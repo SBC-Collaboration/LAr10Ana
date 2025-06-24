@@ -47,14 +47,22 @@ To run a jupyter notebook, you'll want to start a server from your terminal and 
 ```
 ssh -KYX <username>@couppsbcgpvm01.fnal.gov -L 8888:localhost:8888
 ```
-If you see an error in the login that port 8888 is taken, then try again with a different port (8889, for example). Then, navigate to your `LAr10Ana` directory, setup conda, and run the notebook:
+If you see an error in the login that port 8888 is taken, then try again with a different port (8889, for example).
+
+The first time you run a notebook, you'll want to add the conda environment to your list of available jupyterlab kernels. To do this, navigate to your `LAr10Ana` directory, and run the commands:
 ```
 cd /path/to/LAr10Ana
 source setup.sh
+source jupyter_init.sh
+```
+
+Now you're ready to start a jupyter notebook! To do this, start from a terminal inside `LAr10Ana` where you have already activated the conda environment (by running `setup.sh`). Then, run:
+```
 jupyter notebook --no-browser --port <port>
 ```
+
 Where `<port>` is the port you selected in the ssh. A link will print in the terminal. Open it in the browser to access the jupyter notebook. For some example notebooks for 
-accessing SBC-LAr10 data, navigate to `nb/examples`
+accessing SBC-LAr10 data, navigate to `nb/examples`. Make sure to select the `SBC conda (env)` kernel when starting a new notebook.
 
 # Running Analysis on the FermiGrid
 
