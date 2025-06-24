@@ -2,6 +2,7 @@ import os
 import numpy as np
 from sbcbinaryformat import Streamer, Writer
 from PIL import Image
+import json
 
 full_loadlist = [
     "acoustics",
@@ -11,6 +12,7 @@ full_loadlist = [
     "plc",
     "slow_daq",
     "run_info",
+    "run_control"
 ]
 
 def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
@@ -92,5 +94,13 @@ def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
         event["run_info"]["loaded"] = True
         for k, v in run_info_data.items():
             event["run_info"][k] = v
+
+    if "run_control" in loadlist:
+        run_ctrl_file = os.path.join(rundirectory, "rc.json")
+        with open(run_ctrl_file, "r") as f:
+            run_ctrl_data = json.load(f)
+        event["run_control"]["loaded"] = True
+        for k, v in run_ctrl_data.items():
+            event["run_control"][k] = v
 
     return event

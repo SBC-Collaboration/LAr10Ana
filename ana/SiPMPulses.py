@@ -1,5 +1,7 @@
 import numpy as np
 
+SAMPLE_FREQ = 62.5 # MHz
+
 def SiPMPulses(ev):
     # Stuff to save, with defaults
     default_output = dict(
@@ -22,10 +24,23 @@ def SiPMPulses(ev):
 
     # For each SiPM, for each readout, obtain the t0 and the voltage
 
-    # Operate on the waveform in (ticks, ADC)
-    # TODO: convert to ns, V?
+    # Waveform in (ticks, ADC)
     traces = ev["scintillation"]["Waveforms"].T
-    sample_rate = 1 # tick/tick
+
+    # Subtract offset and convert to mV
+    for i_sipm in range(traces.shape[1]):
+        group = i_sipm // 8
+        chan  = i_sipm % 8
+        group_ctrl = ev["run_control"]["group%i" % group]
+        offset = group_ctrl["offset"] + group_ctrl["ch-offset"][chan]
+        range_mV = float(group_ctrl["range"][:-4])
+
+        traces[:, i_sipm, :] -= offset
+        traces[:, i_sipm, :] *= range_mV
+
+
+    decimation = ev["run_control"]["decimation"]
+    sample_rate =  SAMPLE_FREQ/(2**decimation)
 
     # obtain the leading baseline and RMS
     N_SAMPLE_BASELINE = 40
