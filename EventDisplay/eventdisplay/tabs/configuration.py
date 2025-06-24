@@ -61,9 +61,9 @@ class Configuration(tk.Frame):
                 self.piezo_combobox.delete(0, tk.END)
                 self.piezo_combobox.insert(0, [self.piezo])
                 self.piezo_combobox.current(0)
-                self.dytran_combobox.delete(0, tk.END)
-                self.dytran_combobox.insert(0, [self.dytran])
-                self.dytran_combobox.current(0)
+                # self.dytran_combobox.delete(0, tk.END)
+                # self.dytran_combobox.insert(0, [self.dytran])
+                # self.dytran_combobox.current(0)
                 self.piezo_selector_combobox.delete(0, tk.END)
                 self.piezo_selector_combobox.insert(0, [self.piezo])
                 self.piezo_selector_combobox.current(0)
@@ -222,12 +222,12 @@ class Configuration(tk.Frame):
 
         self.piezo_combobox['values'] = [self.piezo]
         self.piezo_combobox.current(0)
-        self.dytran_combobox['values'] = [self.dytran]
-        self.dytran_combobox.current(0)
+        # self.dytran_combobox['values'] = [self.dytran]
+        # self.dytran_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
         self.piezo_plot_t0_checkbutton_var.set(False)
-        self.dytran_plot_t0_checkbutton_var.set(False)
+        # self.dytran_plot_t0_checkbutton_var.set(False)
         self.show_var.set(False)
         
         # update all of the widget values
@@ -289,8 +289,8 @@ class Configuration(tk.Frame):
         self.piezo_config_entry.delete(0, tk.END)
         self.piezo_config_entry.insert(0, self.piezo)
 
-        self.dytran_config_entry.delete(0, tk.END)
-        self.dytran_config_entry.insert(0, self.dytran)
+        # self.dytran_config_entry.delete(0, tk.END)
+        # self.dytran_config_entry.insert(0, self.dytran)
 
         self.jar_radius_config_entry.delete(0, tk.END)
         self.jar_radius_config_entry.insert(0, self.radius)
@@ -387,8 +387,8 @@ class Configuration(tk.Frame):
         # reset piezo & dytran combo boxes
         self.piezo_combobox['values'] = [self.piezo]
         self.piezo_combobox.current(0)
-        self.dytran_combobox['values'] = [self.dytran]
-        self.dytran_combobox.current(0)
+        # self.dytran_combobox['values'] = [self.dytran]
+        # self.dytran_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
         
@@ -421,7 +421,7 @@ class Configuration(tk.Frame):
         self.draw_crosshairs_button.config(state=state)
         self.plot_t0_checkbutton.config(state=state)
         self.piezo_plot_t0_checkbutton.config(state=state)
-        self.dytran_plot_t0_checkbutton.config(state=state)
+        # self.dytran_plot_t0_checkbutton.config(state=state)
         for child in self.bottom_frame_2.winfo_children():
             child.config(state=state)
         self.convert_reco_button['state'] = tk.NORMAL

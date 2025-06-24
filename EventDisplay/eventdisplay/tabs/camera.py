@@ -17,7 +17,7 @@ class Camera(tk.Frame):
         self.load_event_text()
         self.load_plc_text()
         self.load_fastDAQ_piezo()
-        self.load_fastDAQ_dytran()
+        # self.load_fastDAQ_dytran()
         self.load_fastDAQ_analysis()
         self.frame = self.init_frame
         self.diff_checkbutton_var.set(False)

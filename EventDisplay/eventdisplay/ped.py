@@ -270,8 +270,8 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         self.ped_config_file_path_combobox['values'] = self.get_configs()
         self.piezo_combobox['values'] = [self.piezo]
         self.piezo_combobox.current(0)
-        self.dytran_combobox['values'] = [self.dytran]
-        self.dytran_combobox.current(0)
+        # self.dytran_combobox['values'] = [self.dytran]
+        # self.dytran_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
         if os.path.isfile(self.ped_config_file_path_var):
