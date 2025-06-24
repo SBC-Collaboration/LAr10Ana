@@ -5,12 +5,6 @@ import re
 
 import numpy as np
 import scipy.signal
-from scipy import optimize
-# import matplotlib.pyplot as plt
-
-def my_rms(arr):
-    #return np.sqrt(arr.dot(arr)/arr.size)
-    return np.std(arr)
 
 def extend_window(w, r):
     # Inputs:
@@ -20,7 +14,6 @@ def extend_window(w, r):
     mp = 0.5*(w[1]+w[0])  # Midpoint
     new_len = (w[1]-w[0])*(1+r)  # Length of new window
     return [mp-new_len/2, mp+new_len/2]
-
 
 def freq_filter(freqs, lower=None, upper=None):
     # Inputs:
@@ -58,7 +51,7 @@ def spectrum_sums(spectrum, fr, n, lowerf=None, upperf=None):
     out = []
     good_indices = freq_filter(fr, lowerf, upperf)
     for subn in range(n):
-        out.append(np.trapz(spectrum[good_indices[0], subn], dx=np.mean(np.diff(fr))))
+        out.append(np.trapezoid(spectrum[good_indices[0], subn], dx=np.mean(np.diff(fr))))
     return out
 
 
@@ -118,15 +111,6 @@ def corr_signal(tau, dt, t0, n, fit_type=0, shift=10):
             y[0:shift] = 0
     return t, y
 
-# Uncomment the below code if you want to test a new fit_type quickly to make sure the shape is what you want
-# fit_type = 0
-# t,y = corr_signal(1.5, 0.1, 0, 45, fit_type, 20) # <-- Uncomment to test different fit types
-# plt.ioff()
-# plt.plot(t,y)
-# plt.show()
-# 1/0 # <-- Just to stop the program here
-
-
 def find_t0_from_corr(corrt, corry):
     # Inputs:
     #   corrt: Time-values of the correlation signal
@@ -141,51 +125,21 @@ def spectrogram(piezo_waveform, timebase):
     return scipy.signal.spectrogram(piezo_waveform, fs=1./dt, nfft=512, noverlap=450,
                                               mode="psd", window="hann", nperseg=512)
 
-def find_peakt0(raw_piezo, fastdaq_time, meansamp=np.intp(1e4)):
-    filtered_piezo = BandPass2(raw_piezo - np.mean(raw_piezo[:meansamp]), f_low, f_high)
-    dt = fastdaq_time[1] - fastdaq_time[0]
-    t0_win_ix = np.intp(np.round((t0_win - fastdaq_time[0]) / dt))
+def find_peakt0(raw_piezo, times, t0_win, f_low, f_high, n_sample_baseline):
+    filtered_piezo = BandPass2(raw_piezo - np.mean(raw_piezo[:n_sample_baseline]), f_low, f_high)
+    dt = times[1] - times[0]
+    t0_win_ix = np.intp(np.round((t0_win - times[0]) / dt))
     peak_index = np.argmax(np.abs(filtered_piezo[t0_win_ix[0]:t0_win_ix[1]])) + t0_win_ix[0]
-    return fastdaq_time[peak_index]
+    return times[peak_index]
 
-def subtract_led(raw_piezo, fastdaq_time, led_switch_on_time, led_switch_off_time, 
-        led_tau=np.float64(2e-4), meansamp=np.intp(1e4), f_low=np.float64(6e3), f_high=np.float64(40e3), bs_win=np.float64([-0.15, -0.12])):
-
-    dt = fastdaq_time[1] - fastdaq_time[0]
-    bs_win_ix = np.intp(np.round((bs_win - fastdaq_time[0]) / dt))
-
-    filtered_piezo = BandPass2(raw_piezo - np.mean(raw_piezo[:meansamp]), f_low, f_high)
-    led_k = 1./led_tau
-    piezo_led_on = np.sum((fastdaq_time[:, None] > led_switch_on_time) *
-      np.exp(led_k * np.minimum(led_switch_on_time -
-        fastdaq_time[:, None],
-        np.float64([0]))),
-      axis=1)
-    piezo_led_off = np.sum((fastdaq_time[:, None] > led_switch_off_time) *
-      np.exp(led_k * np.minimum(led_switch_off_time -
-        fastdaq_time[:, None],
-        np.float64([0]))),
-      axis=1)
-
-    filtered_piezo_led_on = BandPass2(piezo_led_on, f_low, f_high)
-    filtered_piezo_led_off = BandPass2(piezo_led_off, f_low, f_high)
-    fit_func = lambda _, on_amp, off_amp: on_amp*filtered_piezo_led_on[tdata] + off_amp*filtered_piezo_led_off[tdata]
-    tdata = np.arange(0, bs_win_ix[1])
-    ydata = filtered_piezo[tdata]
-    x0_guess = np.array([1., -1.])
-    led_amp, conv = optimize.curve_fit(fit_func, tdata, ydata, x0_guess)
-    
-    led_only = led_amp[0] * piezo_led_on + led_amp[1] * piezo_led_off
-
-    return tuple(led_amp), raw_piezo - led_only
-
-def calculate_t0(piezo_waveform, piezo_timebase, led_on, tau,
+def calculate_t0(piezo_waveform, piezo_timebase, tau, n_sample_baseline=1000,
                  lower=20000, upper=40000, piezo_fit_type=0):
     # Inputs:
-    #   piezo_waveform: A piezo waveform, generally this should have the LED pulses subtracted
+    #   piezo_waveform: Piezoelectric waveform
     #   piezo_timebase: The times of each element in the piezo_waveform
     #   tau: The time constant we are trying to fit to the exponential decay that occurs
     #        immediately after the bubble forms
+    #   n_sample_baseline: number of samples to use as baseline
     #   lower: The lower frequency threshold for cutting off the spectrogram
     #   upper: The upper frequency threshold for cutting off the spectrogram
     #   piezo_fit_type: The type of fit to use when trying to match the filtered piezo signal. Defaults to 0.
@@ -206,22 +160,13 @@ def calculate_t0(piezo_waveform, piezo_timebase, led_on, tau,
         corr = np.correlate(sp_sums, corr_y, "same")
         corr_t = rescaled_t - 0.5 * corr_n * corr_dt
         test_t0 = find_t0_from_corr(corr_t, corr) # This is the t0 we begin to look backwards from
+
         # Establish a baseline for our lookback algorithm
         #   But first we take the log of the [integrated] spectrogram signal
         log_sp_sums = np.log(sp_sums)
-        first_on = np.argmax(led_on)
-        first_off = np.argmin(led_on[first_on:])
-        second_on = np.argmax(led_on[first_off:])
-        t_first_off = timebase[first_off]
-        t_second_on = timebase[second_on]
-        if not np.any(led_on):
-            return np.nan
-        rescaled_t_first_off_index = np.argmin(np.abs(rescaled_t - t_first_off))
-        rescaled_t_second_on_index = np.argmin(np.abs(rescaled_t - t_second_on))
 
-        baseline = np.average(log_sp_sums[rescaled_t_first_off_index+1:rescaled_t_second_on_index])
-
-        baseline_rms = my_rms(log_sp_sums[rescaled_t_first_off_index+1:rescaled_t_second_on_index])
+        baseline = np.average(log_sp_sums[:n_sample_baseline])
+        baseline_rms = np.std(log_sp_sums[:n_sample_baseline])
 
         test_t0_index = np.argmin(np.abs(rescaled_t - test_t0))
         print("INITIAL T0", test_t0, test_t0_index)
@@ -241,15 +186,6 @@ def calculate_t0(piezo_waveform, piezo_timebase, led_on, tau,
                 break
         if pts_lookbacked_sofar != -1:
             t0 = rescaled_t[test_t0_index-pts_lookbacked_sofar] + rescaled_dt/2
-            # plt.ioff()
-            # plt.plot(rescaled_t, log_sp_sums, color="cyan")
-            # plt.axhline(baseline, color="b")
-            # plt.axhline(baseline+5*baseline_rms, color="k")
-            # plt.axvline(t0, color="g")
-            # plt.axvline(test_t0, color="r")
-            # plt.axvline(t_first_off, color="k")
-            # plt.axvline(t_second_on, color="k")
-            # plt.show()
 
         else:
             t0 = np.nan
@@ -258,16 +194,11 @@ def calculate_t0(piezo_waveform, piezo_timebase, led_on, tau,
         raise
         return np.nan
 
-
-
 def BandPass2(yd, f_low, f_high):
     fband = np.array([f_low, f_high])
     b, a = scipy.signal.butter(2, fband / (2.5e6 / 2.0), btype='bandpass', output='ba')
     yd_f = scipy.signal.filtfilt(b, a, yd)
     return yd_f
-
-
-
 
 def CalcPiezoE(yd, td, t_wins, f_bins, t0):
     piezoE = np.zeros((t_wins.shape[0],
@@ -308,122 +239,67 @@ def CalcPiezoE(yd, td, t_wins, f_bins, t0):
 
 def AcousticAnalysis(ev, tau=0, piezo_fit_type=0,
                      f_high=np.float64(40e3), f_low=np.float64(6e3),
-                     led_amp=np.float64(-0.1), led_tau=np.float64(2e-4),
-                     bs_win=np.float64([-0.15, -0.12]),
-                     t0_win=np.float64([-0.12, 0]),
-                     meansamp=np.intp(1e4), notbs_win=np.float64(2e-4),
-                     t_wins=np.float64([[[-2e-2, -1e-2],
-                                        [-1e-3, 9e-3],
-                                        [-2e-4, 4e-3]],
-                                        [[-2e-2, -1e-2],
-                                         [-1e-3, 9e-3],
-                                         [-2e-4, 4e-3]]]),
-                     f_bins=np.float64([[1e2, 1e3, 1e4, 1e5],
-                                       [1e2, 1e3, 1e4, 1e5]]),
+                     t0_win=np.float64([0, 0.1]),
+                     n_sample_baseline=np.intp(1e4), 
+                     t_wins=np.float64([[-0.1, 0.1]]),
+                     f_bins=np.float64([1e2, 1e3, 1e4, 1e5]),
                      corr_lowerf=20000, corr_upperf=40000):
     # Inputs:
     #   ev: Event data (from GetEvent)
     #   tau: The expected time-constant of the exponential decay from the filtered piezo signal
-    #   piezo1_fit_type: See corr_signal_types.py
-    #   piezo2_fit_type: See corr_signal_Types.py
+    #   piezo_fit_type: Piezoelectric response fit type
     #   f_high: High frequency used for calculating Piezo Energy
     #   f_low: Low frequency used for calculating Piezo Energy
-    #   led_amp: ??
-    #   led_tau: Exponential decay time constant of led-fall off (?? I think)
-    #   bs_win: ??
-    #   t0_win: ??
-    #   meansamp: ??
-    #   t_wins: ??
+    #   t0_win: Time window to expect peak piezoelectric response
+    #   n_sample_baseline: Number of samples at start of acoustic waveform to use for sampling baseline
+    #   t_wins: Time windows for calculating Piezo energy
     #   f_bins: Frequency bins for calculating Piezo energy
     #   corr_lowerf: Lower frequency for cutting off the spectrogram of the Piezo signal
     #   corr_upperf: Higher frequency for cutting off the spectrogram of the Piezo signal
     # Outputs: A dictionary of values for the various variables we are interested in. For a list, take a look
     #          at default_output right below.
-    default_output = dict(bubble_t0=np.zeros(2)-1,  # seconds
-                          peak_t0=np.zeros(2)-1,  # seconds
-                          piezoE=np.zeros((2,
-                                           t_wins.shape[1],
-                                           f_bins.shape[1] - 1),
-                                          dtype=np.float64) + np.nan,
-                          piezo_list=np.zeros(2)-1,
-                          piezo_freq_binedges=f_bins,
-                          piezo_time_windows=t_wins,
-                          led_switch_off_amp=np.zeros((2, 2)),
-                          led_tau=np.zeros((2, 1)),
-                          led_switch_on_amp=np.zeros((2, 2)))
+
+    default_output = dict()
     out = default_output
+
     try:
-        if not ev["acoustic"]["loaded"]:
+        if not ev["acoustics"]["loaded"]:
             return default_output
-        piezoname_list = []
-        piezo_list = []
-        for k in list(ev["acoustic"].keys()):
-            m = re.search("Channel(\d+)", k)
-            if m:
-                piezoname_list.append(m.group(0))
-                piezo_list.append(int(m.group(1)))
-        piezo_list = np.int32(piezo_list)
-        ixx = np.argsort(piezo_list)
-        piezo_list = piezo_list[ixx] # Sorted piezo list
-        piezoname_list = [piezoname_list[ix] for ix in ixx]
-        out["piezo_list"] = piezo_list
-        out["bubble_t0"] = np.zeros(piezo_list.shape, dtype=np.float64) + np.nan
-        out["peak_t0"] = np.zeros(piezo_list.shape, dtype=np.float64) + np.nan
-        out["piezoE"] = np.zeros((piezo_list.shape[0], t_wins.shape[1], f_bins.shape[1]-1),
-                                 dtype=np.float64) + np.nan
-        out["led_switch_on_amp"] = np.zeros(piezo_list.shape, dtype=np.float64) + np.nan
-        out["led_switch_off_amp"] = np.zeros(piezo_list.shape, dtype=np.float64) + np.nan
-        out["led_tau"] = np.zeros(piezo_list.shape, dtype=np.float64) + np.nan
 
-        fastdaq_time = ev["acoustic"]["time"]
-        dt = fastdaq_time[1] - fastdaq_time[0]
+        wvfs = ev["acoustics"]["Waveform"]
+        rnge = ev["acoustics"]["Range"]
+        dcoffset = ev["acoustics"]["DCOffset"]
 
-        t0_win_ix = np.intp(np.round((t0_win - fastdaq_time[0]) / dt))
-
-        k_lowpass = f_high * 2 * np.pi * dt
-        k_highpass = f_high * 2 * np.pi * dt
-
-        if "CAMgate" in ev["acoustic"].keys():
-            led_on = ev["acoustic"]["CAMgate"] < -0.5
-            led_switch = np.diff(np.int8(led_on))
-            led_switch_on = led_switch == 1
-            led_switch_off = led_switch == -1
-            led_switch_on_time = fastdaq_time[:-1][led_switch_on]
-            led_switch_off_time = fastdaq_time[:-1][led_switch_off]
-        else:
-            led_switch_on_time = np.zeros(0)
-            led_switch_off_time = np.zeros(0)
+        dt = 1/(float(ev["run_control"]["acous"]["sample_rate"][:-5])*1e6) # convert MHz -> Hz
+        times = np.arange(wvfs.shape[-1])*dt
+  
     except:
+        raise
         return out
 
-    for i_piezo in range(piezo_list.shape[0]):
+    out["bubble_t0"] = np.zeros(wvfs.shape[1], dtype=np.float64) + np.nan
+    out["peak_t0"] = np.zeros(wvfs.shape[1], dtype=np.float64) + np.nan
+    out["piezoE"] = np.zeros((wvfs.shape[1], t_wins.shape[0], f_bins.shape[0]-1),
+                                 dtype=np.float64) + np.nan
+
+    wvfs = (wvfs.T/rnge.T - dcoffset.T).T # convert to mV, subtract offset
+
+    for i_piezo in range(wvfs.shape[1]):
         try:
+            raw_piezo = wvfs[0, i_piezo, :]
 
-            raw_piezo = ev["acoustic"][piezoname_list[i_piezo]]
-            led_amp, subt_piezo = subtract_led(raw_piezo, fastdaq_time, led_switch_on_time, led_switch_off_time, 
-                led_tau=led_tau, meansamp=meansamp, f_low=f_low, f_high=f_high, bs_win=bs_win)
-
-            out["led_switch_on_amp"][i_piezo] = led_amp[0]
-            out["led_switch_off_amp"][i_piezo] = led_amp[1]
-            out["led_tau"][i_piezo] = led_tau
-
-            out["peak_t0"][i_piezo] = find_peakt0(raw_piezo, t0_win, meansamp=meansamp)
-            t0 = calculate_t0(piezo_waveform=subt_piezo, piezo_timebase=fastdaq_time,
-                              tau=tau, led_on=led_on, lower=corr_lowerf, upper=corr_upperf,
+            out["peak_t0"][i_piezo] = find_peakt0(raw_piezo, times, t0_win, f_low, f_high, n_sample_baseline)
+            t0 = calculate_t0(raw_piezo, times, n_sample_baseline=n_sample_baseline,
+                              tau=tau, lower=corr_lowerf, upper=corr_upperf,
                               piezo_fit_type=piezo_fit_type)
-            if abs(t0) < 10e-6:
-                t0 = np.nan # Then it's essentially 0
-            if abs(t0-fastdaq_time[0]) < 10e-6:
-                t0 = np.nan
             out["bubble_t0"][i_piezo] = t0
-            t0_index = closest_index(fastdaq_time, t0)
+            t0_index = closest_index(times, t0)
 
-            out["piezoE"][i_piezo,:,:] = CalcPiezoE(subt_piezo, fastdaq_time,
-                                                   t_wins[i_piezo], f_bins[i_piezo], fastdaq_time[t0_index])
+            out["piezoE"][i_piezo,:,:] = CalcPiezoE(raw_piezo, times, t_wins, f_bins, times[t0_index])
 
         except Exception as e:
             raise
-            continue
+
     return out
 
 
@@ -436,6 +312,4 @@ if __name__ == "__main__":
     tau = 0.0038163479219674467
 
     out = AcousticAnalysis(GetEvent(TEST_RUN, TEST_EVENT), tau=tau)
-    for x in out:
-        print(x["bubble_t0"])
-
+    print(out)
