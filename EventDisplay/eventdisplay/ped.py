@@ -33,7 +33,6 @@ import zipfile
 import sys
 from tabs.camera import Camera
 from tabs.piezo import Piezo
-from tabs.dytran import Dytran
 from tabs.logviewer import LogViewer
 from tabs.configuration import Configuration
 from tabs.analysis import Analysis
@@ -61,7 +60,7 @@ class PopUpHandler(logging.Handler):
 
 
 # Sets width/height/zoom settings for each tk frame (rectangular window where widgets can be placed)
-class Application(Camera, Piezo, Dytran, LogViewer, Configuration, Analysis, ThreeDBubble):
+class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubble):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
 
@@ -195,7 +194,6 @@ class Application(Camera, Piezo, Dytran, LogViewer, Configuration, Analysis, Thr
 
         Camera.__init__(self)
         Piezo.__init__(self)
-        Dytran.__init__(self)
         LogViewer.__init__(self)
         Analysis.__init__(self)
         ThreeDBubble.__init__(self)
