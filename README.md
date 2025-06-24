@@ -14,6 +14,7 @@
    ```
 4. Get the code! Setup an [SSH key for github](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
    if you do not already have one (follow the "Generating a new SSH key" steps), and then [add it to you github account](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account).
+   Also copy the key to your home directory on `couppsbcgpvm01.fnal.gov` to: `~/.ssh/`.
    Then clone the directory into you app users area:
    ```
    git clone git@github.com:SBC-Collaboration/LAr10Ana.git
