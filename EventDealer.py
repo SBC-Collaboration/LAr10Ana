@@ -7,10 +7,10 @@ import numpy as np
 import copy
 import numpy.matlib
 
-from EventAnalysis import EventAnalysis as eva
+from ana.EventAnalysis import EventAnalysis as eva
 # from AcousticT0 import AcousticAnalysis as aa
-from ExposureAnalysis import ExposureAnalysis as expa 
-from SiPMPulses import SiPMPulses as sa
+from ana.ExposureAnalysis import ExposureAnalysis as expa 
+from ana.SiPMPulses import SiPMPulses as sa
 
 from GetEvent import GetEvent
 from sbcbinaryformat import Streamer, Writer
