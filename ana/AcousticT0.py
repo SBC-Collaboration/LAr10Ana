@@ -274,7 +274,6 @@ def AcousticAnalysis(ev, tau=0, piezo_fit_type=0,
         times = np.arange(wvfs.shape[-1])*dt
   
     except:
-        raise
         return out
 
     out["bubble_t0"] = np.zeros(wvfs.shape[1], dtype=np.float64) + np.nan

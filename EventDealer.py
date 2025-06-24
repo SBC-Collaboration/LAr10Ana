@@ -8,7 +8,7 @@ import copy
 import numpy.matlib
 
 from ana.EventAnalysis import EventAnalysis as eva
-from AcousticT0 import AcousticAnalysis as aa
+from ana.AcousticT0 import AcousticAnalysis as aa
 from ana.ExposureAnalysis import ExposureAnalysis as expa 
 from ana.SiPMPulses import SiPMPulses as sa
 
@@ -17,7 +17,7 @@ from sbcbinaryformat import Streamer, Writer
 
 ANALYSES = {
     "event": eva,
-    # "acoustic": aa,
+    "acoustic": aa,
     "exposure": expa,
     "scintillation": sa,
 }
@@ -121,8 +121,8 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None):
     for p in process_list:
         column_names = list(out[p][0].keys())
         dtypes = [dname(out[p][0][c].dtype.str) for c in column_names]
-        sizes = [list(out[p][0][c].shape) for c in column_names]
+        sizes = [list(np.squeeze(out[p][0][c]).shape) for c in column_names]
         writer = Writer(os.path.join(run_recondir, p + runname + ".bin"), column_names, dtypes, sizes)
         for evind in range(len(out[p])):
-            writer.write(dict([(c, out[p][evind][c]) for c in column_names]))
+            writer.write(dict([(c, np.squeeze(out[p][evind][c])) for c in column_names]))
     return
