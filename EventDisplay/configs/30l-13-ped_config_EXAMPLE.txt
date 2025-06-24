@@ -1,0 +1,32 @@
+Raw Directory: 
+C:\Users\Major Major Major\PICO\PICO_DATA\30l-13-data
+Scratch Directory: 
+C:\Users\Major Major Major\PICO\EventDisplay\scratch
+Initial Run:
+
+PLC temperature var: 
+TE32
+Relative Path to images:
+
+Image naming convention(0 for 'cam0_image0.png', 1 for 'cam0image  0.bmp'):
+1
+Number of Cameras:
+2
+Image Orientation (0 for '0', 1 for '90', 2 for '180', 3 for '270'): 
+0 
+first frame: 
+3
+trig frame: 
+5
+last frame: 
+7
+Piezo: 
+Piezo7
+Dytran:
+Dytran
+Jar - Radius (mm):
+200
+Jar - Positive Z Height (mm):
+600
+Jar - Negative Z Height (mm):
+100

@@ -1,0 +1,32 @@
+Raw Directory: 
+../2l-25-data
+Scratch Directory:
+./scratch
+Initial Run:
+
+PLC temperature var: 
+TE32
+Relative Path to images:
+
+Image naming convention(0 for 'cam0_image0.png', 1 for 'cam0image  0.bmp', 2 for 'cam1-img00.png'):
+2
+Number of Cameras:
+2
+Image Orientation (0 for '0', 1 for '90', 2 for '180', 3 for '270'): 
+3 
+first frame: 
+0
+trig frame: 
+4
+last frame: 
+9
+Piezo: 
+Channel 1
+Dytran:
+Dytran
+Jar - Radius (mm):
+200
+Jar - Positive Z Height (mm):
+600
+Jar - Negative Z Height (mm):
+100
