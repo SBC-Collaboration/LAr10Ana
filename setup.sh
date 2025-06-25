@@ -1,7 +1,7 @@
 unset PYTHONHOME
 unset PYTHONPATH
-export PATH=$PATH:/exp/e961/app/users/gputnam/conda/condabin/
-source /exp/e961/app/users/gputnam/conda/etc/profile.d/conda.sh
+export PATH=$PATH:/cvmfs/coupp.opensciencegrid.org/LAr10Ana/miniforge3/condabin
+source /cvmfs/coupp.opensciencegrid.org/LAr10Ana/miniforge3/etc/profile.d/conda.sh
 conda activate env
 
 # add current directory to python path
