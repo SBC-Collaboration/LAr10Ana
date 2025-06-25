@@ -4,6 +4,6 @@
 
 # NOTE: YOU PROBABLY DON'T NEED TO RUN THIS. USER CODE SHOULD BE RUN WITH THE CENTRAL CONDA ENVIRONMENT.
 
-conda create --name env python jupyterlab notebook numpy pandas scipy matplotlib pip nbstripout
+conda create --name env python jupyterlab notebook numpy pandas scipy matplotlib pip nbstripout opencv
 conda activate env
 pip install git+https://github.com/SBC-Collaboration/SBCBinaryFormat.git@master#subdirectory=python
