@@ -18,28 +18,30 @@ import matplotlib.pyplot as plt
 # matplotlib.use('TkAgg')
 matplotlib.use('Agg')
 from scipy.signal import butter, sosfilt
+import getpass
 
 class Analysis(tk.Frame):
      def __init__(self, master=None):
-         tk.Frame.__init__(self, master)
-         
-         self.last_hline = 0
-         self.freq_cutoff_low = 10000
-         self.freq_cutoff_high = 100000
-         
-         self.piezo_analysis_beginning_time = 0
-         self.piezo_analysis_ending_time = 1
-         
-         self.timerange_checkbutton_var = tk.BooleanVar(value=False)  
-         self.plot_t0_checkbutton_var = tk.BooleanVar(value=False)  
-         self.denoise_selector_var = tk.BooleanVar(value=False)  
-         self.increment_piezo_event = False                           
-         
-         self.create_analysis_widgets()
-         self.analysis_canvas_setup()  
-          
-         self.t1_start = 0
-         self.flag1 = False  
+          tk.Frame.__init__(self, master)
+
+
+          self.last_hline = 0
+          self.freq_cutoff_low = 10000
+          self.freq_cutoff_high = 100000
+
+          self.piezo_analysis_beginning_time = 0
+          self.piezo_analysis_ending_time = 1
+
+          self.timerange_checkbutton_var = tk.BooleanVar(value=False)
+          self.plot_t0_checkbutton_var = tk.BooleanVar(value=False)
+          self.denoise_selector_var = tk.BooleanVar(value=False)
+          self.increment_piezo_event = False
+
+          self.create_analysis_widgets()
+          self.analysis_canvas_setup()
+
+          self.t1_start = 0
+          self.flag1 = False
          
      def load_fastDAQ_analysis(self):
           if not self.load_initial_data_checkbutton_var.get():
@@ -116,10 +118,12 @@ class Analysis(tk.Frame):
           plt.rc('axes', titlesize=10)
           plt.rc('axes', labelsize=10)
 
-          self.tmp_dir = os.path.join(self.extraction_path, 'tmp')
-          if not os.path.exists(self.tmp_dir):
-               os.mkdir(self.tmp_dir)
-            
+          user = getpass.getuser()
+          self.tmp_dir = os.path.join(self.ped_directory, "scratch", user, "tmp")
+
+          # Create full directory path if it doesn't exist
+          os.makedirs(self.tmp_dir, exist_ok=True)
+                    
           image = Image.open(os.path.join(self.ped_directory, 'notfound.jpeg'))
           if image.mode == 'RGBA': # Image in RGBA, Pillow cannot deal with that, so convert to RGB
                r, g, b, a = image.split()
