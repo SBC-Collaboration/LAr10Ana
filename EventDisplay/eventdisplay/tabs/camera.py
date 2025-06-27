@@ -29,6 +29,7 @@ class Camera(tk.Frame):
         self.update_images()
 
     def get_image_path(self, cam, frame):
+        print(self.image_directory)
         if self.image_naming_convention == self.image_naming_conventions[0]:
             path = os.path.join(self.image_directory, 'cam{}_image{}.png'.format(cam, frame))
         elif self.image_naming_convention == self.image_naming_conventions[1]:

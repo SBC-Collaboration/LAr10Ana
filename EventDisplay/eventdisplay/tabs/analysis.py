@@ -10,7 +10,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from tkinter import ttk, messagebox, DISABLED, NORMAL
 from matplotlib.figure import Figure
 from tkinter import *
-from .utils import GetEvent
+import sys
 from PIL import Image, ImageTk
 import scipy.signal
 import matplotlib
@@ -19,6 +19,8 @@ import matplotlib.pyplot as plt
 matplotlib.use('Agg')
 from scipy.signal import butter, sosfilt
 import getpass
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+from GetEvent import GetEvent
 
 class Analysis(tk.Frame):
      def __init__(self, master=None):
@@ -56,7 +58,7 @@ class Analysis(tk.Frame):
           path = os.path.join(self.raw_directory, self.run)
           self.fastDAQ_event = GetEvent(path, self.event)
 
-          self.piezo_selector_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustic']['Waveform'].shape[1])]
+          self.piezo_selector_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
           
           self.check_t0_exist()
           self.draw_fastDAQ_analysis()
@@ -94,10 +96,9 @@ class Analysis(tk.Frame):
            return        
          if self.piezo_selector_combobox.current() == -1:
              self.piezo_selector_combobox.current(0)
-         self.f = self.fastDAQ_event['acoustic']['Waveform'][0][self.piezo_selector_combobox.current()]
-         print(self.piezo_selector_combobox.current())
-         self.t = np.arange(len(self.f)) * (1 / self.fastDAQ_event['acoustic']['sample_rate'])
-         self.piezo_selector_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustic']['Waveform'].shape[1])]
+         self.f = self.fastDAQ_event['acoustics']['Waveform'][0][self.piezo_selector_combobox.current()]
+         self.t = np.arange(len(self.f)) * (1 / self.fastDAQ_event['acoustics']['sample_rate'])
+         self.piezo_selector_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
          # self.f = 0.5*np.sin(2*np.pi*60*self.t) + np.sin(2*np.pi*1000*self.t)*(self.t>0) + 2.0 * np.sin(2*np.pi*2000*self.t)*(self.t>0) # for testing
          self.fft_variables()
          

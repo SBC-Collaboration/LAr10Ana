@@ -749,7 +749,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
                 events_left = self.raw_events[['run', 'ev']][row:]
                 run, event = np.intersect1d(self.selected_events[['run', 'ev']], events_left)[0]
             except IndexError:
-                self.logger.error('reached final event: starting over')
+                self.logger.error('reached final event: starting over1')
                 run, event = self.selected_events[['run', 'ev']][0]
             self.run = run
             if self.run != prevrun:
@@ -830,7 +830,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
                 events_left = self.raw_events[['run', 'ev']][row:]
                 run, event = np.intersect1d(self.selected_events[['run', 'ev']], events_left)[0]
             except IndexError:
-                self.logger.error('reached final event: starting over')
+                self.logger.error('reached final event: starting over2')
                 run, event = self.selected_events[['run', 'ev']][0]
             self.run = run
             if self.run != prevrun:
@@ -948,7 +948,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
             return
 
         if (self.row_index + step) >= len(events):
-            self.logger.error('reached final event: starting over')
+            self.logger.error('reached final event: starting over3')
             self.reset_event()
             return
 

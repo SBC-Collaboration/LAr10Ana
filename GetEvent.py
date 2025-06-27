@@ -3,6 +3,7 @@ import numpy as np
 from sbcbinaryformat import Streamer, Writer
 from PIL import Image
 import json
+import logging
 
 full_loadlist = [
     "acoustics",
@@ -102,5 +103,17 @@ def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
         event["run_control"]["loaded"] = True
         for k, v in run_ctrl_data.items():
             event["run_control"][k] = v
+        sample_rate_str = event['run_control']['acous']['sample_rate'].strip().upper()
+
+        if "MS/S" in sample_rate_str:
+            sample_rate = int(sample_rate_str.replace("MS/S", "").strip()) * 1_000_000
+        elif "KS/S" in sample_rate_str:
+            sample_rate = int(sample_rate_str.replace("KS/S", "").strip()) * 1_000
+        elif "S/S" in sample_rate_str:
+            sample_rate = int(sample_rate_str.replace("S/S", "").strip())
+        else:
+            raise logging.error(f"Unrecognized sample rate format: '{sample_rate_str}'")
+
+        event["acoustics"]["sample_rate"] = sample_rate
 
     return event

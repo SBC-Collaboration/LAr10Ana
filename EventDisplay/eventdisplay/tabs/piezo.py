@@ -6,13 +6,15 @@ import scipy.signal
 import tkinter as tk
 from tkinter import ttk, DISABLED, NORMAL
 import numpy as np
+import sys
 #
 # matplotlib.use('TkAgg')
 matplotlib.use('Agg')
 from matplotlib.figure import Figure
-from .utils import GetEvent
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image, ImageTk
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+from GetEvent import GetEvent
 
 
 class Piezo(tk.Frame):
@@ -56,8 +58,7 @@ class Piezo(tk.Frame):
 
         self.fastDAQ_event = GetEvent(path, self.event)
 
-        self.piezo_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustic']['Waveform'].shape[1])]
-        print(self.piezo_combobox['values'])
+        self.piezo_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
         
         self.draw_fastDAQ_piezo()
 
@@ -98,8 +99,8 @@ class Piezo(tk.Frame):
 
     def draw_filtered_piezo_trace(self, piezo):
         try:
-            piezo_v = self.fastDAQ_event['acoustic']['Waveform'][0][self.piezo_combobox.current()]
-            piezo_time = np.arange(len(piezo_v)) * (1 / self.fastDAQ_event['acoustic']['sample_rate'])
+            piezo_v = self.fastDAQ_event['acoustics']['Waveform'][0][self.piezo_combobox.current()]
+            piezo_time = np.arange(len(piezo_v)) * (1 / self.fastDAQ_event['acoustics']['sample_rate'])
             fn = len(piezo_v)/(piezo_time[-1]-piezo_time[0])/2
             # if (self.piezo_cutoff_high / fn) > 1:
             #     self.logger.error('Cutoff freq > Nyquist, setting = Nyquist')
