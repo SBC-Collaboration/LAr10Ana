@@ -37,6 +37,7 @@ from tabs.logviewer import LogViewer
 from tabs.configuration import Configuration
 from tabs.analysis import Analysis
 from tabs.three_d_bubble import ThreeDBubble
+from tabs.scintillation import Scintillation
 
 try:
     from ctypes import windll
@@ -60,7 +61,7 @@ class PopUpHandler(logging.Handler):
 
 
 # Sets width/height/zoom settings for each tk frame (rectangular window where widgets can be placed)
-class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubble):
+class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubble, Scintillation):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
 
@@ -198,6 +199,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         Analysis.__init__(self)
         ThreeDBubble.__init__(self)
         Configuration.__init__(self)
+        Scintillation.__init__(self)
 
         self.load_reco()
 
