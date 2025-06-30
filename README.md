@@ -52,8 +52,8 @@ If you see an error in the login that port 8888 is taken, then try again with a 
 
 The first time you run a notebook, you'll want to add the conda environment to your list of available jupyterlab kernels. To do this, navigate to your `LAr10Ana` directory (`cd /path/to/LAr10Ana`), and run the commands:
 ```
-source setup.sh
-source jupyter_init.sh
+source setup.sh # This activates the conda environment. You'll need to run it every time you create a new terminal connection.
+source jupyter_init.sh # This tells jupyter about your conda environment. You only need to run it the first time you run the notebook.
 ```
 
 Now you're ready to start a jupyter notebook! To do this, start from a terminal inside `LAr10Ana` where you have already activated the conda environment (by running `setup.sh`). Then, run:
