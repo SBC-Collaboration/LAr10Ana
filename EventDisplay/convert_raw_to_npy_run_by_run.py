@@ -78,6 +78,11 @@ def make_npy_of_run(run, run_folder_path):
     print('  Events in run {}: {}'.format(run,len(events)))
     events = np.array(events, dtype=[('run', 'U12'), ('ev', 'i4'), ('reco index', 'i4')])
     events = validate(events, run_folder_path)
+
+    if events.size == 0:
+        print(f"  No events found in run {run}; skipping npy generation.")
+        return
+
     try:
         np.save(os.path.join(npy_location, run), events)
         new_npy_file_list.append(run)
@@ -117,6 +122,11 @@ def make_npy_of_zip_run(run, run_folder_path):
     print('  Events in run {}: {}'.format(run,len(events)))
     events = np.array(events, dtype=[('run', 'U12'), ('ev', 'i4'), ('reco index', 'i4')])
     events = validate_zip(events, run_folder_path)
+
+    if events.size == 0:
+        print(f"  No events found in zipped run {run}; skipping npy generation.")
+        return
+
     try:
         np.save(os.path.join(npy_location, run), events)
         new_npy_file_list.append(run)
@@ -128,8 +138,13 @@ def make_npy_of_zip_run(run, run_folder_path):
         
 print('Starting now')
 start = time.time()
-runs = [os.path.basename(x) for x in glob(os.path.join(raw_directory, "20*"))]
-runs_npy = [os.path.basename(x) for x in glob(os.path.join(npy_location, "20*"))]
+all_runs = [os.path.basename(x) for x in glob(os.path.join(raw_directory, "202*"))]
+all_runs_npy = [os.path.basename(x) for x in glob(os.path.join(npy_location, "202*"))]
+
+# Filter to only include years >= 2025 for SBC
+runs = [x for x in all_runs if x[:4].isdigit() and int(x[:4]) >= 2025]
+runs_npy = [x for x in all_runs_npy if x[:4].isdigit() and int(x[:4]) >= 2025]
+
 for run in runs:
     path = os.path.join(raw_directory, run)
     print("Checking " + run)
