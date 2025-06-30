@@ -1,9 +1,9 @@
 Raw Directory: 
-/exp/e961/data/SBC-25-daqdata
+../../SBC-25-daqdata
 Scratch Directory:
 ./scratch
 Initial Run:
-20250611_1
+20250611_0
 PLC temperature var: 
 TE32
 Relative Path to images:
