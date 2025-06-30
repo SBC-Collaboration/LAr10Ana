@@ -199,7 +199,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         ThreeDBubble.__init__(self)
         Configuration.__init__(self)
 
-        self.load_reco()
+        # self.load_reco()
 
         # Initial Functions
         self.initialize_widget_values()
@@ -330,7 +330,8 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         # Resolve base directories
         self.raw_init_directory = str(self._resolve_path(values[0]))
         self.raw_directory = self.raw_init_directory
-        self.dataset = Path(self.raw_init_directory).name.rstrip('-data')
+        # Order matters here, we need to try removing -daqdata first, then -data
+        self.dataset = os.path.basename(self.raw_init_directory).removesuffix('-daqdata').removesuffix('-data')
 
         # Relative directories
         self.scan_directory = str(self._resolve_path(f"scan_output_{self.dataset}"))
