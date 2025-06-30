@@ -14,7 +14,7 @@
    ```
 4. Get the code! Setup an [SSH key for github](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
    if you do not already have one (follow the "Generating a new SSH key" steps), and then [add it to you github account](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account).
-   Also copy the key to your home directory on `couppsbcgpvm01.fnal.gov` to: `~/.ssh/`.
+   Also copy the key to your home directory on `couppsbcgpvm01.fnal.gov` to: `~/.ssh/`. If you ran the ssh keygen on the `couppsbcgpvm01.fnal.gov` machine, it will be there already.
    Then clone the directory into you app users area:
    ```
    git clone git@github.com:SBC-Collaboration/LAr10Ana.git
@@ -50,9 +50,8 @@ ssh -KYX <username>@couppsbcgpvm01.fnal.gov -L 8888:localhost:8888
 ```
 If you see an error in the login that port 8888 is taken, then try again with a different port (8889, for example).
 
-The first time you run a notebook, you'll want to add the conda environment to your list of available jupyterlab kernels. To do this, navigate to your `LAr10Ana` directory, and run the commands:
+The first time you run a notebook, you'll want to add the conda environment to your list of available jupyterlab kernels. To do this, navigate to your `LAr10Ana` directory (`cd /path/to/LAr10Ana`), and run the commands:
 ```
-cd /path/to/LAr10Ana
 source setup.sh
 source jupyter_init.sh
 ```
