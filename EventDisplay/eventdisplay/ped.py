@@ -356,7 +356,8 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         self.negative_z = values[15]
         self.frame = self.init_frame
 
-        self.base_directory, _ = re.compile(r'\w*-\w*-data').split(self.raw_init_directory)
+        self.base_directory = os.path.dirname(self.raw_init_directory)
+
 
     def reset_event(self):
         self.run = ''
