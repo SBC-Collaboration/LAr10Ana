@@ -56,12 +56,17 @@ class Analysis(tk.Frame):
                path = os.path.join(self.raw_directory, self.run, '.zip')
 
           path = os.path.join(self.raw_directory, self.run)
-          self.fastDAQ_event = GetEvent(path, self.event)
 
-          self.piezo_selector_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
-          
-          self.check_t0_exist()
-          self.draw_fastDAQ_analysis()
+          try:
+               selected = ["run_control", "acoustics"]
+               self.fastDAQ_event = GetEvent(path, self.event, *selected)
+
+               self.piezo_selector_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
+
+               self.check_t0_exist()
+               self.draw_fastDAQ_analysis()
+          except:
+              print("not found")
 
           # Garbage Collecting
           gc.collect()

@@ -115,7 +115,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         # npy_directory: where the .npy files (raw_events.npy, reco_events.npy) and merged_all.txt
         # config_file_directory: where the configuration files are placed, should be a folder in the same directory as ped_directory
         # extraction_path: where tar files are unpacked
-        self.dataset = '2l-25'
+        self.dataset = 'SBC-25'
         self.reco_filename = 'reco_events.npy'
         self.ped_directory = os.path.split(os.path.split(os.path.abspath(__file__))[0])[0]
         self.scan_directory = os.path.join(self.ped_directory, 'scan_output_' + self.dataset)
@@ -201,7 +201,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         Configuration.__init__(self)
         Scintillation.__init__(self)
 
-        self.load_reco()
+        # self.load_reco()
 
         # Initial Functions
         self.initialize_widget_values()
@@ -332,7 +332,8 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         # Resolve base directories
         self.raw_init_directory = str(self._resolve_path(values[0]))
         self.raw_directory = self.raw_init_directory
-        self.dataset = Path(self.raw_init_directory).name.rstrip('-data')
+        # Order matters here, we need to try removing -daqdata first, then -data
+        self.dataset = os.path.basename(self.raw_init_directory).removesuffix('-daqdata').removesuffix('-data')
 
         # Relative directories
         self.scan_directory = str(self._resolve_path(f"scan_output_{self.dataset}"))
@@ -357,7 +358,8 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         self.negative_z = values[15]
         self.frame = self.init_frame
 
-        self.base_directory, _ = re.compile(r'\w*-\w*-data').split(self.raw_init_directory)
+        self.base_directory = os.path.dirname(self.raw_init_directory)
+
 
     def reset_event(self):
         self.run = ''
@@ -379,34 +381,34 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
             try:
                 os.system("python \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_raw_to_npy_run_by_run.py"), self.raw_directory, self.npy_directory))
                 os.system("python \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "merge_raw_run_npy.py"), self.npy_directory))
-                reco_path = os.path.join(self.npy_directory, self.reco_filename)
-                if not os.path.isfile(reco_path):
-                    reco_response = messagebox.askyesno('No raw_event.npy or reco_events.npy files found', 'NPY files being created now. \nWould you like to select a reco_events file?')
-                    if reco_response == 0:
-                        merged_all_response = messagebox.askyesno('Create a reco_events.npy file?', 'Would you like to select a merged_all file to create reco data?')
-                        if merged_all_response == 0:
-                            self.get_raw_events()
-                        else:
-                            merged_all = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a merged_all File", filetypes = (("Text files", "*.txt*"), ("all files", "*.*")))
-                            os.system("python \"{}\" \"{}\" \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_reco_to_npy_and_reindex_raw_npy.py"), self.npy_directory, self.npy_directory, merged_all, user_date))
-                            self.reco_filename = 'reco_events_{}.npy'.format(user_date)
-                    else:
-                        reco_filename = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a reco_events File", filetypes = (("NPY Files", "*.npy*"), ("all files", "*.*")))
-                        if os.path.isfile(reco_filename):
-                            reco_directory = os.path.split(reco_filename)[0]
-                            if os.path.normpath(reco_directory) == os.path.normpath(self.npy_directory):
-                                self.reco_filename = os.path.split(reco_filename)[1]
-                            else:
-                                directory_response = messagebox.askyesno('Selected File Not in NPY Directory', 'Current Dataset is: {}. \nSelected reco file is not in the NPY Directory for the current dataset. \nWould you still like to use the selected reco_events file?'.format(self.dataset))
-                                if directory_response == 1:
-                                    self.reco_filename = os.path.split(reco_filename)[1]
-                                else:
-                                    self.get_raw_events()
-                        else:
-                            self.get_raw_events()
-                        self.reco_filename = os.path.split(reco_filename)[1]
-                else:
-                    messagebox.showinfo('No raw_events.npy file found', 'NPY files being created now. \nreco_event.npy file found. Reco data will be loaded from npy directory')
+                # reco_path = os.path.join(self.npy_directory, self.reco_filename)
+                # if not os.path.isfile(reco_path):
+                #     reco_response = messagebox.askyesno('No raw_event.npy or reco_events.npy files found', 'NPY files being created now. \nWould you like to select a reco_events file?')
+                #     if reco_response == 0:
+                #         merged_all_response = messagebox.askyesno('Create a reco_events.npy file?', 'Would you like to select a merged_all file to create reco data?')
+                #         if merged_all_response == 0:
+                #             self.get_raw_events()
+                #         else:
+                #             merged_all = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a merged_all File", filetypes = (("Text files", "*.txt*"), ("all files", "*.*")))
+                #             os.system("python \"{}\" \"{}\" \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_reco_to_npy_and_reindex_raw_npy.py"), self.npy_directory, self.npy_directory, merged_all, user_date))
+                #             self.reco_filename = 'reco_events_{}.npy'.format(user_date)
+                #     else:
+                #         reco_filename = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a reco_events File", filetypes = (("NPY Files", "*.npy*"), ("all files", "*.*")))
+                #         if os.path.isfile(reco_filename):
+                #             reco_directory = os.path.split(reco_filename)[0]
+                #             if os.path.normpath(reco_directory) == os.path.normpath(self.npy_directory):
+                #                 self.reco_filename = os.path.split(reco_filename)[1]
+                #             else:
+                #                 directory_response = messagebox.askyesno('Selected File Not in NPY Directory', 'Current Dataset is: {}. \nSelected reco file is not in the NPY Directory for the current dataset. \nWould you still like to use the selected reco_events file?'.format(self.dataset))
+                #                 if directory_response == 1:
+                #                     self.reco_filename = os.path.split(reco_filename)[1]
+                #                 else:
+                #                     self.get_raw_events()
+                #         else:
+                #             self.get_raw_events()
+                #         self.reco_filename = os.path.split(reco_filename)[1]
+                # else:
+                #     messagebox.showinfo('No raw_events.npy file found', 'NPY files being created now. \nreco_event.npy file found. Reco data will be loaded from npy directory')
             except FileNotFoundError:
                 # this error should be handled when it crops up in the code
                 raise FileNotFoundError

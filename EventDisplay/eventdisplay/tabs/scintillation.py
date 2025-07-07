@@ -85,6 +85,7 @@ class Scintillation(tk.Frame):
         self.event_analysis2 = SiPMGain(self.event_analysis1)
         self.event_analysis3 = PhotonT0(self.event_analysis1)
         
+
         # Populate channels
         n_channels = self.fastdaq_event['scintillation']['Waveforms'].shape[1]
         self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
