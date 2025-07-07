@@ -16,6 +16,7 @@ full_loadlist = [
     "run_control"
 ]
 
+
 def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
     event = dict()
     event_dir = os.path.join(rundirectory, str(ev)) 
@@ -40,7 +41,9 @@ def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
             event["acoustics"]["loaded"] = True
             for k, v in acoustic_data.items():
                 event["acoustics"][k] = v
-
+        else:
+            logging.error("Acoustic File Not Found")
+        
     if "scintillation" in loadlist:
         scint_file = os.path.join(event_dir, "scintillation.sbc")
         scint_data = Streamer(scint_file).to_dict()
