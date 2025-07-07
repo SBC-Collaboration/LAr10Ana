@@ -11,6 +11,13 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 # Hacky
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 from GetEvent import GetEvent
+BASE = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                     '..', '..', '..'))
+ANA_DIR = os.path.join(BASE, 'ana')
+sys.path.insert(0, ANA_DIR)
+from SiPMPulses import SiPMPulses
+from SiPMGain import SiPMGain
+from PhotonT0 import PhotonT0
 
 class Scintillation(tk.Frame):
     def __init__(self, master=None):
@@ -74,7 +81,10 @@ class Scintillation(tk.Frame):
         selected = ["run_control", "scintillation", "event_info"]
         self.path = os.path.join(self.raw_directory, self.run)
         self.fastdaq_event = GetEvent(self.path, self.event, *selected)
-
+        self.event_analysis1 = SiPMPulses(self.fastdaq_event)
+        self.event_analysis2 = SiPMGain(self.event_analysis1)
+        self.event_analysis3 = PhotonT0(self.event_analysis1)
+        
         # Populate channels
         n_channels = self.fastdaq_event['scintillation']['Waveforms'].shape[1]
         self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
