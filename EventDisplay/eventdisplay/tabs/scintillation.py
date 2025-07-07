@@ -26,7 +26,7 @@ class Scintillation(tk.Frame):
     def create_scintillation_widgets(self):
         # Main frame
         self.scintillation_tab = tk.Frame(self.notebook)
-        self.notebook.add(self.scintillation_tab, text='Scintillation')
+        self.notebook.add(self.scintillation_tab, text='SiPM')
 
         # Left and right panels
         self.scintillation_tab_left = tk.Frame(self.scintillation_tab, bd=5, relief=tk.SUNKEN)
