@@ -168,7 +168,7 @@ class Scintillation(tk.Frame):
         if idx < 0:
             return
         data = self.fastdaq_event['scintillation']['Waveforms'][0][idx]
-        time = np.arange(len(data)) * (1 / self.fastdaq_event['acoustics']['sample_rate'])
+        time = np.arange(len(data)) * (1 / self.fastdaq_event['scintillation']['sample_rate'])
 
         # … after loading data and time …
         dt   = time[1] - time[0] if len(time) > 1 else 1.0
