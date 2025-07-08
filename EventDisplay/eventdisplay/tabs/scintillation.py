@@ -127,7 +127,8 @@ class Scintillation(tk.Frame):
     def scintillation_canvas_setup(self):
         # Figure and canvas for plotting
         self.scintillation_fig = Figure(figsize=(7, 5), dpi=100)
-        self.scintillation_ax = self.scintillation_fig.add_subplot(111)
+        self.scintillation_ax = self.scintillation_fig.add_subplot(211)
+        self.gain_ax = self.scintillation_fig.add_subplot(212)
         self.scintillation_canvas = FigureCanvasTkAgg(self.scintillation_fig, self.scintillation_tab_right)
 
     def load_fastdaq_scintillation(self):
@@ -191,6 +192,14 @@ class Scintillation(tk.Frame):
         # Plot
         self.scintillation_ax.clear()
         self.scintillation_ax.plot(time, data)
+        # highlight the first hit
+        # histogram of hit amplitudes
+        amps = self.photon['amp']  # or all channels
+        self.gain_ax.clear()
+        self.gain_ax.hist(amps[~np.isnan(amps)], bins=50)
+        self.gain_ax.set_title("Hits per Amplitude histogram")
+        self.gain_ax.set_xlim(0, )
+
         self.scintillation_ax.relim()
         self.scintillation_ax.autoscale_view()
 
