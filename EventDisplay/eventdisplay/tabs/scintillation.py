@@ -65,8 +65,8 @@ class Scintillation(tk.Frame):
             self.scintillation_tab_left,
             variable=self.t_start_var,
             orient='horizontal',
-            from_=0, to=0,            # will be updated on reload
-            resolution=1,             # will be updated on reload
+            from_=0, to=0,         
+            resolution=1,             
             showvalue=True,
             length=200
         )
@@ -77,38 +77,36 @@ class Scintillation(tk.Frame):
             self.scintillation_tab_left,
             variable=self.t_end_var,
             orient='horizontal',
-            from_=0, to=0,            # will be updated on reload
-            resolution=1,             # will be updated on reload
+            from_=0, to=0,            
+            resolution=1,            
             showvalue=True,
             length=200
         )
         self.t_end_slider.grid(row=2, column=3, sticky='WE')
 
-            # ── Voltage‐window sliders ──
+            # Voltage sliders
         self.v_lower_var = tk.DoubleVar(value=0.0)
         self.v_upper_var = tk.DoubleVar(value=0.0)
 
-        # V lower
         tk.Label(self.scintillation_tab_left, text='V lower:').grid(row=3, column=0, sticky='E')
         self.v_lower_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.v_lower_var,
             orient='horizontal',
-            from_=0, to=0,            # will update on reload
-            resolution=1e-3,          # will update on reload
+            from_=0, to=0,         
+            resolution=1e-3,        
             showvalue=True,
             length=200
         )
         self.v_lower_slider.grid(row=3, column=1, sticky='WE')
 
-        # V upper
         tk.Label(self.scintillation_tab_left, text='V upper:').grid(row=3, column=2, sticky='E')
         self.v_upper_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.v_upper_var,
             orient='horizontal',
-            from_=0, to=0,            # will update on reload
-            resolution=1e-3,          # will update on reload
+            from_=0, to=0,         
+            resolution=1e-3,    
             showvalue=True,
             length=200
         )
@@ -142,14 +140,14 @@ class Scintillation(tk.Frame):
         # Load event data
         selected = ["run_control", "scintillation", "event_info"]
         self.path = os.path.join(self.raw_directory, self.run)
-        self.fastdaq_event = GetEvent(self.path, self.event, *selected)
-        self.pulses = SiPMPulses(self.fastdaq_event)
+        self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
+        self.pulses = SiPMPulses(self.scint_fastdaq_event)
         self.gain = SiPMGain(self.pulses)
         self.photon = PhotonT0(self.pulses)
 
-
+        print(self.scint_fastdaq_event['scintillation']['loaded'])
         # Populate channels
-        n_channels = self.fastdaq_event['scintillation']['Waveforms'].shape[1]
+        n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
         self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
 
         # Initial draw
@@ -168,47 +166,45 @@ class Scintillation(tk.Frame):
         idx = self.scintillation_combobox.current()
         if idx < 0:
             return
-        data = self.fastdaq_event['scintillation']['Waveforms'][0][idx]
-        time = np.arange(len(data)) * (1 / self.fastdaq_event['scintillation']['sample_rate'])
+        data = self.scint_fastdaq_event['scintillation']['Waveforms'][0][idx]
+        time = np.arange(len(data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
 
-        # … after loading data and time …
-        dt   = time[1] - time[0] if len(time) > 1 else 1.0
+        # Getting range and resolution for sliderrs
+        dt   = time[1] - time[0] 
         t0   = time[0];    t1 = time[-1]
         v0   = np.min(data); v1 = np.max(data)
-        dv   = (v1 - v0) / 100.0 if v1 != v0 else 1e-3
+        dv   = (v1 - v0) / 100.0 
 
-        # update time sliders (you already have this)
+        # Update sliders 
         self.t_start_slider.config(from_=t0, to=t1, resolution=dt)
-        self.t_end_slider  .config(from_=t0, to=t1, resolution=dt)
-
-        # update voltage sliders
-        self.v_lower_slider.config(from_=v0, to=v1, resolution=dv)
-        self.v_upper_slider.config(from_=v0, to=v1, resolution=dv)
-
-        # update slider ranges & step
-        self.t_start_slider.config(from_=t0, to=t1, resolution=dt)
+        #self.t_start_slider.set(t0)
         self.t_end_slider.config(from_=t0, to=t1, resolution=dt)
+        #self.t_end_slider.set(t1)
+        self.v_lower_slider.config(from_=v0, to=v1, resolution=dv)
+        #self.v_lower_slider.set(v0)
+        self.v_upper_slider.config(from_=v0, to=v1, resolution=dv)
+        #self.v_upper_slider.set(v1)
 
-        # Plot
-        self.scintillation_ax.clear()
-        self.scintillation_ax.plot(time, data)
-        # highlight the first hit
-        # histogram of hit amplitudes
-        amps = self.photon['amp']  # or all channels
+        # Histogram of hit amplitudes
+        amps = self.photon['amp']
         self.gain_ax.clear()
         self.gain_ax.hist(amps[~np.isnan(amps)], bins=50)
         self.gain_ax.set_title("Hits per Amplitude histogram")
         self.gain_ax.set_xlim(0, )
+        self.gain_ax.set_xlabel("Pulse amplitude (mV)")
+        self.gain_ax.set_ylabel("Hits")
 
-        self.scintillation_ax.relim()
-        self.scintillation_ax.autoscale_view()
-
+        # Get range and domain
         start = self.t_start_var.get();    end   = self.t_end_var.get()
         vlow  = self.v_lower_var.get();    vhigh = self.v_upper_var.get()
-
+        
+        self.scintillation_ax.clear()
+        self.scintillation_ax.plot(time, data)
+        self.scintillation_ax.relim()
+        self.scintillation_ax.autoscale_view()
         self.scintillation_ax.set_xlim(start, end)
         self.scintillation_ax.set_ylim(vlow, vhigh)
-        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.fastdaq_event["event_info"]["run_id"][0]) + " Event: " + str(self.fastdaq_event["event_info"]["event_id"][0]))
+        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.scint_fastdaq_event["event_info"]["run_id"][0]) + " Event: " + str(self.scint_fastdaq_event["event_info"]["event_id"][0]))
         self.scintillation_ax.set_xlabel('[s]')
         self.scintillation_ax.set_ylabel('[V]')
 
