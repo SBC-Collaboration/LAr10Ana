@@ -116,7 +116,9 @@ def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
             sample_rate = int(sample_rate_str.replace("S/S", "").strip())
         else:
             raise logging.error(f"Unrecognized sample rate format: '{sample_rate_str}'")
+        decimation = event['run_control']['caen']['global']['decimation']
 
         event["acoustics"]["sample_rate"] = sample_rate
+        event['scintillation']['sample_rate'] = 62500000 / (2**decimation)
 
     return event
