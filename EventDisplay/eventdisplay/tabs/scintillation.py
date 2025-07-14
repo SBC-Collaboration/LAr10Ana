@@ -45,7 +45,7 @@ class Scintillation(tk.Frame):
         # Load fastDAQ checkbutton
         self.load_fastdaq_scintillation_checkbutton = tk.Checkbutton(
             self.scintillation_tab_left,
-            text='Load fastDAQ',
+            text='Load SiPM',
             variable=self.load_fastdaq_scintillation_var,
             command=self.load_fastdaq_scintillation
         )
@@ -53,7 +53,8 @@ class Scintillation(tk.Frame):
 
         # Channel selector
         tk.Label(self.scintillation_tab_left, text='Channel:').grid(row=1, column=0, sticky='WE')
-        self.scintillation_combobox = ttk.Combobox(self.scintillation_tab_left, width=12)
+        self.scintillation_combobox = ttk.Combobox(self.scintillation_tab_left, width=12, validate="focusout", validatecommand=self.load_fastdaq_scintillation)
+        self.scintillation_combobox.bind("<<ComboboxSelected>>", lambda _: self.new_channel())
         self.scintillation_combobox.grid(row=1, column=1, sticky='WE')
     
         # Time window slider
@@ -131,7 +132,6 @@ class Scintillation(tk.Frame):
 
     def load_fastdaq_scintillation(self):
         if not self.load_fastdaq_scintillation_var.get():
-            # Hide when unchecked
             self.scintillation_tab_right.grid_forget()
             return
         # Show panel
@@ -140,51 +140,59 @@ class Scintillation(tk.Frame):
         # Load event data
         selected = ["run_control", "scintillation", "event_info"]
         self.path = os.path.join(self.raw_directory, self.run)
-        self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
-        self.pulses = SiPMPulses(self.scint_fastdaq_event)
-        self.gain = SiPMGain(self.pulses)
-        self.photon = PhotonT0(self.pulses)
-
-        print(self.scint_fastdaq_event['scintillation']['loaded'])
-        # Populate channels
-        n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
-        self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
-
-        # Initial draw
-        self.draw_fastdaq_scintillation()
-
+        try:
+            self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
+            self.pulses = SiPMPulses(self.scint_fastdaq_event)
+            self.gain = SiPMGain(self.pulses)
+            self.photon = PhotonT0(self.pulses)
+            # Populate channels
+            n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
+            self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
+            self.scintillation_combobox.current(0)
+            # Initial draw
+            self.new_channel()
+        except:
+            self.scint_error()
         # Clean up memory
         gc.collect()
 
+    
+
     def draw_fastdaq_scintillation(self):
+        if self.scint_fastdaq_event == None:
+            self.scint_error()
+            return
         if not self.load_fastdaq_scintillation_var.get():
             self.scintillation_tab_right.grid_forget()
             return
+        if self.path != os.path.join(self.raw_directory, self.run):
+            self.load_fastdaq_scintillation()
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
 
         # Retrieve selected channel data
-        idx = self.scintillation_combobox.current()
-        if idx < 0:
-            return
-        data = self.scint_fastdaq_event['scintillation']['Waveforms'][0][idx]
-        time = np.arange(len(data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
+        # idx = self.scintillation_combobox.current()
+        # if idx < 0:
+        #     return
+        # data = self.scint_fastdaq_event['scintillation']['Waveforms'][0][idx]
+        # time = np.arange(len(data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
 
         # Getting range and resolution for sliderrs
-        dt   = time[1] - time[0] 
-        t0   = time[0];    t1 = time[-1]
-        v0   = np.min(data); v1 = np.max(data)
-        dv   = (v1 - v0) / 100.0 
+        # dt   = time[1] - time[0] 
+        # t0   = time[0];    t1 = time[-1]
+        # v0   = np.min(data); v1 = np.max(data)
+        # dv   = (v1 - v0) / 100.0 
 
         # Update sliders 
-        self.t_start_slider.config(from_=t0, to=t1, resolution=dt)
-        #self.t_start_slider.set(t0)
-        self.t_end_slider.config(from_=t0, to=t1, resolution=dt)
-        #self.t_end_slider.set(t1)
-        self.v_lower_slider.config(from_=v0, to=v1, resolution=dv)
-        #self.v_lower_slider.set(v0)
-        self.v_upper_slider.config(from_=v0, to=v1, resolution=dv)
-        #self.v_upper_slider.set(v1)
-
+        # self.t_start_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
+        # self.t_end_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
+        # self.v_lower_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
+        # self.v_upper_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
+        # if 0 == self.t_end_slider.get():
+        #     self.t_end_slider.set(t1)
+        # if np.min(data) == self.v_upper_slider.get():
+        #      self.v_upper_slider.set(v1)
+        # if np.max(data) == self.v_lower_slider.get():
+        #      self.v_lower_slider.set(v0)
         # Histogram of hit amplitudes
         amps = self.photon['amp']
         self.gain_ax.clear()
@@ -199,7 +207,7 @@ class Scintillation(tk.Frame):
         vlow  = self.v_lower_var.get();    vhigh = self.v_upper_var.get()
         
         self.scintillation_ax.clear()
-        self.scintillation_ax.plot(time, data)
+        self.scintillation_ax.plot(self.time, self.data)
         self.scintillation_ax.relim()
         self.scintillation_ax.autoscale_view()
         self.scintillation_ax.set_xlim(start, end)
@@ -211,3 +219,36 @@ class Scintillation(tk.Frame):
         # Render
         self.scintillation_canvas.draw_idle()
         self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NW')
+
+    def new_channel(self):
+        idx = self.scintillation_combobox.current()
+        if idx < 0:
+            return
+        self.data = self.scint_fastdaq_event['scintillation']['Waveforms'][0][idx]
+        self.time = np.arange(len(self.data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
+        self.dt   = self.time[1] - self.time[0] 
+        self.t0   = self.time[0]    
+        self.t1 = self.time[-1]
+        self.v0   = np.min(self.data) 
+        self.v1 = np.max(self.data)
+        self.dv   = (self.v1 - self.v0) / 100.0 
+        self.t_start_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
+        self.t_end_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
+        self.v_lower_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
+        self.v_upper_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
+        self.t_start_slider.set(self.t0)
+        self.t_end_slider.set(self.t1)
+        self.v_upper_slider.set(self.v1)
+        self.v_lower_slider.set(self.v0)
+        self.draw_fastdaq_scintillation()
+
+    def scint_error(self):
+        self.scint_fastdaq_event = None
+        self.scintillation_combobox['values'] = []
+        self.scintillation_combobox.set('')
+        self.scintillation_ax.clear()
+        self.scintillation_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.scintillation_ax.transAxes, fontsize=20)
+        self.gain_ax.clear()
+        self.gain_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.gain_ax.transAxes, fontsize=20)
+        self.scintillation_canvas.draw_idle()
+    # Clean up memory
