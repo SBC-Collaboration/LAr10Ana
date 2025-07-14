@@ -169,30 +169,6 @@ class Scintillation(tk.Frame):
             self.load_fastdaq_scintillation()
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
 
-        # Retrieve selected channel data
-        # idx = self.scintillation_combobox.current()
-        # if idx < 0:
-        #     return
-        # data = self.scint_fastdaq_event['scintillation']['Waveforms'][0][idx]
-        # time = np.arange(len(data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
-
-        # Getting range and resolution for sliderrs
-        # dt   = time[1] - time[0] 
-        # t0   = time[0];    t1 = time[-1]
-        # v0   = np.min(data); v1 = np.max(data)
-        # dv   = (v1 - v0) / 100.0 
-
-        # Update sliders 
-        # self.t_start_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
-        # self.t_end_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
-        # self.v_lower_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
-        # self.v_upper_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
-        # if 0 == self.t_end_slider.get():
-        #     self.t_end_slider.set(t1)
-        # if np.min(data) == self.v_upper_slider.get():
-        #      self.v_upper_slider.set(v1)
-        # if np.max(data) == self.v_lower_slider.get():
-        #      self.v_lower_slider.set(v0)
         # Histogram of hit amplitudes
         amps = self.photon['amp']
         self.gain_ax.clear()
