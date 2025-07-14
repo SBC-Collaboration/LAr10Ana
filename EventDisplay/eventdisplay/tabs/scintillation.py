@@ -53,7 +53,7 @@ class Scintillation(tk.Frame):
 
         # Channel selector
         tk.Label(self.scintillation_tab_left, text='Channel:').grid(row=1, column=0, sticky='WE')
-        self.scintillation_combobox = ttk.Combobox(self.scintillation_tab_left, width=12, validate="focusout", validatecommand=self.load_fastdaq_scintillation)
+        self.scintillation_combobox = ttk.Combobox(self.scintillation_tab_left, width=12)
         self.scintillation_combobox.bind("<<ComboboxSelected>>", lambda _: self.new_channel())
         self.scintillation_combobox.grid(row=1, column=1, sticky='WE')
     
