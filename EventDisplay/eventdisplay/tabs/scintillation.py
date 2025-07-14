@@ -11,6 +11,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 # Hacky
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 from GetEvent import GetEvent
+
 # Even more hacky
 BASE = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                      '..', '..', '..'))
@@ -22,7 +23,7 @@ from PhotonT0 import PhotonT0
 
 class Scintillation(tk.Frame):
     def __init__(self, master=None):
-        super().__init__(master)
+        tk.Frame().__init__(self, master)
 
         # State variable for loading fastDAQ data
         self.load_fastdaq_scintillation_var = tk.BooleanVar(value=False)
@@ -45,7 +46,9 @@ class Scintillation(tk.Frame):
         # Load fastDAQ checkbutton
         self.load_fastdaq_scintillation_checkbutton = tk.Checkbutton(
             self.scintillation_tab_left,
+
             text='Load SiPM',
+
             variable=self.load_fastdaq_scintillation_var,
             command=self.load_fastdaq_scintillation
         )
@@ -54,6 +57,7 @@ class Scintillation(tk.Frame):
         # Channel selector
         tk.Label(self.scintillation_tab_left, text='Channel:').grid(row=1, column=0, sticky='WE')
         self.scintillation_combobox = ttk.Combobox(self.scintillation_tab_left, width=12)
+
         self.scintillation_combobox.bind("<<ComboboxSelected>>", lambda _: self.new_channel())
         self.scintillation_combobox.grid(row=1, column=1, sticky='WE')
     
@@ -114,7 +118,6 @@ class Scintillation(tk.Frame):
         self.v_upper_slider.grid(row=3, column=3, sticky='WE')
 
 
-
         # Reload button
         self.reload_fastdaq_scintillation_button = tk.Button(
             self.scintillation_tab_left,
@@ -123,15 +126,18 @@ class Scintillation(tk.Frame):
         )
         self.reload_fastdaq_scintillation_button.grid(row=4, column=0, columnspan=4, sticky='WE')
 
+
     def scintillation_canvas_setup(self):
         # Figure and canvas for plotting
         self.scintillation_fig = Figure(figsize=(7, 5), dpi=100)
         self.scintillation_ax = self.scintillation_fig.add_subplot(211)
         self.gain_ax = self.scintillation_fig.add_subplot(212)
+
         self.scintillation_canvas = FigureCanvasTkAgg(self.scintillation_fig, self.scintillation_tab_right)
 
     def load_fastdaq_scintillation(self):
         if not self.load_fastdaq_scintillation_var.get():
+
             self.scintillation_tab_right.grid_forget()
             return
         # Show panel
@@ -192,6 +198,7 @@ class Scintillation(tk.Frame):
         self.scintillation_ax.set_xlabel('[s]')
         self.scintillation_ax.set_ylabel('[V]')
 
+
         # Render
         self.scintillation_canvas.draw_idle()
         self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NW')
@@ -228,3 +235,4 @@ class Scintillation(tk.Frame):
         self.gain_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.gain_ax.transAxes, fontsize=20)
         self.scintillation_canvas.draw_idle()
     # Clean up memory
+
