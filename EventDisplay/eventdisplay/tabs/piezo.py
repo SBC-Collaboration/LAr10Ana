@@ -15,7 +15,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image, ImageTk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 from GetEvent import GetEvent
-from .utils import show_not_found_image
 
 
 class Piezo(tk.Frame):
@@ -57,17 +56,14 @@ class Piezo(tk.Frame):
 
         path = os.path.join(self.raw_directory, self.run)
 
-
-        selected = ["run_control", "acoustics"]
-        self.fastDAQ_event = GetEvent(path, self.event, *selected)
-        if self.fastDAQ_event["acoustics"]["loaded"]:
+        try:
+            selected = ["run_control", "acoustics"]
+            self.fastDAQ_event = GetEvent(path, self.event, *selected)
             self.piezo_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
+
             self.draw_fastDAQ_piezo()
-        else:
-            self.piezo_tab_right.grid(row=0, column=1, sticky='NW')
-            text = f"No piezo data for run {self.run}, event {self.event}"
-            show_not_found_image(self.piezo_tab_right, text)
-            return
+        except:
+            print("not found")
 
         # Garbage Collecting
         gc.collect()
