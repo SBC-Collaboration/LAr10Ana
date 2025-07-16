@@ -146,21 +146,20 @@ class Scintillation(tk.Frame):
         # Load event data
         selected = ["run_control", "scintillation", "event_info"]
         self.path = os.path.join(self.raw_directory, self.run)
-        try:
-            self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
-            # self.pulses = SiPMPulses(self.scint_fastdaq_event)
-            # self.gain = SiPMGain(self.pulses)
-            # self.photon = PhotonT0(self.pulses)
-            # Populate channels
-            n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
-            self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
-            self.scintillation_combobox.current(0)
-            # Initial draw
-            self.new_channel()
-        except Exception as e:
-            print(e)
-            self.scint_error()
-            self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
+        # try:
+        self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
+        # self.pulses = SiPMPulses(self.scint_fastdaq_event)
+        # self.gain = SiPMGain(self.pulses)
+        # self.photon = PhotonT0(self.pulses)
+        # Populate channels
+        n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
+        self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
+        self.scintillation_combobox.current(0)
+        # Initial draw
+        self.new_channel()
+        # except Exception as e:
+        #     print(e)
+        #     self.scint_error()
         # Clean up memory
         gc.collect()
 
