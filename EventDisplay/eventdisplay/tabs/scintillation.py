@@ -144,7 +144,7 @@ class Scintillation(tk.Frame):
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
 
         # Load event data
-        selected = ["run_control", "scintillation", "event_info"]
+        selected = ["run_control", "scintillation"]
         self.path = os.path.join(self.raw_directory, self.run)
         try:
             self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
@@ -195,7 +195,7 @@ class Scintillation(tk.Frame):
         self.scintillation_ax.autoscale_view()
         self.scintillation_ax.set_xlim(start, end)
         self.scintillation_ax.set_ylim(vlow, vhigh)
-        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.scint_fastdaq_event["event_info"]["run_id"][0]) + " Event: " + str(self.scint_fastdaq_event["event_info"]["event_id"][0]))
+        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.run) + " Event: " + str(self.event))
         self.scintillation_ax.set_xlabel('[s]')
         self.scintillation_ax.set_ylabel('[V]')
 
