@@ -120,7 +120,7 @@ class Piezo(tk.Frame):
 
             # Set Plot Labels
             self.piezo_ax.clear()
-            self.piezo_ax.set_title(piezo)
+            self.piezo_ax.set_title(piezo + " " + str(self.run) + " " + str(self.event))
             self.piezo_ax.set_xlabel('[s]')
             self.piezo_ax.set_ylabel('[V]')
 

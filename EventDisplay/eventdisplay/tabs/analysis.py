@@ -185,7 +185,7 @@ class Analysis(tk.Frame):
                fig = plt.figure(figsize=(4, 3), dpi=100)
                ax = fig.add_subplot(111)
 
-               ax.set_title('Raw Signal (Time Window)')
+               ax.set_title('Raw Signal (Time Window)' + " " + str(self.run) + " " + str(self.event))
                ax.set_xlabel('[s]')
                ax.set_ylabel('[V]')
         
