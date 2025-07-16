@@ -160,6 +160,7 @@ class Scintillation(tk.Frame):
         except Exception as e:
             print(e)
             self.scint_error()
+            self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
         # Clean up memory
         gc.collect()
 
