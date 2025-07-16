@@ -63,7 +63,7 @@ class Piezo(tk.Frame):
 
             self.draw_fastDAQ_piezo()
         except:
-            print("not found")
+            self.piezo_error()
 
         # Garbage Collecting
         gc.collect()
@@ -195,6 +195,14 @@ class Piezo(tk.Frame):
                 widget.destroy()
         except AttributeError:
             pass
+
+    def piezo_error(self):
+        self.piezo_fastdaq_event = None
+        self.piezo_combobox['values'] = []
+        self.piezo_combobox.set('')
+        self.piezo_ax.clear()
+        self.piezo_ax.text(0.2, 0.5, f"No Data For Run {self.run} Event {self.event}", transform=self.piezo_ax.transAxes, fontsize=10)
+        self.piezo_canvas.draw_idle()
 
     def create_piezo_widgets(self):
         self.piezo_tab = tk.Frame(self.notebook)

@@ -230,9 +230,29 @@ class Scintillation(tk.Frame):
         self.scintillation_combobox['values'] = []
         self.scintillation_combobox.set('')
         self.scintillation_ax.clear()
-        self.scintillation_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.scintillation_ax.transAxes, fontsize=20)
+        self.scintillation_ax.text(
+            0.5, 0.5,
+            f"No Data For Run {self.run} Event {self.event}",
+            transform=self.scintillation_ax.transAxes,
+            fontsize=10,
+            ha='center',
+            va='center'
+        )
         self.gain_ax.clear()
-        self.gain_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.gain_ax.transAxes, fontsize=20)
+        self.gain_ax.text(
+            0.5, 0.5,
+            f"No Gain Data",
+            transform=self.gain_ax.transAxes,
+            fontsize=10,
+            ha='center',
+            va='center'
+        )
+
+        # Redraw the canvas to update the GUI
         self.scintillation_canvas.draw_idle()
-    # Clean up memory
+
+        # Make sure canvas is visible
+        self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NW')
+
+        # Clean up memory
 
