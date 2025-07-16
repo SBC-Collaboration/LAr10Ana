@@ -148,9 +148,9 @@ class Scintillation(tk.Frame):
         self.path = os.path.join(self.raw_directory, self.run)
         try:
             self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
-            self.pulses = SiPMPulses(self.scint_fastdaq_event)
-            self.gain = SiPMGain(self.pulses)
-            self.photon = PhotonT0(self.pulses)
+            # self.pulses = SiPMPulses(self.scint_fastdaq_event)
+            # self.gain = SiPMGain(self.pulses)
+            # self.photon = PhotonT0(self.pulses)
             # Populate channels
             n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
             self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
@@ -176,13 +176,13 @@ class Scintillation(tk.Frame):
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
 
         # Histogram of hit amplitudes
-        amps = self.photon['amp']
-        self.gain_ax.clear()
-        self.gain_ax.hist(amps[~np.isnan(amps)], bins=50)
-        self.gain_ax.set_title("Hits per Amplitude histogram")
-        self.gain_ax.set_xlim(0, )
-        self.gain_ax.set_xlabel("Pulse amplitude (mV)")
-        self.gain_ax.set_ylabel("Hits")
+        # amps = self.photon['amp']
+        # self.gain_ax.clear()
+        # self.gain_ax.hist(amps[~np.isnan(amps)], bins=50)
+        # self.gain_ax.set_title("Hits per Amplitude histogram")
+        # self.gain_ax.set_xlim(0, )
+        # self.gain_ax.set_xlabel("Pulse amplitude (mV)")
+        # self.gain_ax.set_ylabel("Hits")
 
         # Get range and domain
         start = self.t_start_var.get();    end   = self.t_end_var.get()
@@ -230,9 +230,29 @@ class Scintillation(tk.Frame):
         self.scintillation_combobox['values'] = []
         self.scintillation_combobox.set('')
         self.scintillation_ax.clear()
-        self.scintillation_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.scintillation_ax.transAxes, fontsize=20)
+        self.scintillation_ax.text(
+            0.5, 0.5,
+            f"No Data For Run {self.run} Event {self.event}",
+            transform=self.scintillation_ax.transAxes,
+            fontsize=10,
+            ha='center',
+            va='center'
+        )
         self.gain_ax.clear()
-        self.gain_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.gain_ax.transAxes, fontsize=20)
+        self.gain_ax.text(
+            0.5, 0.5,
+            f"No Gain Data",
+            transform=self.gain_ax.transAxes,
+            fontsize=10,
+            ha='center',
+            va='center'
+        )
+
+        # Redraw the canvas to update the GUI
         self.scintillation_canvas.draw_idle()
-    # Clean up memory
+
+        # Make sure canvas is visible
+        self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NW')
+
+        # Clean up memory
 
