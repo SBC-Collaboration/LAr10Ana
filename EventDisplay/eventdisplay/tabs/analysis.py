@@ -65,8 +65,9 @@ class Analysis(tk.Frame):
 
                self.check_t0_exist()
                self.draw_fastDAQ_analysis()
-          except:
-              print("not found")
+          except Exception as e:
+            print("No piezo data")
+            print(e)
 
           # Garbage Collecting
           gc.collect()

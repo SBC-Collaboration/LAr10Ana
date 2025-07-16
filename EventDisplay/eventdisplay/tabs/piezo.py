@@ -62,8 +62,9 @@ class Piezo(tk.Frame):
             self.piezo_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
 
             self.draw_fastDAQ_piezo()
-        except:
-            print("not found")
+        except Exception as e:
+            print("No piezo data")
+            print(e)
 
         # Garbage Collecting
         gc.collect()

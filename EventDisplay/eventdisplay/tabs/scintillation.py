@@ -157,7 +157,8 @@ class Scintillation(tk.Frame):
             self.scintillation_combobox.current(0)
             # Initial draw
             self.new_channel()
-        except:
+        except Exception as e:
+            print(e)
             self.scint_error()
         # Clean up memory
         gc.collect()
