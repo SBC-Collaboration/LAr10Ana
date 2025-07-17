@@ -76,6 +76,8 @@ class Scintillation(tk.Frame):
             length=200
         )
         self.t_start_slider.grid(row=2, column=1, sticky='WE')
+        self.t_start_slider.bind("<ButtonRelease-1>", self.on_slider_release)
+
 
         tk.Label(self.scintillation_tab_left, text='T end:').grid(row=2, column=2, sticky='E')
         self.t_end_slider = tk.Scale(
@@ -88,6 +90,8 @@ class Scintillation(tk.Frame):
             length=200
         )
         self.t_end_slider.grid(row=2, column=3, sticky='WE')
+        self.t_end_slider.bind("<ButtonRelease-1>", self.on_slider_release)
+
 
             # Voltage sliders
         self.v_lower_var = tk.DoubleVar(value=0.0)
@@ -104,6 +108,8 @@ class Scintillation(tk.Frame):
             length=200
         )
         self.v_lower_slider.grid(row=3, column=1, sticky='WE')
+        self.v_lower_slider.bind("<ButtonRelease-1>", self.on_slider_release)
+
 
         tk.Label(self.scintillation_tab_left, text='V upper:').grid(row=3, column=2, sticky='E')
         self.v_upper_slider = tk.Scale(
@@ -116,7 +122,37 @@ class Scintillation(tk.Frame):
             length=200
         )
         self.v_upper_slider.grid(row=3, column=3, sticky='WE')
+        self.v_upper_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
+        # Frequency cutoff sliders
+        self.f_low_var = tk.DoubleVar(value=0.0)
+        self.f_high_var = tk.DoubleVar(value=0.0)
+
+        tk.Label(self.scintillation_tab_left, text='F low (Hz):').grid(row=4, column=0, sticky='E')
+        self.f_low_slider = tk.Scale(
+            self.scintillation_tab_left,
+            variable=self.f_low_var,
+            orient='horizontal',
+            from_=0, to=0,
+            resolution=1,
+            showvalue=True,
+            length=200
+        )
+        self.f_low_slider.grid(row=4, column=1, sticky='WE')
+        self.f_low_slider.bind("<ButtonRelease-1>", self.on_slider_release)
+
+        tk.Label(self.scintillation_tab_left, text='F high (Hz):').grid(row=4, column=2, sticky='E')
+        self.f_high_slider = tk.Scale(
+            self.scintillation_tab_left,
+            variable=self.f_high_var,
+            orient='horizontal',
+            from_=0, to=0,
+            resolution=1,
+            showvalue=True,
+            length=200
+        )
+        self.f_high_slider.grid(row=4, column=3, sticky='WE')
+        self.f_high_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
         # Reload button
         self.reload_fastdaq_scintillation_button = tk.Button(
@@ -124,16 +160,27 @@ class Scintillation(tk.Frame):
             text='Reload',
             command=self.draw_fastdaq_scintillation
         )
-        self.reload_fastdaq_scintillation_button.grid(row=4, column=0, columnspan=4, sticky='WE')
+        self.reload_fastdaq_scintillation_button.grid(row=5, column=0, columnspan=4, sticky='WE')
 
 
     def scintillation_canvas_setup(self):
         # Figure and canvas for plotting
-        self.scintillation_fig = Figure(figsize=(7, 5), dpi=100)
-        self.scintillation_ax = self.scintillation_fig.add_subplot(211)
-        self.gain_ax = self.scintillation_fig.add_subplot(212)
+        self.scintillation_fig = Figure(figsize=(7, 9), dpi=100)
+        gs = self.scintillation_fig.add_gridspec(3, 1)
+
+        self.scintillation_ax = self.scintillation_fig.add_subplot(gs[0, 0])
+        self.gain_ax = self.scintillation_fig.add_subplot(gs[1, 0])
+        self.fft_ax = self.scintillation_fig.add_subplot(gs[2, 0])
+
+        # Spacing and fitting
+        self.scintillation_fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.05, hspace=0.8)
 
         self.scintillation_canvas = FigureCanvasTkAgg(self.scintillation_fig, self.scintillation_tab_right)
+        self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NSEW')
+
+        self.scintillation_tab_right.grid_rowconfigure(0, weight=1)
+        self.scintillation_tab_right.grid_columnconfigure(1, weight=1)
+
 
     def load_fastdaq_scintillation(self):
         if not self.load_fastdaq_scintillation_var.get():
@@ -164,7 +211,7 @@ class Scintillation(tk.Frame):
 
     
 
-    def draw_fastdaq_scintillation(self):
+    def draw_fastdaq_scintillation(self, val=None):
         if self.scint_fastdaq_event == None:
             self.scint_error()
             return
@@ -175,6 +222,32 @@ class Scintillation(tk.Frame):
             self.load_fastdaq_scintillation()
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
 
+        # Get range and domain
+        start = self.t_start_var.get()
+        end   = self.t_end_var.get()
+        vlow  = self.v_lower_var.get()
+        vhigh = self.v_upper_var.get()
+        # Get frequency cutoffs
+        flow = self.f_low_var.get()
+        fhigh = self.f_high_var.get()
+        # Get FFT arrays
+        filtered_data = self.filter_signal_by_freq(self.data, flow, fhigh)
+        fft_vals = np.fft.rfft(filtered_data)
+        freqs = np.fft.rfftfreq(len(filtered_data), d=self.dt)
+        fft_mag = np.abs(fft_vals)
+
+        # Plot raw data and filtered data on same axis
+        self.scintillation_ax.clear()
+        self.scintillation_ax.plot(self.time, self.data)
+        self.scintillation_ax.plot(self.time, filtered_data)
+        self.scintillation_ax.relim()
+        self.scintillation_ax.autoscale_view()
+        self.scintillation_ax.set_xlim(start, end)
+        self.scintillation_ax.set_ylim(vlow, vhigh)
+        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.scint_fastdaq_event["event_info"]["run_id"][0]) + " Event: " + str(self.scint_fastdaq_event["event_info"]["event_id"][0]))
+        self.scintillation_ax.set_xlabel('[s]')
+        self.scintillation_ax.set_ylabel('[V]')
+
         # Histogram of hit amplitudes
         amps = self.photon['amp']
         self.gain_ax.clear()
@@ -184,20 +257,13 @@ class Scintillation(tk.Frame):
         self.gain_ax.set_xlabel("Pulse amplitude (mV)")
         self.gain_ax.set_ylabel("Hits")
 
-        # Get range and domain
-        start = self.t_start_var.get();    end   = self.t_end_var.get()
-        vlow  = self.v_lower_var.get();    vhigh = self.v_upper_var.get()
-        
-        self.scintillation_ax.clear()
-        self.scintillation_ax.plot(self.time, self.data)
-        self.scintillation_ax.relim()
-        self.scintillation_ax.autoscale_view()
-        self.scintillation_ax.set_xlim(start, end)
-        self.scintillation_ax.set_ylim(vlow, vhigh)
-        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.scint_fastdaq_event["event_info"]["run_id"][0]) + " Event: " + str(self.scint_fastdaq_event["event_info"]["event_id"][0]))
-        self.scintillation_ax.set_xlabel('[s]')
-        self.scintillation_ax.set_ylabel('[V]')
-
+        # Plot FFT
+        self.fft_ax.clear()
+        self.fft_ax.plot(freqs, fft_mag)  
+        self.fft_ax.set_xlim(flow, fhigh)
+        self.fft_ax.set_title("FFT Magnitude")
+        self.fft_ax.set_xlabel("Frequency (Hz)")
+        self.fft_ax.set_ylabel("Magnitude")
 
         # Render
         self.scintillation_canvas.draw_idle()
@@ -207,6 +273,7 @@ class Scintillation(tk.Frame):
         idx = self.scintillation_combobox.current()
         if idx < 0:
             return
+        # Update voltage and time slider range
         self.data = self.scint_fastdaq_event['scintillation']['Waveforms'][0][idx]
         self.time = np.arange(len(self.data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
         self.dt   = self.time[1] - self.time[0] 
@@ -223,6 +290,14 @@ class Scintillation(tk.Frame):
         self.t_end_slider.set(self.t1)
         self.v_upper_slider.set(self.v1)
         self.v_lower_slider.set(self.v0)
+
+        # Update FFT slider range
+        nyquist = 1 / (2 * self.dt)
+        self.f_low_slider.config(from_=0, to=nyquist, resolution=nyquist / 100)
+        self.f_high_slider.config(from_=0, to=nyquist, resolution=nyquist / 100)
+        self.f_low_slider.set(0)
+        self.f_high_slider.set(nyquist)
+
         self.draw_fastdaq_scintillation()
 
     def scint_error(self):
@@ -234,5 +309,18 @@ class Scintillation(tk.Frame):
         self.gain_ax.clear()
         self.gain_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.gain_ax.transAxes, fontsize=20)
         self.scintillation_canvas.draw_idle()
-    # Clean up memory
 
+    def filter_signal_by_freq(self, data, flow, fhigh):
+        fft = np.fft.rfft(data)
+        freqs = np.fft.rfftfreq(len(data), d=self.dt)
+
+        # Zero out frequencies outside the desired band
+        bandpass = (freqs >= flow) & (freqs <= fhigh)
+        fft[~bandpass] = 0
+
+        # Inverse FFT to return filtered time signal
+        return np.fft.irfft(fft, n=len(data))
+
+    # Wrapper function for sliders
+    def on_slider_release(self, var):
+        self.draw_fastdaq_scintillation()   
