@@ -38,6 +38,7 @@ from tabs.configuration import Configuration
 from tabs.analysis import Analysis
 from tabs.three_d_bubble import ThreeDBubble
 from tabs.scintillation import Scintillation
+from GetEvent import GetEvent
 
 try:
     from ctypes import windll
@@ -175,11 +176,11 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         # PLC vars
         self.temp_label = tk.StringVar()
 
-        # event.txt vars
-        self.run_type = -1
-        self.run_type_label = tk.StringVar()
+        # event_info.sbc vars
+        self.trigger_type = -1
+        self.trigger_type_label = tk.StringVar()
         self.pset_label = tk.StringVar()
-        self.te_label = tk.StringVar()
+        self.livetime_label = tk.StringVar()
 
         self.run = None
         self.event = None
@@ -475,36 +476,25 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         self.reset_cuts()
         self.load_3d_bubble_data()
 
-    def is_zip_file(self) -> bool:
-        return 'zip ' in self.raw_directory
-    
-    def event_text_zip_loader(self, path) -> None:
-        with self.zipped_event.open(path) as file:
-            entries = file.readline().split()
-            self.run_type = entries[2].decode()
-            self.run_type_label.set('run_type: ' + self.run_type)
-            self.pset_label.set('pset: {:.1f}'.format(float(entries[9].decode())))
-            self.te_label.set('l.t.: {:.1f}'.format(float(entries[10].decode())))
+    def load_event_sbc(self):
+        selected = ["event_info"]
+        self.path = os.path.join(self.raw_directory, self.run)
 
-
-    def load_event_text(self):
         try:
-            if self.zip_flag:
-                path = (os.path.join(self.run, str(self.event), 'Event.txt'))
-                self.event_text_zip_loader(path)
-            else:
-                path = os.path.join(self.raw_directory, self.run, str(self.event), 'Event.txt')
-                with open(path) as file:
-                    entries = file.readline().split()
-                    self.run_type = entries[2]
-                    self.run_type_label.set('run_type: ' + self.run_type)
-                    self.pset_label.set('pset: {:.1f}'.format(float(entries[9])))
-                    self.te_label.set('l.t.: {:.1f}'.format(float(entries[10])))
-        except FileNotFoundError:
-            self.run_type_label.set('run_type: N/A')
+            event_info = GetEvent(self.path, self.event, *selected)["event_info"]
+            livetime = event_info["ev_livetime"][0]
+            pset = event_info["pset"][0]
+            trigger_source = event_info["trigger_source"][0]
+
+            self.trigger_type_label.set(f'trig: {trigger_source}')
+            self.pset_label.set(f'pset: {pset:.1f}')
+            self.livetime_label.set(f'lt: {livetime:.1f}')
+
+        except:
+            self.trigger_type_label.set('trigger: N/A')
             self.pset_label.set('pset: N/A')
-            self.te_label.set('l.t.: N/A')
-            self.error += 'cannot find Event.txt\n'
+            self.livetime_label.set('lt: N/A')
+            self.error += 'cannot find event_info.sbc\n'
 
     def plc_text_zip_loader(self, path:str) -> None:
         with self.zipped_event.open(path) as file:
@@ -526,6 +516,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
                 self.temp_label.set(self.plc_temp_var + ': N/A')
 
     def load_plc_text(self):
+        return
         if self.zip_flag:
             path = os.path.join(self.run, str(self.event), 'PLClog.txt')
             self.plc_text_zip_loader(path)
@@ -1166,8 +1157,8 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         self.forward_1000events_button['command'] = lambda: self.increment_event(1000)
         self.forward_1000events_button.grid(row=3, column=2, columnspan=2, sticky='WE')
 
-        self.fill_run_type = tk.Label(self.bottom_frame_1, textvariable=self.run_type_label, width=11)
-        self.fill_run_type.grid(row=4, column=0, sticky='WE')
+        self.fill_trigger_type = tk.Label(self.bottom_frame_1, textvariable=self.trigger_type_label, width=11)
+        self.fill_trigger_type.grid(row=4, column=0, sticky='WE')
 
         self.fill_pset = tk.Label(self.bottom_frame_1, textvariable=self.pset_label, width=10)
         self.fill_pset.grid(row=4, column=1, sticky='WE')
@@ -1175,8 +1166,8 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         self.fill_temp = tk.Label(self.bottom_frame_1, textvariable=self.temp_label, width=10)
         self.fill_temp.grid(row=4, column=2, sticky='WE')
 
-        self.fill_te = tk.Label(self.bottom_frame_1, textvariable=self.te_label, width=10)
-        self.fill_te.grid(row=4, column=3, sticky='WE')
+        self.fill_livetime = tk.Label(self.bottom_frame_1, textvariable=self.livetime_label, width=10)
+        self.fill_livetime.grid(row=4, column=3, sticky='WE')
 
         self.reset_cuts_button = tk.Button(self.bottom_frame_1, text='reset cuts', command=self.reset_cuts)
         self.reset_cuts_button.grid(row=6, column=0, columnspan=2, sticky='WE')

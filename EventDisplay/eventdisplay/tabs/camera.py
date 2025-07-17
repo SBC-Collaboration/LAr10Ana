@@ -14,7 +14,7 @@ class Camera(tk.Frame):
         self.zip_flag
 
     def reset_images(self):
-        self.load_event_text()
+        self.load_event_sbc()
         self.load_plc_text()
         self.load_fastDAQ_piezo()
         # self.load_fastDAQ_dytran()
