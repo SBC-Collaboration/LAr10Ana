@@ -191,7 +191,7 @@ class Scintillation(tk.Frame):
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
 
         # Load event data
-        selected = ["run_control", "scintillation", "event_info"]
+        selected = ["run_control", "scintillation"]
         self.path = os.path.join(self.raw_directory, self.run)
         try:
             self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
@@ -204,7 +204,8 @@ class Scintillation(tk.Frame):
             self.scintillation_combobox.current(0)
             # Initial draw
             self.new_channel()
-        except:
+        except Exception as e:
+            print(e)
             self.scint_error()
         # Clean up memory
         gc.collect()
@@ -212,6 +213,7 @@ class Scintillation(tk.Frame):
     
 
     def draw_fastdaq_scintillation(self, val=None):
+        print(self.scint_fastdaq_event['scintillation']['Waveforms'].shape)
         if self.scint_fastdaq_event == None:
             self.scint_error()
             return
@@ -244,7 +246,7 @@ class Scintillation(tk.Frame):
         self.scintillation_ax.autoscale_view()
         self.scintillation_ax.set_xlim(start, end)
         self.scintillation_ax.set_ylim(vlow, vhigh)
-        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.scint_fastdaq_event["event_info"]["run_id"][0]) + " Event: " + str(self.scint_fastdaq_event["event_info"]["event_id"][0]))
+        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.run) + " Event: " + str(self.event))
         self.scintillation_ax.set_xlabel('[s]')
         self.scintillation_ax.set_ylabel('[V]')
 
@@ -259,7 +261,7 @@ class Scintillation(tk.Frame):
 
         # Plot FFT
         self.fft_ax.clear()
-        self.fft_ax.plot(freqs, fft_mag)  
+        self.fft_ax.plot(freqs[1:], fft_mag[1:])  
         self.fft_ax.set_xlim(flow, fhigh)
         self.fft_ax.set_title("FFT Magnitude")
         self.fft_ax.set_xlabel("Frequency (Hz)")
@@ -305,10 +307,25 @@ class Scintillation(tk.Frame):
         self.scintillation_combobox['values'] = []
         self.scintillation_combobox.set('')
         self.scintillation_ax.clear()
-        self.scintillation_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.scintillation_ax.transAxes, fontsize=20)
+        self.scintillation_ax.text(
+            0.5, 0.5,
+            f"No Data For Run {self.run} Event {self.event}",
+            transform=self.scintillation_ax.transAxes,
+            fontsize=10,
+            ha='center',
+            va='center'
+        )
         self.gain_ax.clear()
-        self.gain_ax.text(0.5, 0.5, "GetEvent Failed", transform=self.gain_ax.transAxes, fontsize=20)
+        self.gain_ax.text(
+            0.5, 0.5,
+            f"No Gain Data",
+            transform=self.gain_ax.transAxes,
+            fontsize=10,
+            ha='center',
+            va='center'
+        )
         self.scintillation_canvas.draw_idle()
+        self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NW')
 
     def filter_signal_by_freq(self, data, flow, fhigh):
         fft = np.fft.rfft(data)
