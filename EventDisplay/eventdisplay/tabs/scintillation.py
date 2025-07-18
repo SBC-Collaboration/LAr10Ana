@@ -28,6 +28,8 @@ class Scintillation(tk.Frame):
         # State variable for loading fastDAQ data
         self.load_fastdaq_scintillation_var = tk.BooleanVar(value=False)
 
+        self.trigger_index = 0
+
         # Build UI
         self.create_scintillation_widgets()
         self.scintillation_canvas_setup()
@@ -61,6 +63,31 @@ class Scintillation(tk.Frame):
         self.scintillation_combobox.bind("<<ComboboxSelected>>", lambda _: self.new_channel())
         self.scintillation_combobox.grid(row=1, column=1, sticky='WE')
     
+        # Label showing number of triggers
+        self.trigger_count_label = tk.Label(self.scintillation_tab_left, text="Triggers: ?")
+        self.trigger_count_label.grid(row=1, column=2, padx=(10, 0), sticky="W")
+
+        # Entry box for trigger selection
+        self.trigger_var = tk.StringVar()
+        self.trigger_entry = tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_var, width=6)
+        self.trigger_entry.grid(row=1, column=3, padx=(2, 10), sticky="W")
+        self.trigger_entry.bind("<Return>", self.on_trigger_entry_change)
+
+        # Frame to hold the 6 skip buttons in 3x2 grid
+        self.trigger_step_frame = tk.Frame(self.scintillation_tab_left)
+        self.trigger_step_frame.grid(row=1, column=4, padx=(10, 0), sticky="W")
+
+        btn_specs = [
+            ("+1", 1),   ("-1", -1),
+            ("+10", 10), ("-10", -10),
+            ("+100", 100), ("-100", -100)
+        ]
+
+        for i, (label, step) in enumerate(btn_specs):
+            btn = tk.Button(self.trigger_step_frame, text=label, width=4, command=lambda s=step: self.shift_trigger(s))
+            btn.grid(row=i // 2, column=i % 2, padx=1, pady=1)
+
+
         # Time window slider
         self.t_start_var = tk.DoubleVar(value=0.0)
         self.t_end_var   = tk.DoubleVar(value=0.0)
@@ -191,7 +218,7 @@ class Scintillation(tk.Frame):
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
 
         # Load event data
-        selected = ["run_control", "scintillation"]
+        selected = ["run_control", "scintillation", "event_info"]
         self.path = os.path.join(self.raw_directory, self.run)
         try:
             self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
@@ -213,7 +240,6 @@ class Scintillation(tk.Frame):
     
 
     def draw_fastdaq_scintillation(self, val=None):
-        print(self.scint_fastdaq_event['scintillation']['Waveforms'].shape)
         if self.scint_fastdaq_event == None:
             self.scint_error()
             return
@@ -274,10 +300,12 @@ class Scintillation(tk.Frame):
     def new_channel(self):
         idx = self.scintillation_combobox.current()
         if idx < 0:
-            return
+            idx = 0
         # Update voltage and time slider range
-        self.data = self.scint_fastdaq_event['scintillation']['Waveforms'][0][idx]
+        self.data = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index][idx]
         self.time = np.arange(len(self.data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
+        num_trigs = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[0]
+        self.trigger_count_label.config(text=f"Triggers: {num_trigs}")
         self.dt   = self.time[1] - self.time[0] 
         self.t0   = self.time[0]    
         self.t1 = self.time[-1]
@@ -325,7 +353,6 @@ class Scintillation(tk.Frame):
             va='center'
         )
         self.scintillation_canvas.draw_idle()
-        self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NW')
 
     def filter_signal_by_freq(self, data, flow, fhigh):
         fft = np.fft.rfft(data)
@@ -341,3 +368,24 @@ class Scintillation(tk.Frame):
     # Wrapper function for sliders
     def on_slider_release(self, var):
         self.draw_fastdaq_scintillation()   
+
+    def on_trigger_entry_change(self, event):
+        try:
+            idx = int(self.trigger_var.get())
+            max_idx = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[0]
+            if 0 <= idx < max_idx:
+                self.trigger_index = idx
+                self.new_channel()
+            else:
+                print(f"Trigger index {idx} out of range.")
+        except ValueError:
+            print("Invalid trigger index entered.")
+
+    def shift_trigger(self, step):
+        max_idx = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[0]
+        new_idx = self.trigger_index + step
+        new_idx = max(0, min(new_idx, max_idx - 1))  # Clamp to valid range
+
+        self.trigger_index = new_idx
+        self.trigger_var.set(str(new_idx))
+        self.new_channel()
