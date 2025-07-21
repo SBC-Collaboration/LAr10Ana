@@ -352,6 +352,15 @@ class Scintillation(tk.Frame):
             ha='center',
             va='center'
         )
+        self.fft_ax.clear()
+        self.fft_ax.text(
+            0.5, 0.5,
+            f"No FFT Data",
+            transform=self.fft_ax.transAxes,
+            fontsize=10,
+            ha='center',
+            va='center'
+        )
         self.scintillation_canvas.draw_idle()
 
     def filter_signal_by_freq(self, data, flow, fhigh):
