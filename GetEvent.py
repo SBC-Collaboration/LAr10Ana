@@ -4,6 +4,7 @@ from sbcbinaryformat import Streamer, Writer
 from PIL import Image
 import json
 import logging
+import warnings
 
 full_loadlist = [
     "acoustics",
@@ -16,7 +17,7 @@ full_loadlist = [
     "run_control"
 ]
 
-def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
+def GetEvent(rundirectory, ev, *loadlist, max_file_size=None, strictMode=True):
     event = dict()
     event_dir = os.path.join(rundirectory, str(ev)) 
 
@@ -35,7 +36,12 @@ def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
                 acoustic_file = os.path.join(event_dir, fname)
                 break
 
-        if acoustic_file:
+        if acoustic_file is None:
+            if strictMode: 
+                raise FileNotFoundError("No acoustics file present in the run directory. To disable this error, either pass strictMode=False, or remove 'acoustics' from the loadlist")
+            else:
+                warnings.warn("No acoustics file present in the run directory. Data will not be available in the returned dictionary.")
+        else:
             acoustic_data = Streamer(acoustic_file).to_dict()
             event["acoustics"]["loaded"] = True
             for k, v in acoustic_data.items():
@@ -43,16 +49,30 @@ def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
 
     if "scintillation" in loadlist:
         scint_file = os.path.join(event_dir, "scintillation.sbc")
-        scint_data = Streamer(scint_file).to_dict()
-        event["scintillation"]["loaded"] = True
-        for k, v in scint_data.items():
-            event["scintillation"][k] = v
+
+        if not os.path.exists(scint_file):
+            if strictMode: 
+                raise FileNotFoundError("No scintillation file present in the run directory. To disable this error, either pass strictMode=False, or remove 'scintillation' from the loadlist")
+            else:
+                warnings.warn("No scintillation file present in the run directory. Data will not be available in the returned dictionary.")
+        else:
+            scint_data = Streamer(scint_file).to_dict()
+            event["scintillation"]["loaded"] = True
+            for k, v in scint_data.items():
+                event["scintillation"][k] = v
 
     if "cam" in loadlist:
         event["cam"]["loaded"] = True
         for cam_ind in range(1, 4):
             event["cam"]["c%i" % cam_ind] = {}
             cam_file = os.path.join(event_dir, "cam%i-info.csv" % cam_ind)
+            if not os.path.exists(cam_file):
+                if strictMode: 
+                    raise FileNotFoundError("Missing camera file in the run directory. To disable this error, either pass strictMode=False, or remove 'cam' from the loadlist")
+                else:
+                    warnings.warn("Missing camera file in the run directory. Data will not be available in the returned dictionary.")
+                continue
+
             cam_data = np.loadtxt(cam_file, delimiter=",", skiprows=1)
             cam_data_headers = ["index"]
             with open(cam_file) as f:
@@ -70,50 +90,81 @@ def GetEvent(rundirectory, ev, *loadlist, max_file_size=None):
 
     if "event_info" in loadlist:
         event_file = os.path.join(event_dir, "event_info.sbc")
-        event_data = Streamer(event_file).to_dict()
-        event["event_info"]["loaded"] = True
-        for k, v in event_data.items():
-            event["event_info"][k] = v
+
+        if not os.path.exists(event_file):
+            if strictMode: 
+                raise FileNotFoundError("No event_info file present in the run directory. To disable this error, either pass strictMode=False, or remove 'event_info' from the loadlist")
+            else:
+                warnings.warn("No event_info file present in the run directory. Data will not be available in the returned dictionary.")
+        else:
+            event_data = Streamer(event_file).to_dict()
+            event["event_info"]["loaded"] = True
+            for k, v in event_data.items():
+                event["event_info"][k] = v
 
     if "slow_daq" in loadlist:
         slow_daq_file = os.path.join(event_dir, "slow_daq.sbc")
-        slow_daq_data = Streamer(slow_daq_file).to_dict()
-        event["slow_daq"]["loaded"] = True
-        for k, v in slow_daq_data.items():
-             event["slow_daq"][k] = v
+        if not os.path.exists(slow_daq_file):
+            if strictMode: 
+                raise FileNotFoundError("No slow_daq file present in the run directory. To disable this error, either pass strictMode=False, or remove 'slow_daq' from the loadlist")
+            else:
+                warnings.warn("No slow_daq file present in the run directory. Data will not be available in the returned dictionary.")
+        else:
+            slow_daq_data = Streamer(slow_daq_file).to_dict()
+            event["slow_daq"]["loaded"] = True
+            for k, v in slow_daq_data.items():
+                 event["slow_daq"][k] = v
 
     if "plc" in loadlist:
         plc_file = os.path.join(event_dir, "plc.sbc")
-        plc_data = Streamer(plc_file).to_dict()
-        event["plc"]["loaded"] = True
-        for k, v in plc_data.items():
-            event["plc"][k] = v
+        if not os.path.exists(plc_file):
+            if strictMode: 
+                raise FileNotFoundError("No plc file present in the run directory. To disable this error, either pass strictMode=False, or remove 'plc' from the loadlist")
+            else:
+                warnings.warn("No plc file present in the run directory. Data will not be available in the returned dictionary.")
+        else:
+            plc_data = Streamer(plc_file).to_dict()
+            event["plc"]["loaded"] = True
+            for k, v in plc_data.items():
+                event["plc"][k] = v
 
     if "run_info" in loadlist:
         run_info_file = os.path.join(rundirectory, "run_info.sbc")
-        run_info_data = Streamer(run_info_file).to_dict()
-        event["run_info"]["loaded"] = True
-        for k, v in run_info_data.items():
-            event["run_info"][k] = v
+        if not os.path.exists(run_info_file):
+            if strictMode: 
+                raise FileNotFoundError("No run_info file present in the run directory. To disable this error, either pass strictMode=False, or remove 'run_info' from the loadlist")
+            else:
+                warnings.warn("No run_info file present in the run directory. Data will not be available in the returned dictionary.")
+        else:
+            run_info_data = Streamer(run_info_file).to_dict()
+            event["run_info"]["loaded"] = True
+            for k, v in run_info_data.items():
+                event["run_info"][k] = v
 
     if "run_control" in loadlist:
         run_ctrl_file = os.path.join(rundirectory, "rc.json")
-        with open(run_ctrl_file, "r") as f:
-            run_ctrl_data = json.load(f)
-        event["run_control"]["loaded"] = True
-        for k, v in run_ctrl_data.items():
-            event["run_control"][k] = v
-        sample_rate_str = event['run_control']['acous']['sample_rate'].strip().upper()
-
-        if "MS/S" in sample_rate_str:
-            sample_rate = int(sample_rate_str.replace("MS/S", "").strip()) * 1_000_000
-        elif "KS/S" in sample_rate_str:
-            sample_rate = int(sample_rate_str.replace("KS/S", "").strip()) * 1_000
-        elif "S/S" in sample_rate_str:
-            sample_rate = int(sample_rate_str.replace("S/S", "").strip())
+        if not os.path.exists(run_ctrl_file):
+            if strictMode: 
+                raise FileNotFoundError("No run_control file present in the run directory. To disable this error, either pass strictMode=False, or remove 'run_control' from the loadlist")
+            else:
+                warnings.warn("No run_control file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            raise logging.error(f"Unrecognized sample rate format: '{sample_rate_str}'")
+            with open(run_ctrl_file, "r") as f:
+                run_ctrl_data = json.load(f)
+            event["run_control"]["loaded"] = True
+            for k, v in run_ctrl_data.items():
+                event["run_control"][k] = v
+            sample_rate_str = event['run_control']['acous']['sample_rate'].strip().upper()
 
-        event["acoustics"]["sample_rate"] = sample_rate
+            if "MS/S" in sample_rate_str:
+                sample_rate = int(sample_rate_str.replace("MS/S", "").strip()) * 1_000_000
+            elif "KS/S" in sample_rate_str:
+                sample_rate = int(sample_rate_str.replace("KS/S", "").strip()) * 1_000
+            elif "S/S" in sample_rate_str:
+                sample_rate = int(sample_rate_str.replace("S/S", "").strip())
+            else:
+                raise ValueError(f"Unrecognized sample rate format: '{sample_rate_str}'")
+
+            event["acoustics"]["sample_rate"] = sample_rate
 
     return event
