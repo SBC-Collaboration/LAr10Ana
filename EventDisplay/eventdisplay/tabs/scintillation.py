@@ -39,11 +39,15 @@ class Scintillation(tk.Frame):
         self.scintillation_tab = tk.Frame(self.notebook)
         self.notebook.add(self.scintillation_tab, text='SiPM')
 
-        # Left and right panels
+        # Left and right panels + Frames to hold buttons and variables
         self.scintillation_tab_left = tk.Frame(self.scintillation_tab, bd=5, relief=tk.SUNKEN)
         self.scintillation_tab_left.grid(row=0, column=0, sticky='NW')
         self.scintillation_tab_right = tk.Frame(self.scintillation_tab, bd=5, relief=tk.SUNKEN)
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
+        self.info_frame = tk.LabelFrame(self.scintillation_tab_left, text="Pulse Info", padx=5, pady=5)
+        self.info_frame.grid(row=6, column=0, columnspan=4, sticky='WE', pady=(10, 0))
+        self.trigger_step_frame = tk.Frame(self.scintillation_tab_left)
+        self.trigger_step_frame.grid(row=1, column=4, padx=(10, 0), sticky="W")
 
         # Load fastDAQ checkbutton
         self.load_fastdaq_scintillation_checkbutton = tk.Checkbutton(
@@ -73,9 +77,7 @@ class Scintillation(tk.Frame):
         self.trigger_entry.grid(row=1, column=3, padx=(2, 10), sticky="W")
         self.trigger_entry.bind("<Return>", self.on_trigger_entry_change)
 
-        # Frame to hold the 6 skip buttons in 3x2 grid
-        self.trigger_step_frame = tk.Frame(self.scintillation_tab_left)
-        self.trigger_step_frame.grid(row=1, column=4, padx=(10, 0), sticky="W")
+        # 6 skip buttons in 3x2 grid
 
         btn_specs = [
             ("+1", 1),   ("-1", -1),
@@ -86,6 +88,22 @@ class Scintillation(tk.Frame):
         for i, (label, step) in enumerate(btn_specs):
             btn = tk.Button(self.trigger_step_frame, text=label, width=4, command=lambda s=step: self.shift_trigger(s))
             btn.grid(row=i // 2, column=i % 2, padx=1, pady=1)
+
+        # Info box showing pulse characteristics
+        self.hit_t0_label = tk.Label(self.info_frame, text="hit_t0: N/A")
+        self.hit_t0_label.grid(row=0, column=0, sticky='W')
+
+        self.hit_amp_label = tk.Label(self.info_frame, text="hit_amp: N/A")
+        self.hit_amp_label.grid(row=1, column=0, sticky='W')
+
+        self.hit_area_label = tk.Label(self.info_frame, text="hit_area: N/A")
+        self.hit_area_label.grid(row=2, column=0, sticky='W')
+
+        self.wvf_area_label = tk.Label(self.info_frame, text="wvf_area: N/A")
+        self.wvf_area_label.grid(row=3, column=0, sticky='W')
+
+        self.second_pulse_label = tk.Label(self.info_frame, text="Second Pulse: N/A")
+        self.second_pulse_label.grid(row=4, column=0, sticky='W')
 
 
         # Time window slider
@@ -196,8 +214,8 @@ class Scintillation(tk.Frame):
         gs = self.scintillation_fig.add_gridspec(3, 1)
 
         self.scintillation_ax = self.scintillation_fig.add_subplot(gs[0, 0])
-        self.gain_ax = self.scintillation_fig.add_subplot(gs[1, 0])
-        self.fft_ax = self.scintillation_fig.add_subplot(gs[2, 0])
+        self.gain_ax = self.scintillation_fig.add_subplot(gs[2, 0])
+        self.fft_ax = self.scintillation_fig.add_subplot(gs[1, 0])
 
         # Spacing and fitting
         self.scintillation_fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.05, hspace=0.8)
@@ -265,9 +283,19 @@ class Scintillation(tk.Frame):
         fft_mag = np.abs(fft_vals)
 
         # Plot raw data and filtered data on same axis
+        # Plot vertical dotted lines at hit_t0 and hit_end (estimated)
         self.scintillation_ax.clear()
-        self.scintillation_ax.plot(self.time, self.data)
-        self.scintillation_ax.plot(self.time, filtered_data)
+        channel_index = self.scintillation_combobox.current()
+        if channel_index >= 0:
+            t0_val = self.pulses['hit_t0'][channel_index, self.trigger_index]
+            amp_val = self.pulses['hit_amp'][channel_index, self.trigger_index]
+            area_val = self.pulses['hit_area'][channel_index, self.trigger_index]
+
+            if not np.isnan(t0_val) and amp_val > 0:
+                self.scintillation_ax.axvline(t0_val, color='red', linestyle='dotted', label='hit_t0')
+                self.scintillation_ax.legend(loc='upper right', fontsize='small')
+        self.scintillation_ax.plot(self.time, self.data, label='Raw')
+        self.scintillation_ax.plot(self.time, filtered_data, label='Filtered')
         self.scintillation_ax.relim()
         self.scintillation_ax.autoscale_view()
         self.scintillation_ax.set_xlim(start, end)
@@ -292,6 +320,29 @@ class Scintillation(tk.Frame):
         self.fft_ax.set_title("FFT Magnitude")
         self.fft_ax.set_xlabel("Frequency (Hz)")
         self.fft_ax.set_ylabel("Magnitude")
+
+        # Update info labels
+        channel_index = self.scintillation_combobox.current()
+        try:
+            hit_t0_val = self.pulses['hit_t0'][channel_index, self.trigger_index]
+            hit_amp_val = self.pulses['hit_amp'][channel_index, self.trigger_index]
+            hit_area_val = self.pulses['hit_area'][channel_index, self.trigger_index]
+            wvf_area_val = self.pulses['wvf_area'][channel_index, self.trigger_index]
+            second_pulse_val = self.pulses['second_pulse'][channel_index, self.trigger_index]
+
+            self.hit_t0_label.config(text=f"hit_t0: {hit_t0_val:.4e}")
+            self.hit_amp_label.config(text=f"hit_amp: {hit_amp_val:.4e}")
+            self.hit_area_label.config(text=f"hit_area: {hit_area_val:.4e}")
+            self.wvf_area_label.config(text=f"wvf_area: {wvf_area_val:.4e}")
+            self.second_pulse_label.config(text=f"Second Pulse: {'Yes' if second_pulse_val else 'No'}")
+        except Exception as e:
+            print("Error updating pulse info:", e)
+            self.hit_t0_label.config(text="hit_t0: N/A")
+            self.hit_amp_label.config(text="hit_amp: N/A")
+            self.hit_area_label.config(text="hit_area: N/A")
+            self.wvf_area_label.config(text="wvf_area: N/A")
+            self.second_pulse_label.config(text="Second Pulse: N/A")
+
 
         # Render
         self.scintillation_canvas.draw_idle()
