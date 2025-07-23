@@ -105,6 +105,49 @@ class Scintillation(tk.Frame):
         self.second_pulse_label = tk.Label(self.info_frame, text="Second Pulse: N/A")
         self.second_pulse_label.grid(row=4, column=0, sticky='W')
 
+        self.baseline_label = ttk.Label(self.info_frame, text="Baseline: ")
+        self.baseline_label.grid(row=5, column=0) 
+
+        self.rms_label = ttk.Label(self.info_frame, text="RMS: ")
+        self.rms_label.grid(row=6, column=0) 
+
+        self.enable_cuts_var = tk.BooleanVar()
+        self.enable_cuts_check = ttk.Checkbutton(
+            self.info_frame,
+            text="Enable Cuts",
+            variable=self.enable_cuts_var,
+            command=self.toggle_cut_widgets
+        )
+        self.enable_cuts_check.grid(row=7, column=0, sticky="w", pady=(10, 0))
+
+        self.cut_widgets = {}
+
+        cut_variables = ["hit_amp", "hit_area", "wvf_area", "hit_t0", "second_pulse"]
+        for i, var in enumerate(cut_variables):
+            if var == "second_pulse":
+                yes_var = tk.BooleanVar(value=True)
+                no_var = tk.BooleanVar(value=True)
+                yes_check = ttk.Checkbutton(self.info_frame, text="Yes", variable=yes_var)
+                no_check = ttk.Checkbutton(self.info_frame, text="No", variable=no_var)
+
+                self.cut_widgets[var] = {
+                    "yes_var": yes_var,
+                    "no_var": no_var,
+                    "yes_check": yes_check,
+                    "no_check": no_check
+                }
+            else:
+                entry = ttk.Entry(self.info_frame, width=6)
+                mode = tk.StringVar(value="above")
+                above_button = ttk.Radiobutton(self.info_frame, text="Above", variable=mode, value="above")
+                below_button = ttk.Radiobutton(self.info_frame, text="Below", variable=mode, value="below")
+
+                self.cut_widgets[var] = {
+                    "entry": entry,
+                    "mode": mode,
+                    "above": above_button,
+                    "below": below_button
+                }
 
         # Time window slider
         self.t_start_var = tk.DoubleVar(value=0.0)
@@ -285,6 +328,8 @@ class Scintillation(tk.Frame):
         # Plot raw data and filtered data on same axis
         # Plot vertical dotted lines at hit_t0 and hit_end (estimated)
         self.scintillation_ax.clear()
+        self.scintillation_ax.plot(self.time, self.data, label='Raw')
+        self.scintillation_ax.plot(self.time, filtered_data, label='Filtered')
         channel_index = self.scintillation_combobox.current()
         if channel_index >= 0:
             t0_val = self.pulses['hit_t0'][channel_index, self.trigger_index]
@@ -293,16 +338,23 @@ class Scintillation(tk.Frame):
 
             if not np.isnan(t0_val) and amp_val > 0:
                 self.scintillation_ax.axvline(t0_val, color='red', linestyle='dotted', label='hit_t0')
-                self.scintillation_ax.legend(loc='upper right', fontsize='small')
-        self.scintillation_ax.plot(self.time, self.data, label='Raw')
-        self.scintillation_ax.plot(self.time, filtered_data, label='Filtered')
+        # Horizontal line for threshold = baseline + 5 * RMS
+        try:
+            baseline_val = self.pulses['baseline'][channel_index, self.trigger_index]
+            rms_val = self.pulses['rms'][channel_index, self.trigger_index]
+            threshold_val = baseline_val + 5 * rms_val
+            self.scintillation_ax.axhline(threshold_val, color='purple', linestyle='dotted', label='Threshold')
+
+        except Exception as e:
+            print("Failed to add threshold line:", e)
         self.scintillation_ax.relim()
         self.scintillation_ax.autoscale_view()
         self.scintillation_ax.set_xlim(start, end)
         self.scintillation_ax.set_ylim(vlow, vhigh)
         self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.run) + " Event: " + str(self.event))
         self.scintillation_ax.set_xlabel('[s]')
-        self.scintillation_ax.set_ylabel('[V]')
+        self.scintillation_ax.set_ylabel('[mV]')
+        self.scintillation_ax.legend(loc='upper right', fontsize='small')
 
         # Histogram of hit amplitudes
         amps = self.photon['amp']
@@ -329,12 +381,16 @@ class Scintillation(tk.Frame):
             hit_area_val = self.pulses['hit_area'][channel_index, self.trigger_index]
             wvf_area_val = self.pulses['wvf_area'][channel_index, self.trigger_index]
             second_pulse_val = self.pulses['second_pulse'][channel_index, self.trigger_index]
+            baseline_val = self.pulses['baseline'][channel_index, self.trigger_index]
+            rms_val = self.pulses['rms'][channel_index, self.trigger_index]
 
             self.hit_t0_label.config(text=f"hit_t0: {hit_t0_val:.4e}")
             self.hit_amp_label.config(text=f"hit_amp: {hit_amp_val:.4e}")
             self.hit_area_label.config(text=f"hit_area: {hit_area_val:.4e}")
             self.wvf_area_label.config(text=f"wvf_area: {wvf_area_val:.4e}")
             self.second_pulse_label.config(text=f"Second Pulse: {'Yes' if second_pulse_val else 'No'}")
+            self.baseline_label.config(text=f"Baseline: {baseline_val:.4f}")
+            self.rms_label.config(text=f"RMS: {rms_val:.4f}")
         except Exception as e:
             print("Error updating pulse info:", e)
             self.hit_t0_label.config(text="hit_t0: N/A")
@@ -342,6 +398,7 @@ class Scintillation(tk.Frame):
             self.hit_area_label.config(text="hit_area: N/A")
             self.wvf_area_label.config(text="wvf_area: N/A")
             self.second_pulse_label.config(text="Second Pulse: N/A")
+            self.baseline_label.config(text="Baseline: N/A")
 
 
         # Render
@@ -449,3 +506,24 @@ class Scintillation(tk.Frame):
         self.trigger_index = new_idx
         self.trigger_var.set(str(new_idx))
         self.new_channel()
+
+    def toggle_cut_widgets(self):
+        if self.enable_cuts_var.get():
+            for i, (var, widgets) in enumerate(self.cut_widgets.items()):
+                row = 0 + i
+                if var == "second_pulse":
+                    widgets["yes_check"].grid(row=row, column=3)
+                    widgets["no_check"].grid(row=row, column=4)
+                else:
+                    widgets["entry"].grid(row=row, column=3)
+                    widgets["above"].grid(row=row, column=4)
+                    widgets["below"].grid(row=row, column=5)
+        else:
+            for var, widgets in self.cut_widgets.items():
+                if var == "second_pulse":
+                    widgets["yes_check"].grid_remove()
+                    widgets["no_check"].grid_remove()
+                else:
+                    widgets["entry"].grid_remove()
+                    widgets["above"].grid_remove()
+                    widgets["below"].grid_remove()
