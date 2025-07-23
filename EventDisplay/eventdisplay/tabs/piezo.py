@@ -63,7 +63,7 @@ class Piezo(tk.Frame):
 
             self.draw_fastDAQ_piezo()
         except:
-            print("not found")
+            self.piezo_error()
 
         # Garbage Collecting
         gc.collect()
@@ -270,3 +270,19 @@ class Piezo(tk.Frame):
         self.reload_fastDAQ_piezo_button = tk.Button(self.piezo_tab_left, text='reload',
                                                      command=self.draw_fastDAQ_piezo)
         self.reload_fastDAQ_piezo_button.grid(row=8, column=0, sticky='WE')
+
+    def piezo_error(self):
+        print(f"No acoustics.sbc for {self.run} - {self.event}")
+        self.fastDAQ_event = None
+        self.piezo_combobox['values'] = []
+        self.piezo_combobox.set('')
+        self.piezo_ax.clear()
+        self.piezo_ax.text(0.2, 0.5, f"No data for {self.run} - {self.event}", transform=self.piezo_ax.transAxes, fontsize=15)
+
+        self.piezo_ax.set_xlabel('[s]')
+        self.piezo_ax.set_ylabel('[V]')
+
+        # Make sure elements are on canvas before calling draw_idle
+        self.piezo_tab_right.grid(row=0, column=1, sticky='NW')
+        self.piezo_canvas.get_tk_widget().grid(row=0, column=1, sticky='NW')
+        self.piezo_canvas.draw_idle()
