@@ -62,28 +62,8 @@ class Piezo(tk.Frame):
             self.piezo_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
 
             self.draw_fastDAQ_piezo()
-        except Exception as e:
-            # self.error += 'piezo data not found\n'
-            # self.destroy_children(self.piezo_tab_right)
-            # canvas = tk.Canvas(self.piezo_tab_right, width=self.init_image_width, height=self.init_image_height)
-            # self.reset_zoom(canvas)
-
-            # ### draw not found image
-            # # image_path = os.path.join(os.path.dirname(__file__), '..', '..', 'notfound.jpeg')
-            # # image_path = os.path.abspath(image_path)
-            # image = Image.open(os.path.join(self.ped_directory, 'notfound.jpeg'))
-
-            # self.native_image_width, self.native_image_height = image.size
-            # image = image.resize((int(canvas.image_width), int(canvas.image_height)),
-            #                      self.antialias_checkbutton_var.get())
-            # image = image.crop((canvas.crop_left, canvas.crop_bottom, canvas.crop_right, canvas.crop_top))
-
-            # canvas.image = canvas.create_image(0, 0, anchor=tk.NW, image=None)
-            # canvas.photo = ImageTk.PhotoImage(image)
-            # canvas.itemconfig(canvas.image, image=canvas.photo)
-            # canvas.grid(row=0, column=1, sticky='NW')
-            print(e)
-            self.piezo_error()
+        except:
+            print("not found")
 
         # Garbage Collecting
         gc.collect()
@@ -290,18 +270,3 @@ class Piezo(tk.Frame):
         self.reload_fastDAQ_piezo_button = tk.Button(self.piezo_tab_left, text='reload',
                                                      command=self.draw_fastDAQ_piezo)
         self.reload_fastDAQ_piezo_button.grid(row=8, column=0, sticky='WE')
-    
-    def piezo_error(self):
-        self.piezo_fastdaq_event = None
-        self.piezo_combobox['values'] = []
-        self.piezo_combobox.set('')
-        self.piezo_ax.clear()
-        self.piezo_ax.text(
-            0.5, 0.5,
-            f"No Data For Run {self.run} Event {self.event}",
-            transform=self.piezo_ax.transAxes,
-            fontsize=10,
-            ha='center',
-            va='center'
-        )
-        self.piezo_canvas.draw_idle()
