@@ -243,7 +243,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
             print(e, 'Line: ', sys.exc_info()[2].tb_lineno)
 
         # Click on Log Viewer Tab
-        if tab_clicked == 3 or tab_clicked == 'Log Viewer':
+        if tab_clicked == 2 or tab_clicked == 'Log Viewer':
             # Show Log Viewer Widgets
             self.bottom_frame_5.grid(row=1, column=0, sticky='NW')
             self.fra2.pack(side='top')
