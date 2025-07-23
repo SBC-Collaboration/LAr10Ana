@@ -59,7 +59,15 @@ class Piezo(tk.Frame):
         try:
             selected = ["run_control", "acoustics"]
             self.fastDAQ_event = GetEvent(path, self.event, *selected)
-            self.piezo_combobox['values'] = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
+            channels = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
+            self.piezo_combobox['values'] = channels
+
+            if channels:
+                self.piezo_combobox.set(channels[0])
+                self.piezo_combobox.state(['!disabled', 'readonly'])
+            else:
+                self.piezo_combobox.set('')
+                self.piezo_combobox.state(['disabled'])
 
             self.draw_fastDAQ_piezo()
         except:
