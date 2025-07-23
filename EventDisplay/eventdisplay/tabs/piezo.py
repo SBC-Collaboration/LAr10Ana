@@ -64,8 +64,10 @@ class Piezo(tk.Frame):
 
             if channels:
                 self.piezo_combobox.set(channels[0])
+                self.piezo_combobox.state(['!disabled', 'readonly'])
             else:
                 self.piezo_combobox.set('')
+                self.piezo_combobox.state(['disabled'])
 
             self.draw_fastDAQ_piezo()
         except:
