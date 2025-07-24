@@ -2,7 +2,7 @@ import numpy as np
 
 SAMPLE_FREQ = 62.5 # MHz
 
-def SiPMPulses(ev):
+def SiPMPulses(ev, traces=None, convert_adc2mV=False):
     # Stuff to save, with defaults
     default_output = dict(
         baseline=np.array([]),
@@ -25,18 +25,22 @@ def SiPMPulses(ev):
     # For each SiPM, for each readout, obtain the t0 and the voltage
 
     # Waveform in (ticks, ADC)
-    traces = ev["scintillation"]["Waveforms"].T.astype(float)
+    if traces is None:
+        traces = ev["scintillation"]["Waveforms"]
+
+    traces = traces.T.astype(float)
 
     # Subtract offset and convert to mV
-    for i_sipm in range(traces.shape[1]):
-        group = i_sipm // 8
-        chan  = i_sipm % 8
-        group_ctrl = ev["run_control"]["caen"]["group%i" % group]
-        offset = group_ctrl["offset"] + group_ctrl["ch_offset"][chan]
-        range_mV = float(group_ctrl["range"][:-4])
+    if convert_adc2mV:
+        for i_sipm in range(traces.shape[1]):
+            group = i_sipm // 8
+            chan  = i_sipm % 8
+            group_ctrl = ev["run_control"]["caen"]["group%i" % group]
+            offset = group_ctrl["offset"] + group_ctrl["ch_offset"][chan]
+            range_mV = float(group_ctrl["range"][:-4])
 
-        traces[:, i_sipm, :] -= offset
-        traces[:, i_sipm, :] *= range_mV
+            traces[:, i_sipm, :] -= offset
+            traces[:, i_sipm, :] *= range_mV
 
 
     decimation = ev["run_control"]["caen"]["global"]["decimation"]
@@ -70,6 +74,8 @@ def SiPMPulses(ev):
     # voltage values
     hit_area = hit_trace_V.sum(axis=0)
     hit_amplitude = hit_trace_V.max(axis=0)
+    hit_area[hit_area == 0] = np.nan
+    hit_amplitude[hit_amplitude == 0] = np.nan
     wvf_area = (trace_V*(wvf_index >= t0_ind)).sum(axis=0)
 
     # Are there any secondary hits after the first one?
