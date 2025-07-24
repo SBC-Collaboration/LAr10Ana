@@ -30,6 +30,8 @@ class Scintillation(tk.Frame):
 
         self.trigger_index = 0
 
+        self.channel_info_labels = {}
+
         # Build UI
         self.create_scintillation_widgets()
         self.scintillation_canvas_setup()
@@ -55,8 +57,11 @@ class Scintillation(tk.Frame):
             self.photon = PhotonT0(self.pulses)
             # Create channels in combobox
             n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
-            self.scintillation_combobox['values'] = [f"Channel {i+1}" for i in range(n_channels)]
-            self.scintillation_combobox.current(0)
+            self.scintillation_listbox.delete(0, tk.END)
+            for i in range(n_channels):
+                self.scintillation_listbox.insert(tk.END, f"Channel {i+1}")
+            self.scintillation_listbox.select_set(0)
+
             self.new_channel()
         except Exception as e:
             # Prints error
@@ -68,9 +73,13 @@ class Scintillation(tk.Frame):
         # Wrapper function for reloading data
     def new_channel(self):
         # If no channel is selected go to channel 1
-        idx = self.scintillation_combobox.current()
+        selections = self.scintillation_listbox.curselection()
+        if not selections:
+            return  
+        idx = selections[0]  # Use first selected index for now
         if idx < 0:
             idx = 0
+
         # Pull sampling rate and triggers
         self.data = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index][idx]
         self.time = np.arange(len(self.data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
@@ -80,8 +89,14 @@ class Scintillation(tk.Frame):
         self.dt   = self.time[1] - self.time[0] 
         self.t0   = self.time[0]    
         self.t1 = self.time[-1]
-        self.v0   = np.min(self.data) 
-        self.v1 = np.max(self.data)
+        waveforms = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index]
+        selected_channels = self.scintillation_listbox.curselection()
+        if not selected_channels:
+            selected_channels = [0]
+
+        all_selected_data = np.array([waveforms[idx] for idx in selected_channels])
+        self.v0 = np.min(all_selected_data)
+        self.v1 = np.max(all_selected_data)
         self.dv   = (self.v1 - self.v0) / 100.0 
         # Update voltage and time slider range
         self.t_start_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
@@ -92,8 +107,21 @@ class Scintillation(tk.Frame):
         self.t_start_slider.set(self.t0)
         self.t_end_slider.set(self.t1)
         # This is commented to not change the voltage slider value when a new channel is selected
-        # self.v_upper_slider.set(self.v1)
-        # self.v_lower_slider.set(self.v0)
+        if not self.lock_voltage_var.get():
+            self.v0 = np.min(all_selected_data)
+            self.v1 = np.max(all_selected_data)
+            self.dv = (self.v1 - self.v0) / 100.0 
+
+            self.v_lower_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
+            self.v_upper_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
+
+            # Clamp values to bounds and sync DoubleVars
+            if not (self.v0 <= self.v_lower_var.get() <= self.v1):
+                self.v_lower_var.set(self.v0)
+            if not (self.v0 <= self.v_upper_var.get() <= self.v1):
+                self.v_upper_var.set(self.v1)
+
+
 
         # Update FFT slider range
         nyquist = 1 / (2 * self.dt)
@@ -135,37 +163,75 @@ class Scintillation(tk.Frame):
 
         # Plot raw data and filtered data on same axis
         self.scintillation_ax.clear()
-        self.scintillation_ax.plot(self.time, self.data, label='Raw')
-        self.scintillation_ax.plot(self.time, filtered_data, label='Filtered')
-        channel_index = self.scintillation_combobox.current()
-        # Vertical line for hit time
-        if channel_index >= 0:
-            t0_val = self.pulses['hit_t0'][channel_index, self.trigger_index]
-            amp_val = self.pulses['hit_amp'][channel_index, self.trigger_index]
-            if not np.isnan(t0_val) and amp_val > 0:
-                self.scintillation_ax.axvline(t0_val, color='red', linestyle='dotted', label='hit_t0')
-        # Horizontal line for threshold
-        try:
-            baseline_val = self.pulses['baseline'][channel_index, self.trigger_index]
-            rms_val = self.pulses['rms'][channel_index, self.trigger_index]
-            threshold_val = baseline_val + 5 * rms_val
-            self.scintillation_ax.axhline(threshold_val, color='purple', linestyle='dotted', label='Threshold')
+        self.fft_ax.clear()
+        self.gain_ax.clear()
+        selections = self.scintillation_listbox.curselection()
+        if not selections:
+            return
 
-        except Exception as e:
-            print("Failed to add threshold line:", e)
+        vmins = []
+        vmaxs = []
+        fft_mins = []
+        fft_maxs = []
+
+
+        for idx in selections:
+            data = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index][idx]
+            time = np.arange(len(data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
+
+            filtered = self.filter_signal_by_freq(data, self.f_low_var.get(), self.f_high_var.get())
+            self.scintillation_ax.plot(time, data, label=f'Raw Ch {idx}')
+            self.scintillation_ax.plot(time, filtered, linestyle='--', label=f'Filtered Ch {idx + 1}')
+
+            vmins.append(np.min(data))
+            vmaxs.append(np.max(data))
+
+            data = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index][idx]
+            sample_rate = self.scint_fastdaq_event['scintillation']['sample_rate']
+            dt = 1 / sample_rate
+
+            filtered = self.filter_signal_by_freq(data, self.f_low_var.get(), self.f_high_var.get())
+            fft_vals = np.fft.rfft(filtered)
+            freqs = np.fft.rfftfreq(len(filtered), d=dt)
+            fft_mag = np.abs(fft_vals)
+
+            self.fft_ax.plot(freqs[1:], fft_mag[1:], label=f'Ch {idx}')
+            fft_mins.append(np.min(fft_mag[1:]))
+            fft_maxs.append(np.max(fft_mag[1:]))
+
+        #     try:
+        #         t0_val = self.pulses['hit_t0'][idx, self.trigger_index]
+        #         amp_val = self.pulses['hit_amp'][idx, self.trigger_index]
+        #         if not np.isnan(t0_val) and amp_val > 0:
+        #             self.scintillation_ax.axvline(t0_val, color='red', linestyle='dotted', label=f'hit_t0 Ch {idx}')
+        #     except Exception as e:
+        #         print(f"Failed to add hit_t0 for channel {idx}: {e}")
+            # try:
+            #     baseline_val = self.pulses['baseline'][idx, self.trigger_index]
+            #     rms_val = self.pulses['rms'][idx, self.trigger_index]
+            #     threshold_val = baseline_val + 5 * rms_val
+            #     self.scintillation_ax.axhline(threshold_val, color='purple', linestyle='dotted', label=f'Thresh Ch {idx}')
+            # except Exception as e:
+            #     print(f"Failed to add threshold line for Ch {idx}: {e}")
         # Waveform axis settings
         self.scintillation_ax.relim()
         self.scintillation_ax.autoscale_view()
         self.scintillation_ax.set_xlim(start, end)
-        self.scintillation_ax.set_ylim(vlow, vhigh)
-        self.scintillation_ax.set_title(self.scintillation_combobox.get() + " Run: " + str(self.run) + " Event: " + str(self.event))
+        if self.lock_voltage_var.get():
+            self.scintillation_ax.set_ylim(vlow, vhigh)
+        else:
+            self.scintillation_ax.set_ylim(min(vmins), max(vmaxs))
+            # Also update sliders live if not locked
+            self.v_lower_var.set(min(vmins))
+            self.v_upper_var.set(max(vmaxs))
+
+        self.scintillation_ax.set_title("Channels: " + ", ".join(str(i+1) for i in selections) + " Run: " + str(self.run) + " Event: " + str(self.event))
         self.scintillation_ax.set_xlabel('[s]')
         self.scintillation_ax.set_ylabel('[mV]')
         self.scintillation_ax.legend(loc='upper right', fontsize='small')
 
         # Histogram of hit amplitudes
         amps = self.photon['amp']
-        self.gain_ax.clear()
         self.gain_ax.hist(amps[~np.isnan(amps)], bins=50)
         self.gain_ax.set_title("Hits per Amplitude histogram")
         self.gain_ax.set_xlim(0, )
@@ -173,59 +239,29 @@ class Scintillation(tk.Frame):
         self.gain_ax.set_ylabel("Hits")
 
         # Plot FFT
-        self.fft_ax.clear()
-        self.fft_ax.plot(freqs[1:], fft_mag[1:])  
+        if fft_mins and fft_maxs:
+            self.fft_ax.set_ylim(min(fft_mins), max(fft_maxs))
+
         self.fft_ax.set_xlim(flow, fhigh)
         self.fft_ax.set_title("FFT Magnitude")
         self.fft_ax.set_xlabel("Frequency (Hz)")
         self.fft_ax.set_ylabel("Magnitude")
 
-        # Update analysis variable labels
-        channel_index = self.scintillation_combobox.current()
-        try:
-            hit_t0_val = self.pulses['hit_t0'][channel_index, self.trigger_index]
-            hit_amp_val = self.pulses['hit_amp'][channel_index, self.trigger_index]
-            hit_area_val = self.pulses['hit_area'][channel_index, self.trigger_index]
-            wvf_area_val = self.pulses['wvf_area'][channel_index, self.trigger_index]
-            second_pulse_val = self.pulses['second_pulse'][channel_index, self.trigger_index]
-            baseline_val = self.pulses['baseline'][channel_index, self.trigger_index]
-            rms_val = self.pulses['rms'][channel_index, self.trigger_index]
+        if selections:
+            self.fft_ax.legend(loc='upper right', fontsize='small')
 
-            self.hit_t0_label.config(text=f"hit_t0: {hit_t0_val:.4e}")
-            self.hit_amp_label.config(text=f"hit_amp: {hit_amp_val:.4e}")
-            self.hit_area_label.config(text=f"hit_area: {hit_area_val:.4e}")
-            self.wvf_area_label.config(text=f"wvf_area: {wvf_area_val:.4e}")
-            self.second_pulse_label.config(text=f"Second Pulse: {'Yes' if second_pulse_val else 'No'}")
-            self.baseline_label.config(text=f"Baseline: {baseline_val:.4f}")
-            self.rms_label.config(text=f"RMS: {rms_val:.4f}")
-        except Exception as e:
-            print("Error updating pulse info:", e)
-            self.hit_t0_label.config(text="hit_t0: N/A")
-            self.hit_amp_label.config(text="hit_amp: N/A")
-            self.hit_area_label.config(text="hit_area: N/A")
-            self.wvf_area_label.config(text="wvf_area: N/A")
-            self.second_pulse_label.config(text="Second Pulse: N/A")
-            self.baseline_label.config(text="Baseline: N/A")
+                # Show updated channel variable info and cuts
+        self.update_channel_info_display()
 
         # Render
         self.scintillation_canvas.draw_idle()
         self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NW')
 
-        # Update FFT slider range
-        nyquist = 1 / (2 * self.dt)
-        self.f_low_slider.config(from_=0, to=nyquist, resolution=nyquist / 100)
-        self.f_high_slider.config(from_=0, to=nyquist, resolution=nyquist / 100)
-        self.f_low_slider.set(0)
-        self.f_high_slider.set(nyquist)
-
-        self.draw_fastdaq_scintillation()
-
     # Error handling
     def scint_error(self):
         # Clear event and combobox
         self.scint_fastdaq_event = None
-        self.scintillation_combobox['values'] = []
-        self.scintillation_combobox.set('')
+        self.scintillation_listbox.delete(0, tk.END)
         # Clear graphs and display error message with run and event for bug testing
         self.scintillation_ax.clear()
         self.scintillation_ax.text(
@@ -293,6 +329,84 @@ class Scintillation(tk.Frame):
         self.trigger_index = new_idx
         self.trigger_var.set(str(new_idx))
         self.new_channel()
+    
+    def update_channel_info_display(self):
+        for widget in self.info_frame.winfo_children():
+            widget.destroy()
+
+        selected_channels = self.scintillation_listbox.curselection()
+        if not selected_channels:
+            return
+
+        # Variable names on left
+        variable_names = [
+            "hit_t0", "hit_amp", "hit_area", "wvf_area",
+            "Second Pulse", "Baseline", "RMS"
+        ]
+        for row, var in enumerate(variable_names, start=1):
+            tk.Label(self.info_frame, text=var).grid(row=row, column=0, sticky='w')
+
+        # Fill in channel headers + values
+        for col, ch_idx in enumerate(selected_channels, start=1):
+            tk.Label(self.info_frame, text=f"Ch {ch_idx + 1}", font=("Arial", 9, "underline")).grid(row=0, column=col, padx=5)
+            try:
+                values = [
+                    f"{self.pulses['hit_t0'][ch_idx, self.trigger_index]:.4e}",
+                    f"{self.pulses['hit_amp'][ch_idx, self.trigger_index]:.4e}",
+                    f"{self.pulses['hit_area'][ch_idx, self.trigger_index]:.4e}",
+                    f"{self.pulses['wvf_area'][ch_idx, self.trigger_index]:.4e}",
+                    "Yes" if self.pulses['second_pulse'][ch_idx, self.trigger_index] else "No",
+                    f"{self.pulses['baseline'][ch_idx, self.trigger_index]:.4f}",
+                    f"{self.pulses['rms'][ch_idx, self.trigger_index]:.4f}",
+                ]
+                for row, val in enumerate(values, start=1):
+                    tk.Label(self.info_frame, text=val).grid(row=row, column=col, padx=5)
+            except Exception as e:
+                print(f"Error showing pulse info for Channel {ch_idx}: {e}")
+
+
+        self.cut_start_row = row  # store where to begin the cut widgets
+        # Recreate cut widgets below channel info
+        self.cut_widgets = {}
+
+        cut_variables = ["hit_amp", "hit_area", "wvf_area", "hit_t0", "second_pulse"]
+        for i, var in enumerate(cut_variables):
+            row = self.cut_start_row + i
+            if var == "second_pulse":
+                yes_var = tk.BooleanVar(value=True)
+                no_var = tk.BooleanVar(value=True)
+                yes_check = ttk.Checkbutton(self.info_frame, text="Yes", variable=yes_var)
+                no_check = ttk.Checkbutton(self.info_frame, text="No", variable=no_var)
+
+                if self.enable_cuts_var.get():
+                    yes_check.grid(row=row, column=3)
+                    no_check.grid(row=row, column=4)
+
+                self.cut_widgets[var] = {
+                    "yes_var": yes_var,
+                    "no_var": no_var,
+                    "yes_check": yes_check,
+                    "no_check": no_check
+                }
+            else:
+                entry = ttk.Entry(self.info_frame, width=6)
+                mode = tk.StringVar(value="above")
+                above_button = ttk.Radiobutton(self.info_frame, text="Above", variable=mode, value="above")
+                below_button = ttk.Radiobutton(self.info_frame, text="Below", variable=mode, value="below")
+
+                if self.enable_cuts_var.get():
+                    entry.grid(row=row, column=3)
+                    above_button.grid(row=row, column=4)
+                    below_button.grid(row=row, column=5)
+
+                self.cut_widgets[var] = {
+                    "entry": entry,
+                    "mode": mode,
+                    "above": above_button,
+                    "below": below_button
+                }
+
+
 
     # Creating figure, canvas, and axes for plots
     def scintillation_canvas_setup(self):
@@ -343,10 +457,15 @@ class Scintillation(tk.Frame):
 
         # Channel selector combobox
         tk.Label(self.scintillation_tab_left, text='Channel:').grid(row=1, column=0, sticky='WE')
-        self.scintillation_combobox = ttk.Combobox(self.scintillation_tab_left, width=12)
+        self.scintillation_listbox = tk.Listbox(
+            self.scintillation_tab_left,
+            selectmode='multiple',
+            height=6,
+            exportselection=False
+        )
+        self.scintillation_listbox.grid(row=1, column=1, sticky='WE')
+        self.scintillation_listbox.bind("<<ListboxSelect>>", lambda _: self.new_channel())
 
-        self.scintillation_combobox.bind("<<ComboboxSelected>>", lambda _: self.new_channel())
-        self.scintillation_combobox.grid(row=1, column=1, sticky='WE')
     
         # Label showing number of triggers
         self.trigger_count_label = tk.Label(self.scintillation_tab_left, text="Triggers: ?")
@@ -491,6 +610,15 @@ class Scintillation(tk.Frame):
         self.v_upper_slider.grid(row=3, column=3, sticky='WE')
         self.v_upper_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
+        self.lock_voltage_var = tk.BooleanVar(value=False)
+        self.lock_voltage_check = tk.Checkbutton(
+            self.scintillation_tab_left,
+            text='Lock Voltage',
+            variable=self.lock_voltage_var
+        )
+        self.lock_voltage_check.grid(row=3, column=4, padx=(10, 0), sticky='W')
+
+
         # Frequency cutoff sliders
         self.f_low_var = tk.DoubleVar(value=0.0)
         self.f_high_var = tk.DoubleVar(value=0.0)
@@ -530,10 +658,10 @@ class Scintillation(tk.Frame):
         self.reload_fastdaq_scintillation_button.grid(row=5, column=0, columnspan=4, sticky='WE')
 
     # Cut widget show/hide
-    def toggle_cut_widgets(self):
+    def place_cut_widgets(self):
         if self.enable_cuts_var.get():
             for i, (var, widgets) in enumerate(self.cut_widgets.items()):
-                row = 0 + i
+                row = self.cut_start_row + i
                 if var == "second_pulse":
                     widgets["yes_check"].grid(row=row, column=3)
                     widgets["no_check"].grid(row=row, column=4)
@@ -542,11 +670,14 @@ class Scintillation(tk.Frame):
                     widgets["above"].grid(row=row, column=4)
                     widgets["below"].grid(row=row, column=5)
         else:
-            for var, widgets in self.cut_widgets.items():
-                if var == "second_pulse":
+            for widgets in self.cut_widgets.values():
+                if "yes_check" in widgets:
                     widgets["yes_check"].grid_remove()
                     widgets["no_check"].grid_remove()
                 else:
                     widgets["entry"].grid_remove()
                     widgets["above"].grid_remove()
                     widgets["below"].grid_remove()
+
+    def toggle_cut_widgets(self):
+        self.update_channel_info_display()
