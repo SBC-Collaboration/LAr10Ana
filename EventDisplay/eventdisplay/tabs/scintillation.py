@@ -53,7 +53,7 @@ class Scintillation(tk.Frame):
         try:
             self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
             self.pulses = SiPMPulses(self.scint_fastdaq_event)
-            self.gain = SiPMGain(self.pulses)
+            # self.gain = SiPMGain(self.pulses) Not needed at the moment but maybe future use
             self.photon = PhotonT0(self.pulses)
             # Create channels in combobox
             n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
@@ -79,7 +79,12 @@ class Scintillation(tk.Frame):
         idx = selections[0]  # Use first selected index for now
         if idx < 0:
             idx = 0
-
+        # Pull waveforms for a trigger across only selected channels
+        waveforms = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index]
+        selected_channels = self.scintillation_listbox.curselection()
+        if not selected_channels:
+            selected_channels = [0]
+        all_selected_data = np.array([waveforms[idx] for idx in selected_channels])
         # Pull sampling rate and triggers
         self.data = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index][idx]
         self.time = np.arange(len(self.data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
@@ -89,15 +94,9 @@ class Scintillation(tk.Frame):
         self.dt   = self.time[1] - self.time[0] 
         self.t0   = self.time[0]    
         self.t1 = self.time[-1]
-        waveforms = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index]
-        selected_channels = self.scintillation_listbox.curselection()
-        if not selected_channels:
-            selected_channels = [0]
-
-        all_selected_data = np.array([waveforms[idx] for idx in selected_channels])
         self.v0 = np.min(all_selected_data)
         self.v1 = np.max(all_selected_data)
-        self.dv   = (self.v1 - self.v0) / 100.0 
+        self.dv = (self.v1 - self.v0) / 100.0 
         # Update voltage and time slider range
         self.t_start_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
         self.t_end_slider.config(from_=self.t0, to=self.t1, resolution=self.dt)
@@ -106,15 +105,8 @@ class Scintillation(tk.Frame):
         # Set sliders to max and min of data set
         self.t_start_slider.set(self.t0)
         self.t_end_slider.set(self.t1)
-        # This is commented to not change the voltage slider value when a new channel is selected
+        # Voltage slider logic to only set sliders to min/max when lock is not
         if not self.lock_voltage_var.get():
-            self.v0 = np.min(all_selected_data)
-            self.v1 = np.max(all_selected_data)
-            self.dv = (self.v1 - self.v0) / 100.0 
-
-            self.v_lower_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
-            self.v_upper_slider.config(from_=self.v0, to=self.v1, resolution=self.dv)
-
             # Clamp values to bounds and sync DoubleVars
             if not (self.v0 <= self.v_lower_var.get() <= self.v1):
                 self.v_lower_var.set(self.v0)
@@ -180,7 +172,7 @@ class Scintillation(tk.Frame):
             time = np.arange(len(data)) * (1 / self.scint_fastdaq_event['scintillation']['sample_rate'])
 
             filtered = self.filter_signal_by_freq(data, self.f_low_var.get(), self.f_high_var.get())
-            self.scintillation_ax.plot(time, data, label=f'Raw Ch {idx}')
+            self.scintillation_ax.plot(time, data, label=f'Raw Ch {idx + 1}')
             self.scintillation_ax.plot(time, filtered, linestyle='--', label=f'Filtered Ch {idx + 1}')
 
             vmins.append(np.min(data))
@@ -222,8 +214,8 @@ class Scintillation(tk.Frame):
         else:
             self.scintillation_ax.set_ylim(min(vmins), max(vmaxs))
             # Also update sliders live if not locked
-            self.v_lower_var.set(min(vmins))
-            self.v_upper_var.set(max(vmaxs))
+            # self.v_lower_var.set(min(vmins))
+            # self.v_upper_var.set(max(vmaxs))
 
         self.scintillation_ax.set_title("Channels: " + ", ".join(str(i+1) for i in selections) + " Run: " + str(self.run) + " Event: " + str(self.event))
         self.scintillation_ax.set_xlabel('[s]')
