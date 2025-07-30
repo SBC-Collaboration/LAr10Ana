@@ -11,10 +11,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 # Hacky
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 from GetEvent import GetEvent
-
 # Even more hacky
-BASE = os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                     '..', '..', '..'))
+BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 ANA_DIR = os.path.join(BASE, 'ana')
 sys.path.insert(0, ANA_DIR)
 from SiPMPulses import SiPMPulses
@@ -74,7 +72,8 @@ class Scintillation(tk.Frame):
         # If no channel is selected go to channel 1
         selections = self.scintillation_listbox.curselection()
         if not selections:
-            return  
+            self.draw_fastdaq_scintillation()
+            return
         idx = selections[0]  # Use first selected index for now
         if idx < 0:
             idx = 0
@@ -104,14 +103,10 @@ class Scintillation(tk.Frame):
         # Set sliders to max and min of data set
         self.t_start_slider.set(self.t0)
         self.t_end_slider.set(self.t1)
-        # Voltage slider logic to only set sliders to min/max when lock is not
+        # Only update values if lock is not checked
         if not self.lock_voltage_var.get():
-            # Clamp values to bounds and sync DoubleVars
-            if not (self.v0 <= self.v_lower_var.get() <= self.v1):
-                self.v_lower_var.set(self.v0)
-            if not (self.v0 <= self.v_upper_var.get() <= self.v1):
-                self.v_upper_var.set(self.v1)
-
+            self.v_lower_var.set(self.v0)
+            self.v_upper_var.set(self.v1)
 
 
         # Update FFT slider range
@@ -157,7 +152,25 @@ class Scintillation(tk.Frame):
         self.fft_ax.clear()
         self.gain_ax.clear()
         selections = self.scintillation_listbox.curselection()
+        # If no channels selected clear graphs
         if not selections:
+            self.scintillation_ax.clear()
+            self.fft_ax.clear()
+            self.gain_ax.clear()
+
+            self.scintillation_ax.set_title("No channels selected")
+            self.scintillation_ax.set_xlabel('')
+            self.scintillation_ax.set_ylabel('')
+
+            self.fft_ax.set_title("No FFT Data")
+            self.fft_ax.set_xlabel('')
+            self.fft_ax.set_ylabel('')
+
+            self.gain_ax.set_title("No Gain Data")
+            self.gain_ax.set_xlabel('')
+            self.gain_ax.set_ylabel('')
+
+            self.scintillation_canvas.draw_idle()
             return
 
         vmins = []
@@ -208,14 +221,7 @@ class Scintillation(tk.Frame):
         self.scintillation_ax.relim()
         self.scintillation_ax.autoscale_view()
         self.scintillation_ax.set_xlim(start, end)
-        if self.lock_voltage_var.get():
-            self.scintillation_ax.set_ylim(vlow, vhigh)
-        else:
-            self.scintillation_ax.set_ylim(min(vmins), max(vmaxs))
-            # Also update sliders live if not locked
-            # self.v_lower_var.set(min(vmins))
-            # self.v_upper_var.set(max(vmaxs))
-
+        self.scintillation_ax.set_ylim(vlow, vhigh)
         self.scintillation_ax.set_title("Channels: " + ", ".join(str(i+1) for i in selections) + " Run: " + str(self.run) + " Event: " + str(self.event))
         self.scintillation_ax.set_xlabel('[s]')
         self.scintillation_ax.set_ylabel('[mV]')
