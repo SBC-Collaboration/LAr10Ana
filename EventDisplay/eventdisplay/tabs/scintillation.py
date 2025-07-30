@@ -18,7 +18,6 @@ BASE = os.path.abspath(os.path.join(os.path.dirname(__file__),
 ANA_DIR = os.path.join(BASE, 'ana')
 sys.path.insert(0, ANA_DIR)
 from SiPMPulses import SiPMPulses
-from SiPMGain import SiPMGain
 from PhotonT0 import PhotonT0
 
 class Scintillation(tk.Frame):
