@@ -454,15 +454,26 @@ class Scintillation(tk.Frame):
 
         # Channel selector combobox
         tk.Label(self.scintillation_tab_left, text='Channel:').grid(row=1, column=0, sticky='WE')
+        # Frame to hold Listbox + Scrollbar
+        listbox_frame = tk.Frame(self.scintillation_tab_left)
+        listbox_frame.grid(row=1, column=1, sticky='WE')
+        # Listbox
         self.scintillation_listbox = tk.Listbox(
-            self.scintillation_tab_left,
+            listbox_frame,
             selectmode='multiple',
             height=6,
-            exportselection=False
+            exportselection=False,
+            yscrollcommand=lambda *args: self.listbox_scrollbar.set(*args)
         )
-        self.scintillation_listbox.grid(row=1, column=1, sticky='WE')
+        self.scintillation_listbox.pack(side=tk.LEFT, fill=tk.BOTH)
+        # Scrollbar
+        self.listbox_scrollbar = tk.Scrollbar(
+            listbox_frame,
+            orient="vertical",
+            command=self.scintillation_listbox.yview
+        )
+        self.listbox_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.scintillation_listbox.bind("<<ListboxSelect>>", lambda _: self.new_channel())
-
     
         # Label showing number of triggers
         self.trigger_count_label = tk.Label(self.scintillation_tab_left, text="Triggers: ?")
