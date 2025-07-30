@@ -308,13 +308,13 @@ class Scintillation(tk.Frame):
     # If trig entry is below or above the range of trig
     def on_trigger_entry_change(self, event):
         try:
-            idx = int(self.trigger_var.get())
+            idx = int(self.trigger_var.get()) - 1
             max_idx = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[0]
             if 0 <= idx < max_idx:
                 self.trigger_index = idx
                 self.new_channel()
             else:
-                print(f"Trigger index {idx} out of range.")
+                print(f"Trigger index {idx + 1} out of range.")
         except ValueError:
             print("Invalid trigger index entered.")
 
@@ -324,7 +324,7 @@ class Scintillation(tk.Frame):
         new_idx = self.trigger_index + step
         new_idx = max(0, min(new_idx, max_idx - 1))
         self.trigger_index = new_idx
-        self.trigger_var.set(str(new_idx))
+        self.trigger_var.set(str(new_idx + 1))
         self.new_channel()
     
     def update_channel_info_display(self):
@@ -470,15 +470,18 @@ class Scintillation(tk.Frame):
 
         # Entry box for trigger selection
         self.trigger_var = tk.StringVar()
+        self.trigger_var.set("1")
         self.trigger_entry = tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_var, width=6)
         self.trigger_entry.grid(row=1, column=3, padx=(2, 10), sticky="W")
         self.trigger_entry.bind("<Return>", self.on_trigger_entry_change)
 
         # 6 skip buttons in 3x2 grid for triggers
         btn_specs = [
-            ("+1", 1),   ("-1", -1),
-            ("+10", 10), ("-10", -10),
-            ("+100", 100), ("-100", -100)
+            ("-1", -1),   ("+1", 1),
+            ("-10", -10), ("+10", 10),
+            ("-100", -100), ("+100", 100),
+            ("-1000", -1000), ("+1000", 1000),
+            ("-10000", -10000), ("+10000", -10000)
         ]
         for i, (label, step) in enumerate(btn_specs):
             btn = tk.Button(self.trigger_step_frame, text=label, width=4, command=lambda s=step: self.shift_trigger(s))
