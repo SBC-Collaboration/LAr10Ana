@@ -16,7 +16,18 @@ full_loadlist = [
     "run_control"
 ]
 
-def GetEvent(rundirectory, ev, *loadlist, max_file_size=None, strictMode=True):
+def GetScint(ev, start=None, end=None, length=None):
+    out_ev = dict([(k, v.copy()) for (k, v) in ev.items()]) # copy input
+
+    for key in ev["scintillation"].keys():
+        if key == "loaded" or key == "length" or key == "sample_rate" or key == "EventCounter": # skip helper keys
+            continue
+
+        out_ev["scintillation"][key] = ev["scintillation"][key](start=start, end=end, length=length)
+
+    return out_ev
+
+def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillation=True):
     event = dict()
     event_dir = os.path.join(rundirectory, str(ev)) 
 
@@ -55,10 +66,17 @@ def GetEvent(rundirectory, ev, *loadlist, max_file_size=None, strictMode=True):
             else:
                 warnings.warn("No scintillation file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            scint_data = Streamer(scint_file).to_dict()
+            scint = Streamer(scint_file)
+            if lazy_load_scintillation:
+                for c in scint.columns:
+                    event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
+                event["scintillation"]["length"] = scint.num_elems
+            else:
+                scint = scint_data.items()
+                for k, v in scint_data.items():
+                    event["scintillation"][k] = v
+
             event["scintillation"]["loaded"] = True
-            for k, v in scint_data.items():
-                event["scintillation"][k] = v
 
     if "cam" in loadlist:
         event["cam"]["loaded"] = True

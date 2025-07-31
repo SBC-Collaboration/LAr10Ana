@@ -1,8 +1,37 @@
 import numpy as np
+from GetEvent import GetScint
 
 SAMPLE_FREQ = 62.5 # MHz
 
-def SiPMPulses(ev, traces=None, convert_adc2mV=False):
+def SiPMPulsesBatched(ev, nwvf_batch=1000, convert_adc2mV=False):
+    # load defaults
+    output = SiPMPulses(None)
+
+    if ev is None:
+        return output
+
+    # Call SiPMPulses in batches
+    nwvf = ev["scintillation"]["length"]
+    print("BATCHING %i pulses" % nwvf)
+
+    batched_outputs = []
+    for start in range(0, nwvf, nwvf_batch):
+        end = min(start + nwvf_batch, nwvf)
+        
+        batched_outputs.append(SiPMPulses(GetScint(ev, start=start, end=end), convert_adc2mV=convert_adc2mV))
+
+        print([(k, v.shape) for (k, v) in batched_outputs[-1].items()])
+
+    # concatenate the outputs
+    for key in output.keys():
+        output[key] = np.concatenate([b[key] for b in batched_outputs], axis=1) 
+        
+    print([(k, v.shape) for (k, v) in output.items()])
+
+    return output
+   
+
+def SiPMPulses(ev, convert_adc2mV=False):
     # Stuff to save, with defaults
     default_output = dict(
         baseline=np.array([]),
@@ -12,7 +41,6 @@ def SiPMPulses(ev, traces=None, convert_adc2mV=False):
         hit_amp=np.array([]),
         wvf_area=np.array([]),
         second_pulse=np.array([]),
-        wvf_timestamp=np.array([]),
     )
     out = default_output
 
@@ -25,8 +53,7 @@ def SiPMPulses(ev, traces=None, convert_adc2mV=False):
     # For each SiPM, for each readout, obtain the t0 and the voltage
 
     # Waveform in (ticks, ADC)
-    if traces is None:
-        traces = ev["scintillation"]["Waveforms"]
+    traces = ev["scintillation"]["Waveforms"]
 
     traces = traces.T.astype(float)
 
