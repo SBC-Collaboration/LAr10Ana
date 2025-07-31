@@ -85,7 +85,7 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             cam_file = os.path.join(event_dir, "cam%i-info.csv" % cam_ind)
             if not os.path.exists(cam_file):
                 if strictMode: 
-                    raise FileNotFoundError("Missing camera file in the run directory. To disable this error, either pass strictMode=False, or remove 'cam' from the loadlist")
+                    raise FileNotFoundError("Missing camera file (%s) in the run directory. To disable this error, either pass strictMode=False, or remove 'cam' from the loadlist" % str(cam_file))
                 else:
                     warnings.warn("Missing camera file in the run directory. Data will not be available in the returned dictionary.")
                 continue
