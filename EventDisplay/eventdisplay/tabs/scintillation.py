@@ -10,7 +10,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Hacky
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from GetEvent import GetEvent
+from GetEvent import GetEvent, GetScint
 # Even more hacky
 BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 ANA_DIR = os.path.join(BASE, 'ana')
@@ -437,7 +437,7 @@ class Scintillation(tk.Frame):
         self.scintillation_tab_right = tk.Frame(self.scintillation_tab, bd=5, relief=tk.SUNKEN)
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
         self.info_frame = tk.LabelFrame(self.scintillation_tab_left, text="Pulse Info", padx=5, pady=5)
-        self.info_frame.grid(row=6, column=0, columnspan=4, sticky='WE', pady=(10, 0))
+        self.info_frame.grid(row=7, column=0, columnspan=4, sticky='WE', pady=(10, 0))
         self.trigger_step_frame = tk.Frame(self.scintillation_tab_left)
         self.trigger_step_frame.grid(row=1, column=4, padx=(10, 0), sticky="W")
 
@@ -559,11 +559,22 @@ class Scintillation(tk.Frame):
                     "below": below_button
                 }
 
+        # Entry fields for trigger range (start and end)
+        tk.Label(self.scintillation_tab_left, text='Start Trigger:').grid(row=2, column=0, sticky='E')
+        self.trigger_range_start_var = tk.IntVar(value=0)
+        self.trigger_range_start_entry = tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_range_start_var, width=6)
+        self.trigger_range_start_entry.grid(row=2, column=1, sticky='W')
+
+        tk.Label(self.scintillation_tab_left, text='End Trigger:').grid(row=2, column=2, sticky='E')
+        self.trigger_range_end_var = tk.IntVar(value=0)
+        self.trigger_range_end_entry = tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_range_end_var, width=6)
+        self.trigger_range_end_entry.grid(row=2, column=3, sticky='W')
+
         # Time domain slider
         self.t_start_var = tk.DoubleVar(value=0.0)
         self.t_end_var   = tk.DoubleVar(value=0.0)
 
-        tk.Label(self.scintillation_tab_left, text='T start:').grid(row=2, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='T start:').grid(row=3, column=0, sticky='E')
         self.t_start_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.t_start_var,
@@ -573,11 +584,11 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.t_start_slider.grid(row=2, column=1, sticky='WE')
+        self.t_start_slider.grid(row=3, column=1, sticky='WE')
         self.t_start_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
 
-        tk.Label(self.scintillation_tab_left, text='T end:').grid(row=2, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='T end:').grid(row=3, column=2, sticky='E')
         self.t_end_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.t_end_var,
@@ -587,7 +598,7 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.t_end_slider.grid(row=2, column=3, sticky='WE')
+        self.t_end_slider.grid(row=3, column=3, sticky='WE')
         self.t_end_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
 
@@ -595,7 +606,7 @@ class Scintillation(tk.Frame):
         self.v_lower_var = tk.DoubleVar(value=0.0)
         self.v_upper_var = tk.DoubleVar(value=0.0)
 
-        tk.Label(self.scintillation_tab_left, text='V lower:').grid(row=3, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='V lower:').grid(row=4, column=0, sticky='E')
         self.v_lower_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.v_lower_var,
@@ -605,10 +616,10 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.v_lower_slider.grid(row=3, column=1, sticky='WE')
+        self.v_lower_slider.grid(row=4, column=1, sticky='WE')
         self.v_lower_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
-        tk.Label(self.scintillation_tab_left, text='V upper:').grid(row=3, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='V upper:').grid(row=4, column=2, sticky='E')
         self.v_upper_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.v_upper_var,
@@ -618,7 +629,7 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.v_upper_slider.grid(row=3, column=3, sticky='WE')
+        self.v_upper_slider.grid(row=4, column=3, sticky='WE')
         self.v_upper_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
         self.lock_voltage_var = tk.BooleanVar(value=False)
@@ -627,14 +638,14 @@ class Scintillation(tk.Frame):
             text='Lock Voltage',
             variable=self.lock_voltage_var
         )
-        self.lock_voltage_check.grid(row=3, column=4, padx=(10, 0), sticky='W')
+        self.lock_voltage_check.grid(row=4, column=4, padx=(10, 0), sticky='W')
 
 
         # Frequency cutoff sliders
         self.f_low_var = tk.DoubleVar(value=0.0)
         self.f_high_var = tk.DoubleVar(value=0.0)
 
-        tk.Label(self.scintillation_tab_left, text='F low (Hz):').grid(row=4, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='F low (Hz):').grid(row=5, column=0, sticky='E')
         self.f_low_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.f_low_var,
@@ -644,10 +655,10 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.f_low_slider.grid(row=4, column=1, sticky='WE')
+        self.f_low_slider.grid(row=5, column=1, sticky='WE')
         self.f_low_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
-        tk.Label(self.scintillation_tab_left, text='F high (Hz):').grid(row=4, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='F high (Hz):').grid(row=5, column=2, sticky='E')
         self.f_high_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.f_high_var,
@@ -657,7 +668,7 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.f_high_slider.grid(row=4, column=3, sticky='WE')
+        self.f_high_slider.grid(row=5, column=3, sticky='WE')
         self.f_high_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
         # Reload button
@@ -666,7 +677,7 @@ class Scintillation(tk.Frame):
             text='Reload',
             command=self.draw_fastdaq_scintillation
         )
-        self.reload_fastdaq_scintillation_button.grid(row=5, column=0, columnspan=4, sticky='WE')
+        self.reload_fastdaq_scintillation_button.grid(row=6, column=0, columnspan=4, sticky='WE')
 
     # Cut widget show/hide
     def place_cut_widgets(self):
