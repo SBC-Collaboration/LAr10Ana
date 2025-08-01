@@ -15,7 +15,7 @@ from GetEvent import GetEvent, GetScint
 BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 ANA_DIR = os.path.join(BASE, 'ana')
 sys.path.insert(0, ANA_DIR)
-from SiPMPulses import SiPMPulses
+from SiPMPulses import SiPMPulses, SiPMPulsesBatched
 from PhotonT0 import PhotonT0
 
 class Scintillation(tk.Frame):
@@ -28,6 +28,10 @@ class Scintillation(tk.Frame):
         self.trigger_index = 0
 
         self.channel_info_labels = {}
+
+        self.analysis_cache = None
+        self.analyzed_triggers = None
+
 
         # Build UI
         self.create_scintillation_widgets()
@@ -47,23 +51,33 @@ class Scintillation(tk.Frame):
         # Creating path to run
         self.path = os.path.join(self.raw_directory, self.run)
         # Try catch for loading files
-        try:
-            self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
-            self.pulses = SiPMPulses(self.scint_fastdaq_event)
-            # self.gain = SiPMGain(self.pulses) Not needed at the moment but maybe future use
-            self.photon = PhotonT0(self.pulses)
-            # Create channels in combobox
-            n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
-            self.scintillation_listbox.delete(0, tk.END)
-            for i in range(n_channels):
-                self.scintillation_listbox.insert(tk.END, f"Channel {i+1}")
-            self.scintillation_listbox.select_set(0)
+        # try:
+        self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected, lazy_load_scintillation=False)
+        # self.pulses = SiPMPulses(self.scint_fastdaq_event)
+        # self.gain = SiPMGain(self.pulses) Not needed at the moment but maybe future use
+        # self.photon = PhotonT0(self.pulses)
+        # Create channels in combobox
+        wf_full = self.scint_fastdaq_event["scintillation"]["Waveforms"]
+        n_channels = wf_full.shape[1]
 
-            self.new_channel()
-        except Exception as e:
-            # Prints error
-            print(e)
-            self.scint_error()
+
+        self.scintillation_listbox.delete(0, tk.END)
+        for i in range(n_channels):
+            self.scintillation_listbox.insert(tk.END, f"Channel {i+1}")
+        self.scintillation_listbox.select_set(0)
+
+        self.analysis_cache    = None
+        self.analyzed_triggers = None
+        self.loaded_trigger_range  = None
+        n_trig = self.scint_fastdaq_event['scintillation']['length']
+        self.trigger_range_start_var.set(0)
+        self.trigger_range_end_var.set(100)
+
+        self.new_channel()
+        # except Exception as e:
+        #     # Prints error
+        #     print(e)
+        #     self.scint_error()
         # Clean up memory
         gc.collect()
 
@@ -73,10 +87,100 @@ class Scintillation(tk.Frame):
         selections = self.scintillation_listbox.curselection()
         if not selections:
             self.draw_fastdaq_scintillation()
-            return
+            selections = self.scintillation_listbox.curselection() or [0]
+            idx = selections[0]
         idx = selections[0]  # Use first selected index for now
         if idx < 0:
             idx = 0
+
+            # One-time init of analysis cache
+        if 'length' in self.scint_fastdaq_event['scintillation']:
+            n_trig = self.scint_fastdaq_event['scintillation']['length']
+        else:
+            n_trig = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[0]
+
+        n_chan = self.scint_fastdaq_event["scintillation"]["Waveforms"].shape[1]
+
+
+        # Determine trigger window for batch analysis
+        start_trigger = self.trigger_range_start_var.get()
+        end_trigger = self.trigger_range_end_var.get()
+        if 'length' in self.scint_fastdaq_event['scintillation']:
+            max_trigs = self.scint_fastdaq_event['scintillation']['length']
+        else:
+            max_trigs = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[0]
+
+
+        # Clamp to valid range
+        start_trigger = max(0, min(start_trigger, max_trigs - 1))
+        end_trigger = max(start_trigger + 1, min(end_trigger, max_trigs))
+
+        self.window_start = start_trigger
+
+        # Check if new range is different from current
+        reload_analysis = (
+            not hasattr(self, 'loaded_trigger_range') or 
+            self.loaded_trigger_range != (start_trigger, end_trigger)
+        )
+
+        if reload_analysis:
+            wf_val = self.scint_fastdaq_event["scintillation"]["Waveforms"]
+            if callable(wf_val):
+                # lazy‐loaded path: use GetScint exactly as before
+                batch_ev = GetScint(
+                    self.scint_fastdaq_event,
+                    start=start_trigger,
+                    end=end_trigger
+                )
+            else:
+                ev          = self.scint_fastdaq_event
+                batch_ev    = { k:v for k,v in ev.items() if k!="scintillation" }
+                scint_funcs = {}
+                for key, val in ev["scintillation"].items():
+                    # metadata stays as-is
+                    if key in ("loaded", "length", "sample_rate", "EventCounter"):
+                        scint_funcs[key] = val
+                    else:
+                        if callable(val):
+                            # already a loader
+                            scint_funcs[key] = val
+                        else:
+                            arr = val
+                            # wrap ndarray in a function
+                            scint_funcs[key] = (
+                                lambda start, end, length=None, _a=arr: _a[start:end]
+                            )
+                # now all scint_funcs[key] are callable
+                scint_funcs["length"] = end_trigger - start_trigger
+                batch_ev["scintillation"] = scint_funcs
+            new_pulses  = SiPMPulsesBatched(batch_ev, nwvf_batch=500)
+
+            if self.analysis_cache is None:
+                self.analysis_cache = {
+                    key: np.full((n_chan, n_trig), np.nan)
+                    for key in new_pulses
+                }
+                self.analyzed_triggers = np.zeros(n_trig, dtype=bool)
+    
+            # merge the entire window into the cache
+            idxs = np.arange(start_trigger, end_trigger)
+            for key in new_pulses:
+                self.analysis_cache[key][:, idxs] = new_pulses[key]
+            self.analyzed_triggers[start_trigger:end_trigger] = True
+            # remember what range we’ve just loaded
+            self.loaded_trigger_range = (start_trigger, end_trigger)
+
+            self.photon = PhotonT0(self.analysis_cache)
+
+        # now slice out exactly that window from your cache
+        self.pulses = {
+            k: self.analysis_cache[k][:, start_trigger:end_trigger]
+            for k in self.analysis_cache
+        }
+    
+
+
+
         # Pull waveforms for a trigger across only selected channels
         waveforms = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index]
         selected_channels = self.scintillation_listbox.curselection()
@@ -229,9 +333,17 @@ class Scintillation(tk.Frame):
 
         # Histogram of hit amplitudes
         amps = self.photon['amp']
-        self.gain_ax.hist(amps[~np.isnan(amps)], bins=50)
-        self.gain_ax.set_title("Hits per Amplitude histogram")
-        self.gain_ax.set_xlim(0, )
+        mask = getattr(self, 'analyzed_triggers', None)
+        if mask is None:
+            # fallback to nan‐filter only
+            valid_amps = amps[~np.isnan(amps)]
+        else:
+            # only include the triggers we've loaded into the cache
+            loaded_amps = amps[mask]
+            valid_amps  = loaded_amps[~np.isnan(loaded_amps)]
+
+        self.gain_ax.hist(valid_amps, bins=50)
+        self.gain_ax.set_title(f"Hits per Amplitude histogram (n={len(valid_amps)})")
         self.gain_ax.set_xlabel("Pulse amplitude (mV)")
         self.gain_ax.set_ylabel("Hits")
 
@@ -675,7 +787,7 @@ class Scintillation(tk.Frame):
         self.reload_fastdaq_scintillation_button = tk.Button(
             self.scintillation_tab_left,
             text='Reload',
-            command=self.draw_fastdaq_scintillation
+            command=self.new_channel
         )
         self.reload_fastdaq_scintillation_button.grid(row=6, column=0, columnspan=4, sticky='WE')
 

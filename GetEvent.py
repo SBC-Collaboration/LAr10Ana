@@ -72,10 +72,10 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                     event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
                 event["scintillation"]["length"] = scint.num_elems
             else:
-                scint = scint_data.items()
-                for k, v in scint_data.items():
+                scint = scint.to_dict()
+                for k, v in scint.items():
                     event["scintillation"][k] = v
-
+                event["scintillation"]["length"] = scint["Waveforms"].shape[0]
             event["scintillation"]["loaded"] = True
 
     if "cam" in loadlist:
