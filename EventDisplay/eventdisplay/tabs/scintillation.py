@@ -31,7 +31,7 @@ class Scintillation(tk.Frame):
 
         self.channel_info_labels = {}
 
-        self.analysis_cache = None
+        self.analysis_cache = {}
         self.analyzed_triggers = None
 
 
@@ -56,6 +56,8 @@ class Scintillation(tk.Frame):
             self.populate_channel_listbox()
             self.reset_analysis_cache()
             self.new_channel()
+                # now begin auto‐loading in 5 ms steps
+            self.start_auto_load()
         # Error handling (prints out error but not where error is. Uncomment to debug)
         except Exception as e:
             print(e)
@@ -220,6 +222,34 @@ class Scintillation(tk.Frame):
         self.f_high_slider.set(nyquist)
 
         self.draw_fastdaq_scintillation()
+
+    def _auto_load_step(self):
+        # how many triggers we have
+        max_trigs = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[0]
+        # current window
+        start = self.trigger_range_start_var.get() + 2000
+        end   = self.trigger_range_end_var.get()   + 2000
+
+        # clamp
+        if start >= max_trigs:
+            return  # stop when you hit the end
+        end = min(end, max_trigs)
+
+        # set the new window
+        self.trigger_range_start_var.set(start)
+        self.trigger_range_end_var.set(end)
+
+        # reload that window
+        self.new_channel()
+
+        # schedule next step in 5 ms
+        self.after(2000, self._auto_load_step)
+
+    def start_auto_load(self):
+        """Begin shifting trigger‐ranges by +100 every 5 ms."""
+        # kick off after 5 ms
+        self.after(2000, self._auto_load_step)
+
 
     # Plotting
     def draw_fastdaq_scintillation(self, val=None):
