@@ -12,13 +12,28 @@ def histogram(channels, datatype, title, lb=0, rb=0):
     # Check that bounds are valid
     if not (leftbound == 0 and rightbound == 0) and leftbound >= rightbound:
         print(f"Invalid bounds: leftbound ({leftbound}) >= rightbound ({rightbound})")
-        return  # Exit early if bounds are incorrect
+        return
 
     plt.figure(figsize=(8, 5))
 
-    for chan in channels:
-        plt.hist(datatype[chan, :], bins=300, histtype='step', label=f"Channel {chan}")
+    # ── 1. Compute global min/max over selected channels ─────────────────────────────
+    all_data = np.concatenate([datatype[chan, :] for chan in channels])
+    data_min = np.min(all_data)
+    data_max = np.max(all_data)
 
+    # Optional: clamp range to bounds if provided
+    if lb != 0 or rb != 0:
+        data_min = min(data_min, lb)
+        data_max = max(data_max, rb)
+
+    # ── 2. Create shared bins ────────────────────────────────────────────────────────
+    bins = np.linspace(data_min, data_max, 301)  # 300 bins
+
+    # ── 3. Plot histograms with shared bins ─────────────────────────────────────────
+    for chan in channels:
+        plt.hist(datatype[chan, :], bins=bins, histtype='step', label=f"Channel {chan}")
+
+    # ── 4. Optional vertical bounds ──────────────────────────────────────────────────
     if not (leftbound == 0 and rightbound == 0):
         plt.axvline(leftbound, c='r', alpha=0.4, label="Lower Bound")
         plt.axvline(rightbound, c='r', alpha=0.4, label="Upper Bound")
@@ -30,6 +45,11 @@ def histogram(channels, datatype, title, lb=0, rb=0):
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+
+
+
+
 
 
 
