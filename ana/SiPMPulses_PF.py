@@ -132,104 +132,134 @@ def SiPMPulses(ev,N,samp,SiPM_cal=False):
         peaks[threshMask] = 0
         peak_inds[threshMask] = 0
 
-    #now find pulse edges
-    t0 = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
-    tf = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
-    for ch in range(smooth_traces.shape[1]):
-        ch_traces = smooth_traces[:,ch,:]
-        ch_traces[:,threshMask[ch]] = 0
-        ch_t0, ch_tf = FindEdges(ch_traces,peak_inds[ch,:],rms_thresh[ch,:],10)
-        t0[ch] = ch_t0
-        tf[ch] = ch_tf
+        #now find pulse edges
+        t0 = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
+        tf = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
+        for ch in range(smooth_traces.shape[1]):
+            ch_traces = smooth_traces[:,ch,:]
+            ch_traces[:,threshMask[ch]] = 0
+            ch_t0, ch_tf = FindEdges(ch_traces,peak_inds[ch,:],rms_thresh[ch,:],10)
+            t0[ch] = ch_t0
+            tf[ch] = ch_tf
+    else:
+        n = 25
+        t0_ind = np.argmax(smooth_traces, axis=0)-n
+        tf_ind = np.argmax(smooth_traces, axis=0)+n
+
 
     #now check whether there's a second pulse in the trace
-    for ch in range(smooth_traces.shape[1]):
-        for i in range(smooth_traces.shape[2]):
-            smooth_traces[np.int32(t0[ch,i]):np.int32(tf[ch,i]),ch,i] = 0
+    if SiPM_cal==False:
+        for ch in range(smooth_traces.shape[1]):
+            for i in range(smooth_traces.shape[2]):
+                smooth_traces[np.int32(t0[ch,i]):np.int32(tf[ch,i]),ch,i] = 0
 
-    peaks2 = np.max(smooth_traces,axis=0)
-    peak_inds2 = np.argmax(smooth_traces,axis=0)
+        peaks2 = np.max(smooth_traces,axis=0)
+        peak_inds2 = np.argmax(smooth_traces,axis=0)
 
-    threshMask2 = peaks2<rms_thresh
-    peaks2[threshMask2] = 0
-    peak_inds2[threshMask2] = 0
+        threshMask2 = peaks2<rms_thresh
+        peaks2[threshMask2] = 0
+        peak_inds2[threshMask2] = 0
 
-    t02 = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
-    tf2 = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
-    for ch in range(smooth_traces.shape[1]):
-        ch_traces = smooth_traces[:,ch,:]
-        ch_traces[:,threshMask2[ch]] = 0
-        ch_t0, ch_tf = FindEdges(ch_traces,peak_inds2[ch,:],rms_thresh[ch,:],10)
-        t02[ch] = ch_t0
-        tf2[ch] = ch_tf 
+        t02 = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
+        tf2 = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
+        for ch in range(smooth_traces.shape[1]):
+            ch_traces = smooth_traces[:,ch,:]
+            ch_traces[:,threshMask2[ch]] = 0
+            ch_t0, ch_tf = FindEdges(ch_traces,peak_inds2[ch,:],rms_thresh[ch,:],10)
+            t02[ch] = ch_t0
+            tf2[ch] = ch_tf 
     
-    #record how many pulses found in each scintillation trigger in each channel
-    peaklets = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
-    for ch in range(smooth_traces.shape[1]):
-        peaklets[ch][np.where(tf[ch]!=0)[0]] = 1
-        peaklets[ch][np.where(tf2[ch]!=0)[0]] = 2 #if I were spending more time on this, I'd be cleverer about not updating some of these entries twice
+        #record how many pulses found in each scintillation trigger in each channel
+        peaklets = np.zeros((smooth_traces.shape[1],smooth_traces.shape[2]))
+        for ch in range(smooth_traces.shape[1]):
+            peaklets[ch][np.where(tf[ch]!=0)[0]] = 1
+            peaklets[ch][np.where(tf2[ch]!=0)[0]] = 2 #if I were spending more time on this, I'd be cleverer about not updating some of these entries twice
 
-    #delete traces outside of found pulses and sum 
-    #also switching to raw traces now since these are the traces we'll use to calculate the rest of our RQs
-    #also also getting areas by channel
-    areas_ch = np.zeros((raw_traces.shape[1],raw_traces.shape[2]))
-        #should be noted that I guess all areas are in mV*samples right now, can change x dimension to ns later if desired
-        #and also of course we can change mV to phd once calibrations are done
+        #delete traces outside of found pulses and sum 
+        #also switching to raw traces now since these are the traces we'll use to calculate the rest of our RQs
+        #also also getting areas by channel
+        areas_ch = np.zeros((raw_traces.shape[1],raw_traces.shape[2]))
+            #should be noted that I guess all areas are in mV*samples right now, can change x dimension to ns later if desired
+            #and also of course we can change mV to phd once calibrations are done
 
-    for ch in range(raw_traces.shape[1]):
-        for i in range(raw_traces.shape[2]):
-            if peaklets[ch,i]==0:
-                raw_traces[:,ch,i] = 0
-            elif peaklets[ch,i]==1:
-                raw_traces[:np.int32(t0[ch,i]),ch,i] = 0
-                raw_traces[np.int32(tf[ch,i]):,ch,i] = 0
-            elif peaklets[ch,i]==2:
-                if np.int32(t0[ch,i])<np.int32(t02[ch,i]):
+        for ch in range(raw_traces.shape[1]):
+            for i in range(raw_traces.shape[2]):
+                if peaklets[ch,i]==0:
+                    raw_traces[:,ch,i] = 0
+                elif peaklets[ch,i]==1:
                     raw_traces[:np.int32(t0[ch,i]),ch,i] = 0
-                    raw_traces[np.int32(tf[ch,i]):np.int32(t02[ch,i]),ch,i] = 0
-                    raw_traces[np.int32(tf2[ch,i]):,ch,i] = 0
-                else:
-                    raw_traces[:np.int32(t02[ch,i]),ch,i] = 0
-                    raw_traces[np.int32(tf2[ch,i]):np.int32(t0[ch,i]),ch,i] = 0
                     raw_traces[np.int32(tf[ch,i]):,ch,i] = 0
+                elif peaklets[ch,i]==2:
+                    if np.int32(t0[ch,i])<np.int32(t02[ch,i]):
+                        raw_traces[:np.int32(t0[ch,i]),ch,i] = 0
+                        raw_traces[np.int32(tf[ch,i]):np.int32(t02[ch,i]),ch,i] = 0
+                        raw_traces[np.int32(tf2[ch,i]):,ch,i] = 0
+                    else:
+                        raw_traces[:np.int32(t02[ch,i]),ch,i] = 0
+                        raw_traces[np.int32(tf2[ch,i]):np.int32(t0[ch,i]),ch,i] = 0
+                        raw_traces[np.int32(tf[ch,i]):,ch,i] = 0
                 
-            areas_ch[ch,i] = np.sum(raw_traces[:,ch,i])
+                areas_ch[ch,i] = np.sum(raw_traces[:,ch,i])
         
-    summed_traces = np.sum(raw_traces,axis=1)
+        summed_traces = np.sum(raw_traces,axis=1)
 
-    #Awesome!  Now let's get the rest of our RQs :]
-    areas_tot = np.sum(summed_traces,axis=0)
+        #Awesome!  Now let's get the rest of our RQs :]
+        areas_tot = np.sum(summed_traces,axis=0)
 
-    t0_tot = np.zeros(summed_traces.shape[1])
-    for i in range(summed_traces.shape[1]):
-        try:
-            t0_tot[i] = np.where(summed_traces[:,i]!=0)[0][0]
-        except:
-            continue
+        t0_tot = np.zeros(summed_traces.shape[1])
+        for i in range(summed_traces.shape[1]):
+            try:
+                t0_tot[i] = np.where(summed_traces[:,i]!=0)[0][0]
+            except:
+                continue
 
-    t100 = aftXX(summed_traces,t0_tot,areas_tot,100)
-    t90 = aftXX(summed_traces,t0_tot,areas_tot,90)
-    t10 = aftXX(summed_traces,t0_tot,areas_tot,10)
-    t50 = aftXX(summed_traces,t0_tot,areas_tot,50)
+        t100 = aftXX(summed_traces,t0_tot,areas_tot,100)
+        t90 = aftXX(summed_traces,t0_tot,areas_tot,90)
+        t10 = aftXX(summed_traces,t0_tot,areas_tot,10)
+        t50 = aftXX(summed_traces,t0_tot,areas_tot,50)
 
-    amps = np.max(summed_traces,axis=0)
-
+        amps = np.max(summed_traces,axis=0)
+    else:
+        areas_ch = np.zeros((raw_traces.shape[1],raw_traces.shape[2]))
+        for ch in range(raw_traces.shape[1]):
+            for i in range(raw_traces.shape[2]):
+                areas_ch[ch,i] = np.sum(raw_traces[np.int32(t0_ind[ch,i]):np.int32(tf_ind[ch,i]),ch,i])
+                
+        summed_traces = np.sum(raw_traces,axis=1)
+        
     #finally, save our RQs
-    out["baseline"] = baseline
-    out["rms"] = rms
-    out["hit_t0"] = t0_tot #/ sample_rate
-    out["hit_t100"] = t100 #/ sample_rate
-    out["hit_t10"] = t10 #/ sample_rate
-    out["hit_t50"] = t50 #/ sample_rate
-    out["hit_t90"] = t90 #/ sample_rate
-    out["hit_area_ch"] = areas_ch
-    out["hit_area_tot"] = areas_tot
-    out["hit_amp_ch"] = peaks
-    out["hit_amp_tot"] = amps
-    out["second_pulse_t0"] = t02 #/ sample_rate
-    out["second_pulse_amp"] = peaks2
-    out["num_pulses"] = peaklets
-    out["summed_waveforms"] = summed_traces
+    if SiPM_cal==False:
+        out["baseline"] = baseline
+        out["rms"] = rms
+        out["hit_t0"] = t0_tot #/ sample_rate
+        out["hit_t100"] = t100 #/ sample_rate
+        out["hit_t10"] = t10 #/ sample_rate
+        out["hit_t50"] = t50 #/ sample_rate
+        out["hit_t90"] = t90 #/ sample_rate
+        out["hit_area_ch"] = areas_ch
+        out["hit_area_tot"] = areas_tot
+        out["hit_amp_ch"] = peaks
+        out["hit_amp_tot"] = amps
+        out["second_pulse_t0"] = t02 #/ sample_rate
+        out["second_pulse_amp"] = peaks2
+        out["num_pulses"] = peaklets
+        out["summed_waveforms"] = summed_traces
+    else:
+        out["baseline"] = baseline
+        out["rms"] = rms
+        out["hit_t0"] = t0_ind #/ sample_rate
+        out["hit_t100"] = tf_ind #/ sample_rate
+        out["hit_t10"] = 0
+        out["hit_t50"] = 0
+        out["hit_t90"] = 0
+        out["hit_area_ch"] = areas_ch
+        out["hit_area_tot"] = 0
+        out["hit_amp_ch"] = peaks
+        out["hit_amp_tot"] = 0
+        out["second_pulse_t0"] = 0
+        out["second_pulse_amp"] = 0
+        out["num_pulses"] = 0
+        out["summed_waveforms"] = summed_traces
 
     #got rid of "[t0==0] = nan" bit because we can use num_pulses to mask if desired
     
