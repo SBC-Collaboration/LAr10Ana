@@ -130,12 +130,27 @@ vncserver :PORT_NUMBER
 
 ## Run the Event Display
 
+You will need to port forward your local VNC port to your localhost machine. This
+can be done using `ssh`
+
+`ssh -L <local_port>:localhost:<remote_port> <user>@<remote_host>`
+
+After tunneling you can run the following commands to run the event display
+
 ```
 export DISPLAY=:PORT_NUMBER
 cd /exp/e961/app/LAr10Ana
 source setup.sh
 python EventDisplay/eventdisplay/ped.py
 ```
+
+## VNC Software
+
+You will need to download VNC software and connect to `localhost:PORT_NUMBER` to
+view the event display.
+
+- For MacOS we recommend using the built in "Screen Sharing" software.
+- For Windows we recommend using TigerVNC
 
 # Running Analysis on the FermiGrid
 
