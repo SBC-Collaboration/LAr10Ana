@@ -90,7 +90,7 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                     warnings.warn("Missing camera file in the run directory. Data will not be available in the returned dictionary.")
                 continue
 
-            cam_data = np.loadtxt(cam_file, delimiter=",", skiprows=1)
+            cam_data = np.transpose(np.loadtxt(cam_file, delimiter=",", skiprows=1))
             cam_data_headers = ["index"]
             with open(cam_file) as f:
                 first_line = f.readline()
