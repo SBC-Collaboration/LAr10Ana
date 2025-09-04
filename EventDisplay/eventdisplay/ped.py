@@ -116,7 +116,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
         # npy_directory: where the .npy files (raw_events.npy, reco_events.npy) and merged_all.txt
         # config_file_directory: where the configuration files are placed, should be a folder in the same directory as ped_directory
         # extraction_path: where tar files are unpacked
-        self.dataset = '2l-25'
+        self.dataset = 'SBC-25'
         self.reco_filename = 'reco_events.npy'
         self.ped_directory = os.path.split(os.path.split(os.path.abspath(__file__))[0])[0]
         self.scan_directory = os.path.join(self.ped_directory, 'scan_output_' + self.dataset)
