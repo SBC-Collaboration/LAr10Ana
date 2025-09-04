@@ -10,12 +10,12 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Hacky
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from GetEvent import GetEvent
+from GetEvent import GetEvent, GetScint
 # Even more hacky
 BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 ANA_DIR = os.path.join(BASE, 'ana')
 sys.path.insert(0, ANA_DIR)
-from SiPMPulses import SiPMPulses
+from SiPMPulses import SiPMPulsesBatched, SiPMPulses
 from PhotonT0 import PhotonT0
 
 class Scintillation(tk.Frame):
@@ -29,54 +29,143 @@ class Scintillation(tk.Frame):
 
         self.channel_info_labels = {}
 
+        self.analysis_cache = {}
+        self.analyzed_triggers = None
+
+
+        self.analysis_cache = None
+        self.analyzed_triggers = None
+
+        self.analysis_results = {
+            "hit_amp": [],
+            "hit_area": [],
+            "hit_t0": [],
+            "second_pulse": [],
+            "wvf_area": [],
+            "baseline": [],
+            "rms": []
+        }
+
+
         # Build UI
         self.create_scintillation_widgets()
         self.scintillation_canvas_setup()
 
     # Loading files 
     def load_fastdaq_scintillation(self):
-        # If load SiPM is checked
+        # Return if the checkbox is not selected
         if not self.load_fastdaq_scintillation_var.get():
             self.scintillation_tab_right.grid_forget()
             return
-        # Show panel
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
-
-        # Select what files to pull
-        selected = ["run_control", "scintillation", "event_info"]
-        # Creating path to run
         self.path = os.path.join(self.raw_directory, self.run)
-        # Try catch for loading files
-        try:
-            self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected)
-            self.pulses = SiPMPulses(self.scint_fastdaq_event)
-            # self.gain = SiPMGain(self.pulses) Not needed at the moment but maybe future use
-            self.photon = PhotonT0(self.pulses)
-            # Create channels in combobox
-            n_channels = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[1]
-            self.scintillation_listbox.delete(0, tk.END)
-            for i in range(n_channels):
-                self.scintillation_listbox.insert(tk.END, f"Channel {i+1}")
-            self.scintillation_listbox.select_set(0)
-
-            self.new_channel()
-        except Exception as e:
-            # Prints error
-            print(e)
-            self.scint_error()
-        # Clean up memory
+        # try:
+        self.load_event()
+        self.populate_channel_listbox()
+        self.reset_analysis_cache()
+        self.new_channel()
+        self.auto_load()
+        # Error handling (prints out error but not where error is. Uncomment to debug)
+        # except Exception as e:
+        #     print(e)
+        #     self.scint_error()
         gc.collect()
 
-        # Wrapper function for reloading data
+    # Load bin and sbc files
+    def load_event(self):
+        selected = ["run_control", "scintillation", "event_info"]
+        self.scint_fastdaq_event = GetEvent(self.path, self.event, *selected, lazy_load_scintillation=False)
+
+    # Create channel names in listbox
+    def populate_channel_listbox(self):
+        wf_full = self.scint_fastdaq_event["scintillation"]["Waveforms"]
+        self.scintillation_listbox.delete(0, tk.END)
+        for i in range(wf_full.shape[1]):
+            self.scintillation_listbox.insert(tk.END, f"Channel {i+1}")
+        self.scintillation_listbox.select_set(0)
+
+    # Clear memory (only will run when event/run is switched)
+    def reset_analysis_cache(self):
+        self.analysis_cache = None
+        self.analyzed_triggers = None
+        self.loaded_trigger_range = None
+        self.trigger_range_start_var.set(0)
+        # Hard coded trigger range to be 100 for now
+        self.trigger_range_end_var.set(2000)
+
     def new_channel(self):
-        # If no channel is selected go to channel 1
+        # If no channel is selected go to channel 1 and draw fastdaq will clear graphs
         selections = self.scintillation_listbox.curselection()
         if not selections:
             self.draw_fastdaq_scintillation()
-            return
+            selections = self.scintillation_listbox.curselection() or [0]
+            idx = selections[0]
+            selections = self.scintillation_listbox.curselection() or [0]
+            idx = selections[0]
         idx = selections[0]  # Use first selected index for now
         if idx < 0:
             idx = 0
+
+        # Find how many triggers 
+        n_trig = self.scint_fastdaq_event['scintillation']['length']
+        n_chan = self.scint_fastdaq_event["scintillation"]["Waveforms"].shape[1]
+
+        # Determine trigger window for analysis
+        start_trigger = self.trigger_range_start_var.get()
+        end_trigger = self.trigger_range_end_var.get()
+
+        # Clamp to valid range
+        start_trigger = max(0, min(start_trigger, n_trig - 1))
+        end_trigger = max(start_trigger + 1, min(end_trigger, n_trig))
+
+        self.window_start = start_trigger
+
+        # Check if trigger range exists or new range is different from current
+        reload_analysis = (
+            not hasattr(self, 'loaded_trigger_range') or 
+            self.loaded_trigger_range != (start_trigger, end_trigger) or 
+            not np.all(self.analyzed_triggers[start_trigger:end_trigger])
+        )
+
+        # I had a lot of trouble getting batched to work with lazy load. I found it easier to just parse the data myself
+        # Future step could be to eliminate this logic, enable lazy load when calling GetEvent
+        if reload_analysis:
+
+            # Create a temporary dict with correct structure
+            ev = dict(self.scint_fastdaq_event)
+            ev["scintillation"] = dict(self.scint_fastdaq_event["scintillation"])
+            ev["scintillation"]["Waveforms"] = ev["scintillation"]["Waveforms"][start_trigger:end_trigger]
+            ev["scintillation"]["length"] = end_trigger - start_trigger
+            new_pulses  = SiPMPulses(ev)
+
+            if self.analysis_cache is None:
+                self.analysis_cache = {
+                    key: np.full((n_chan, n_trig), np.nan)
+                    for key in new_pulses
+                }
+                self.analyzed_triggers = np.zeros(n_trig, dtype=bool)
+    
+            # Merge the entire window into the cache
+            idxs = np.arange(start_trigger, end_trigger)
+            for key in new_pulses:
+                self.analysis_cache[key][:, idxs] = new_pulses[key]
+            self.analyzed_triggers[start_trigger:end_trigger] = True
+            # Remember what range we’ve just loaded
+            self.loaded_trigger_range = (start_trigger, end_trigger)
+
+            self.photon = PhotonT0(self.analysis_cache)
+
+        # Now slice out exactly that window from your cache
+        self.pulses = {
+            k: self.analysis_cache[k][:, 0:end_trigger]
+            for k in self.analysis_cache
+        }
+        
+        self.update_waveform_settings(idx)
+        self.draw_fastdaq_scintillation()
+
+    # Waveform settings and logic
+    def update_waveform_settings(self, idx):
         # Pull waveforms for a trigger across only selected channels
         waveforms = self.scint_fastdaq_event['scintillation']['Waveforms'][self.trigger_index]
         selected_channels = self.scintillation_listbox.curselection()
@@ -107,8 +196,6 @@ class Scintillation(tk.Frame):
         if not self.lock_voltage_var.get():
             self.v_lower_var.set(self.v0)
             self.v_upper_var.set(self.v1)
-
-
         # Update FFT slider range
         nyquist = 1 / (2 * self.dt)
         self.f_low_slider.config(from_=0, to=nyquist, resolution=nyquist / 100)
@@ -116,7 +203,22 @@ class Scintillation(tk.Frame):
         self.f_low_slider.set(0)
         self.f_high_slider.set(nyquist)
 
-        self.draw_fastdaq_scintillation()
+    # Change trigger range ever 2 seconds to load another 2000 trigger analysis
+    def auto_load(self):
+        # Pull max trigs, shift start/end 
+        max_trigs = self.scint_fastdaq_event['scintillation']['Waveforms'].shape[0]
+        start = self.trigger_range_start_var.get() + 2000
+        end   = self.trigger_range_end_var.get()   + 2000
+        # If all trigs loaded return
+        if start >= max_trigs:
+            return  
+        # If end is greater than max trigs set end to max trigs
+        end = min(end, max_trigs)
+        # Set new trigger start/end
+        self.trigger_range_start_var.set(start)
+        self.trigger_range_end_var.set(end)
+        self.new_channel()
+        self.after(2000, self.auto_load)
 
     # Plotting
     def draw_fastdaq_scintillation(self, val=None):
@@ -229,9 +331,28 @@ class Scintillation(tk.Frame):
 
         # Histogram of hit amplitudes
         amps = self.photon['amp']
-        self.gain_ax.hist(amps[~np.isnan(amps)], bins=50)
-        self.gain_ax.set_title("Hits per Amplitude histogram")
-        self.gain_ax.set_xlim(0, )
+        mask = getattr(self, 'analyzed_triggers', None)
+        if mask is None:
+            # fallback to nan‐filter only
+            valid_amps = amps[~np.isnan(amps)]
+        else:
+            # only include the triggers we've loaded into the cache
+            loaded_amps = amps[mask]
+            valid_amps  = loaded_amps[~np.isnan(loaded_amps)]
+
+        self.gain_ax.hist(valid_amps, bins=100)
+        self.gain_ax.set_title(f"Hits per Amplitude histogram (n={len(valid_amps)})")
+        mask = getattr(self, 'analyzed_triggers', None)
+        if mask is None:
+            # fallback to nan‐filter only
+            valid_amps = amps[~np.isnan(amps)]
+        else:
+            # only include the triggers we've loaded into the cache
+            loaded_amps = amps[mask]
+            valid_amps  = loaded_amps[~np.isnan(loaded_amps)]
+
+        self.gain_ax.hist(valid_amps, bins=100)
+        self.gain_ax.set_title(f"Hits per Amplitude histogram (n={len(valid_amps)})")
         self.gain_ax.set_xlabel("Pulse amplitude (mV)")
         self.gain_ax.set_ylabel("Hits")
 
@@ -437,7 +558,8 @@ class Scintillation(tk.Frame):
         self.scintillation_tab_right = tk.Frame(self.scintillation_tab, bd=5, relief=tk.SUNKEN)
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
         self.info_frame = tk.LabelFrame(self.scintillation_tab_left, text="Pulse Info", padx=5, pady=5)
-        self.info_frame.grid(row=6, column=0, columnspan=4, sticky='WE', pady=(10, 0))
+        self.info_frame.grid(row=7, column=0, columnspan=4, sticky='WE', pady=(10, 0))
+        self.info_frame.grid(row=7, column=0, columnspan=4, sticky='WE', pady=(10, 0))
         self.trigger_step_frame = tk.Frame(self.scintillation_tab_left)
         self.trigger_step_frame.grid(row=1, column=4, padx=(10, 0), sticky="W")
 
@@ -559,11 +681,23 @@ class Scintillation(tk.Frame):
                     "below": below_button
                 }
 
+        # Entry fields for trigger range (start and end)
+        tk.Label(self.scintillation_tab_left, text='Start Trigger:').grid(row=2, column=0, sticky='E')
+        self.trigger_range_start_var = tk.IntVar(value=0)
+        self.trigger_range_start_entry = tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_range_start_var, width=6)
+        self.trigger_range_start_entry.grid(row=2, column=1, sticky='W')
+
+        tk.Label(self.scintillation_tab_left, text='End Trigger:').grid(row=2, column=2, sticky='E')
+        self.trigger_range_end_var = tk.IntVar(value=0)
+        self.trigger_range_end_entry = tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_range_end_var, width=6)
+        self.trigger_range_end_entry.grid(row=2, column=3, sticky='W')
+
         # Time domain slider
         self.t_start_var = tk.DoubleVar(value=0.0)
         self.t_end_var   = tk.DoubleVar(value=0.0)
 
-        tk.Label(self.scintillation_tab_left, text='T start:').grid(row=2, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='T start:').grid(row=3, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='T start:').grid(row=3, column=0, sticky='E')
         self.t_start_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.t_start_var,
@@ -573,11 +707,13 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.t_start_slider.grid(row=2, column=1, sticky='WE')
+        self.t_start_slider.grid(row=3, column=1, sticky='WE')
+        self.t_start_slider.grid(row=3, column=1, sticky='WE')
         self.t_start_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
 
-        tk.Label(self.scintillation_tab_left, text='T end:').grid(row=2, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='T end:').grid(row=3, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='T end:').grid(row=3, column=2, sticky='E')
         self.t_end_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.t_end_var,
@@ -587,7 +723,8 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.t_end_slider.grid(row=2, column=3, sticky='WE')
+        self.t_end_slider.grid(row=3, column=3, sticky='WE')
+        self.t_end_slider.grid(row=3, column=3, sticky='WE')
         self.t_end_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
 
@@ -595,7 +732,8 @@ class Scintillation(tk.Frame):
         self.v_lower_var = tk.DoubleVar(value=0.0)
         self.v_upper_var = tk.DoubleVar(value=0.0)
 
-        tk.Label(self.scintillation_tab_left, text='V lower:').grid(row=3, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='V lower:').grid(row=4, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='V lower:').grid(row=4, column=0, sticky='E')
         self.v_lower_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.v_lower_var,
@@ -605,10 +743,12 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.v_lower_slider.grid(row=3, column=1, sticky='WE')
+        self.v_lower_slider.grid(row=4, column=1, sticky='WE')
+        self.v_lower_slider.grid(row=4, column=1, sticky='WE')
         self.v_lower_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
-        tk.Label(self.scintillation_tab_left, text='V upper:').grid(row=3, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='V upper:').grid(row=4, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='V upper:').grid(row=4, column=2, sticky='E')
         self.v_upper_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.v_upper_var,
@@ -618,7 +758,8 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.v_upper_slider.grid(row=3, column=3, sticky='WE')
+        self.v_upper_slider.grid(row=4, column=3, sticky='WE')
+        self.v_upper_slider.grid(row=4, column=3, sticky='WE')
         self.v_upper_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
         self.lock_voltage_var = tk.BooleanVar(value=False)
@@ -627,14 +768,16 @@ class Scintillation(tk.Frame):
             text='Lock Voltage',
             variable=self.lock_voltage_var
         )
-        self.lock_voltage_check.grid(row=3, column=4, padx=(10, 0), sticky='W')
+        self.lock_voltage_check.grid(row=4, column=4, padx=(10, 0), sticky='W')
+        self.lock_voltage_check.grid(row=4, column=4, padx=(10, 0), sticky='W')
 
 
         # Frequency cutoff sliders
         self.f_low_var = tk.DoubleVar(value=0.0)
         self.f_high_var = tk.DoubleVar(value=0.0)
 
-        tk.Label(self.scintillation_tab_left, text='F low (Hz):').grid(row=4, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='F low (Hz):').grid(row=5, column=0, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='F low (Hz):').grid(row=5, column=0, sticky='E')
         self.f_low_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.f_low_var,
@@ -644,10 +787,12 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.f_low_slider.grid(row=4, column=1, sticky='WE')
+        self.f_low_slider.grid(row=5, column=1, sticky='WE')
+        self.f_low_slider.grid(row=5, column=1, sticky='WE')
         self.f_low_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
-        tk.Label(self.scintillation_tab_left, text='F high (Hz):').grid(row=4, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='F high (Hz):').grid(row=5, column=2, sticky='E')
+        tk.Label(self.scintillation_tab_left, text='F high (Hz):').grid(row=5, column=2, sticky='E')
         self.f_high_slider = tk.Scale(
             self.scintillation_tab_left,
             variable=self.f_high_var,
@@ -657,16 +802,18 @@ class Scintillation(tk.Frame):
             showvalue=True,
             length=200
         )
-        self.f_high_slider.grid(row=4, column=3, sticky='WE')
+        self.f_high_slider.grid(row=5, column=3, sticky='WE')
+        self.f_high_slider.grid(row=5, column=3, sticky='WE')
         self.f_high_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
         # Reload button
         self.reload_fastdaq_scintillation_button = tk.Button(
             self.scintillation_tab_left,
             text='Reload',
-            command=self.draw_fastdaq_scintillation
+            command=self.new_channel
         )
-        self.reload_fastdaq_scintillation_button.grid(row=5, column=0, columnspan=4, sticky='WE')
+        self.reload_fastdaq_scintillation_button.grid(row=6, column=0, columnspan=4, sticky='WE')
+        self.reload_fastdaq_scintillation_button.grid(row=6, column=0, columnspan=4, sticky='WE')
 
     # Cut widget show/hide
     def place_cut_widgets(self):
