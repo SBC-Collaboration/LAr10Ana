@@ -77,11 +77,12 @@ def FindBubbles(camFileList, path, plotMode = False):
 
         #perform the CHT
         accum = np.zeros(accum_shape)
-        for i in range(np.where(edges==True)[0].shape[0]):
-            y = np.where(edges==True)[0][i]
-            x = np.where(edges==True)[1][i]
+        edge_pix = np.where(edges==True)
+        x = edge_pix[0]
+        y = edge_pix[1]
+        for i in range(x.shape[0]):
             for k in range(len(radii_cands)):
-                circx, circy = circle_perimeter(x, y, radii_cands[k], shape=edges.T.shape)
+                circx, circy = circle_perimeter(x[i], y[i], radii_cands[k], shape=edges.T.shape)
                 accum[circy,circx,k] += 1
                 
         #identify peaks
