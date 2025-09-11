@@ -86,9 +86,10 @@ def FindBubbles(camFileList, path, plotMode = False):
                 accum[circy,circx,k] += 1
                 
         #identify peaks
-        cy = np.where(accum>0)[0]
-        cx = np.where(accum>0)[1]
-        radii = radii_cands[np.where(accum>0)[2]]
+        peaks = np.where(accum>0)
+        cy = peaks[0]
+        cx = peaks[1]
+        radii = radii_cands[peaks[2]]
 
         if bubs_found==False:
             max_bub = 5
@@ -104,9 +105,10 @@ def FindBubbles(camFileList, path, plotMode = False):
 
         for i in range(max_bub):
             if np.max(accum)>circle_thresh:
-                this_cy = np.where(accum==accum.max())[0][0]
-                this_cx = np.where(accum==accum.max())[1][0]
-                this_rad = radii_cands[np.where(accum==accum.max())[2][0]]
+                this_peak = np.where(accum==accum.max())
+                this_cy = this_peak[0][0]
+                this_cx = this_peak[1][0]
+                this_rad = radii_cands[this_peak[2][0]]
 
                 bub_cx.append(this_cx)
                 bub_cy.append(this_cy)
@@ -117,8 +119,9 @@ def FindBubbles(camFileList, path, plotMode = False):
 
         #get goodness of fit for each circle
         gof_thresh = 110 #somewhat arbitrary for now
-        white_y = np.where(edges.astype(np.uint8)==1)[0]
-        white_x = np.where(edges.astype(np.uint8)==1)[1]
+        white = np.where(edges.astype(np.uint8)==1)
+        white_y = white[0]
+        white_x = white[1]
         gofs = []
         for i in range(len(bub_rad)):
             gof = GetGoF(white_x,white_y,bub_cy[i],bub_cx[i],bub_rad[i],nextIm.shape)
@@ -147,7 +150,7 @@ def FindBubbles(camFileList, path, plotMode = False):
                 bub_dict['Pos'] = (np.uint32(bub_cx[i]),np.uint32(bub_cy[i]))
                 bub_dict['Radius'] = bub_rad[i]
                 bub_dict['GOF'] = gofs[i]
-
+                
                 frame_dict[f'Bubble{i}'] = bub_dict
             cam_dict[f'Frame{im_num}'] = frame_dict
         
