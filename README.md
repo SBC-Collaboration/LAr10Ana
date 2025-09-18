@@ -151,6 +151,7 @@ view the event display.
 
 - For MacOS we recommend using the built in "Screen Sharing" software.
 - For Windows we recommend using TigerVNC
+- For Chromebook, try using Remmina (Linux app)
 
 # Running Analysis on the FermiGrid
 
