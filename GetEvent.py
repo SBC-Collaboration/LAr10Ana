@@ -66,12 +66,13 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 warnings.warn("No scintillation file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            scint = Streamer(scint_file)
             if lazy_load_scintillation:
+                scint = Streamer(scint_file, max_size=1000)
                 for c in scint.columns:
                     event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
                 event["scintillation"]["length"] = scint.num_elems
             else:
+                scint = Streamer(scint_file)
                 scint = scint.to_dict()
                 for k, v in scint.items():
                     event["scintillation"][k] = v
