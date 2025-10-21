@@ -1,46 +1,24 @@
 import numpy as np
-from GetEvent import GetScint
+from ana import BatchSiPMs
 
 SAMPLE_FREQ = 62.5 # MHz
 
-def SiPMPulsesBatched(ev, nwvf_batch=1000, convert_adc2mV=False):
-    # load defaults
-    output = SiPMPulses(None)
+def SiPMPulsesBatched(ev, nwvf_batch=1000, convert_adc2mV=False, smoothing=None, n_sigma_threshold=5, maxwvf=0, progress=False, njob=1):
+    return BatchSiPMs.BatchSiPMs(ev, SiPMPulses, nwvf_batch=nwvf_batch, convert_adc2mV=convert_adc2mV, smoothing=smoothing, n_sigma_threshold=n_sigma_threshold,
+        maxwvf=maxwvf, progress=progress, njob=njob)
 
-    if ev is None:
-        return output
-
-    # Call SiPMPulses in batches
-    nwvf = ev["scintillation"]["length"]
-    print("BATCHING %i pulses" % nwvf)
-
-    batched_outputs = []
-    for start in range(0, nwvf, nwvf_batch):
-        end = min(start + nwvf_batch, nwvf)
-        
-        batched_outputs.append(SiPMPulses(GetScint(ev, start=start, end=end), convert_adc2mV=convert_adc2mV))
-
-        print([(k, v.shape) for (k, v) in batched_outputs[-1].items()])
-
-    # concatenate the outputs
-    for key in output.keys():
-        output[key] = np.concatenate([b[key] for b in batched_outputs], axis=1) 
-        
-    print([(k, v.shape) for (k, v) in output.items()])
-
-    return output
-   
-
-def SiPMPulses(ev, convert_adc2mV=False):
+def SiPMPulses(ev, convert_adc2mV=False, smoothing=None, n_sigma_threshold=5):
     # Stuff to save, with defaults
     default_output = dict(
         baseline=np.array([]),
         rms=np.array([]),
         hit_t0=np.array([]),
+        hit_tf=np.array([]),
         hit_area=np.array([]),
         hit_amp=np.array([]),
         wvf_area=np.array([]),
         second_pulse=np.array([]),
+        max_avg_fft_freq=np.array([]),
     )
     out = default_output
 
@@ -69,9 +47,23 @@ def SiPMPulses(ev, convert_adc2mV=False):
             traces[:, i_sipm, :] -= offset
             traces[:, i_sipm, :] *= range_mV
 
-
     decimation = ev["run_control"]["caen"]["global"]["decimation"]
     sample_rate =  SAMPLE_FREQ/(2**decimation)
+
+    # Calculate the maximum FFT freq
+    avg_wvf = np.sum(traces, axis=1)
+    avg_fft = np.abs(np.fft.rfft(avg_wvf, axis=0))[1:, :]
+    fft_freqs = np.fft.rfftfreq(avg_wvf.shape[0], d=1/sample_rate)[1:]
+    max_avg_fft_freq = fft_freqs[np.argmax(avg_fft, axis=0)]
+    # repeat it to provide a value per-channel
+    max_avg_fft_freq_perchannel = np.tile(max_avg_fft_freq, (traces.shape[1], 1))
+
+    # implement rolling mean if requested
+    if smoothing is not None:
+        trace_cumsum = np.cumsum(traces, axis=0)
+        traces = (trace_cumsum[smoothing:] - trace_cumsum[:-smoothing]) / smoothing
+    else:
+        smoothing = 0
 
     # obtain the leading baseline and RMS
     N_SAMPLE_BASELINE = 40
@@ -83,13 +75,13 @@ def SiPMPulses(ev, convert_adc2mV=False):
     trace_V = -(traces - baseline)
 
     # Start time of hit
-    N_SIGMA_THRESHOLD = 5
-    above_threshold = trace_V > rms*N_SIGMA_THRESHOLD
+    above_threshold = trace_V > rms*n_sigma_threshold
     t0_ind = np.argmax(above_threshold, axis=0)
-    t0 = t0_ind / sample_rate
+    t0 = (t0_ind + smoothing/2) / sample_rate
 
     # Final time of hit
     tf_ind = np.argmax(np.cumsum(~above_threshold, axis=0) > t0_ind, axis=0)
+    tf = (tf_ind + smoothing/2) / sample_rate
 
     # build index into each waveform
     wvf_index = np.zeros(trace_V.shape, dtype=np.int32)
@@ -112,17 +104,20 @@ def SiPMPulses(ev, convert_adc2mV=False):
     out["baseline"] = baseline
     out["rms"] = rms
     out["hit_t0"] = t0
+    out["hit_tf"] = tf
     out["hit_area"] = hit_area
     out["hit_amp"] = hit_amplitude
     out["wvf_area"] = wvf_area
     out["second_pulse"] = second_pulse
+    out["max_avg_fft_freq"] = max_avg_fft_freq_perchannel
 
     # If no hit was found, set relevant values to nan
-    out["hit_t0"][t0 == 0] = np.nan
-    out["hit_area"][t0 == 0] = np.nan
-    out["hit_amp"][t0 == 0] = np.nan
-    out["wvf_area"][t0 == 0] = np.nan
-    out["second_pulse"][t0 == 0] = False
+    out["hit_t0"][t0_ind == 0] = np.nan
+    out["hit_tf"][t0_ind == 0] = np.nan
+    out["hit_area"][t0_ind == 0] = np.nan
+    out["hit_amp"][t0_ind == 0] = np.nan
+    out["wvf_area"][t0_ind == 0] = np.nan
+    out["second_pulse"][t0_ind == 0] = False
 
     return out
 
