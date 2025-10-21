@@ -3,8 +3,6 @@
 import sys
 
 import numpy as np
-import matplotlib.pyplot as plt
-plt.rcParams['figure.dpi'] = 300
 import scipy.optimize # For curve fitting
 
 from scipy.optimize import curve_fit
