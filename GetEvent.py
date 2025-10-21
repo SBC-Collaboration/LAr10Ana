@@ -27,6 +27,9 @@ def GetScint(ev, start=None, end=None, length=None):
 
     return out_ev
 
+def NEvent(rundirectory):
+    return len([d for d in os.listdir(rundirectory) if os.path.isdir(os.path.join(rundirectory, d))])
+
 def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillation=True):
     event = dict()
     event_dir = os.path.join(rundirectory, str(ev)) 
