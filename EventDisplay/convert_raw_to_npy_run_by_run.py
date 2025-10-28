@@ -158,33 +158,33 @@ for run in runs:
             warning = "WARNING: npy file found with no corresponding run directory or tar"
             print(" " + warning)
             warning_list.append(warning)
-    # elif run.endswith(tar_postfix):
-    #     print("It's a tar file")
-    #     run_nopostfix = run[:-tar_postfix_len]
-    #     if run_nopostfix in runs:
-    #         print(" Found run folder " + run_nopostfix + " corresponding to tar file. No need to untar")
-    #     elif run_nopostfix + ".npy" in runs:
-    #         print(" Found npy file " + run_nopostfix + ".npy corresponding to tar file. No need to untar")
-    #     elif run_nopostfix + ".npy" in runs_npy:
-    #         print(" The npy file for this run already exists in npy dir. Ignoring.")
-    #     else:
-    #         print(" Did not find run folder " + run_nopostfix + " or npy file corresponding to tar file. Untarring...")
-    #         try:
-    #             t = tarfile.open(path, 'r')
-    #             t.extractall(extraction_path)
-    #             run = run_nopostfix
-    #             print(" Untar successful. Proceeding to generate npy file.")
-    #             new_untar_list.append(run)
-    #             run_folder_path = os.path.join(extraction_path, run)
-    #             # Make npy file if no npy is found and had to untar
-    #             make_npy_of_run(run, run_folder_path)
-    #             os.system('chmod -R 777 ' + run_folder_path)
-    #             shutil.rmtree(run_folder_path)
-    #         except Exception as e:
-    #             warning = "WARNING: Untar of file " + path + " failed"
-    #             print(" " + warning)
-    #             print(e)
-    #             warning_list.append(warning)
+    elif run.endswith(tar_postfix):
+        print("It's a tar file")
+        run_nopostfix = run[:-tar_postfix_len]
+        if run_nopostfix in runs:
+            print(" Found run folder " + run_nopostfix + " corresponding to tar file. No need to untar")
+        elif run_nopostfix + ".npy" in runs:
+            print(" Found npy file " + run_nopostfix + ".npy corresponding to tar file. No need to untar")
+        elif run_nopostfix + ".npy" in runs_npy:
+            print(" The npy file for this run already exists in npy dir. Ignoring.")
+        else:
+            print(" Did not find run folder " + run_nopostfix + " or npy file corresponding to tar file. Untarring...")
+            try:
+                t = tarfile.open(path, 'r')
+                t.extractall(extraction_path)
+                run = run_nopostfix
+                print(" Untar successful. Proceeding to generate npy file.")
+                new_untar_list.append(run)
+                run_folder_path = os.path.join(extraction_path, run)
+                # Make npy file if no npy is found and had to untar
+                make_npy_of_run(run, run_folder_path)
+                os.system('chmod -R 777 ' + run_folder_path)
+                shutil.rmtree(run_folder_path)
+            except Exception as e:
+                warning = "WARNING: Untar of file " + path + " failed"
+                print(" " + warning)
+                print(e)
+                warning_list.append(warning)
     elif run.endswith('.zip'):
         print("It's a zip file")
         run_nopostfix = run[:-4]

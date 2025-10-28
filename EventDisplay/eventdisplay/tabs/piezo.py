@@ -59,7 +59,9 @@ class Piezo(tk.Frame):
         try:
             selected = ["run_control", "acoustics"]
             self.fastDAQ_event = GetEvent(path, self.event, *selected)
-            channels = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics']['Waveform'].shape[1])]
+            
+            wf_key = "Waveforms" if "Waveforms" in self.fastDAQ_event["acoustics"] else "Waveform"
+            channels = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics'][wf_key].shape[1])]
             self.piezo_combobox['values'] = channels
 
             if channels:
@@ -70,7 +72,8 @@ class Piezo(tk.Frame):
                 self.piezo_combobox.state(['disabled'])
 
             self.draw_fastDAQ_piezo()
-        except:
+        except Exception as e:
+            print(e)
             self.piezo_error()
 
         # Garbage Collecting
@@ -110,7 +113,8 @@ class Piezo(tk.Frame):
 
     def draw_filtered_piezo_trace(self, piezo):
         try:
-            piezo_v = self.fastDAQ_event['acoustics']['Waveform'][0][self.piezo_combobox.current()]
+            wf_key = "Waveforms" if "Waveforms" in self.fastDAQ_event["acoustics"] else "Waveform"
+            piezo_v = self.fastDAQ_event['acoustics'][wf_key][0][self.piezo_combobox.current()]
             piezo_time = np.arange(len(piezo_v)) * (1 / self.fastDAQ_event['acoustics']['sample_rate'])
             fn = len(piezo_v)/(piezo_time[-1]-piezo_time[0])/2
             # if (self.piezo_cutoff_high / fn) > 1:
