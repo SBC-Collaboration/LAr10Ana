@@ -69,7 +69,8 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
 
     # prepend the run directory if this isn't a tar file
     event_dir = os.path.join(os.path.splitext(os.path.basename(rundirectory))[0], str(ev)) if is_tar else os.path.join(rundirectory, str(ev)) 
-
+    base_dir = rundirectory if not is_tar else os.path.splitext(os.path.basename(rundirectory))[0]
+    
     for key in full_loadlist:
         event[key] = dict(loaded=False)
 
@@ -206,7 +207,7 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                 event["plc"][k] = v
 
     if "run_info" in loadlist:
-        run_info_file = os.path.join(rundirectory, "run_info.sbc")
+        run_info_file = os.path.join(base_dir, "run_info.sbc")
         if not FileExists(rundirectory, run_info_file):
             if strictMode: 
                 raise FileNotFoundError("No run_info file present in the run directory. To disable this error, either pass strictMode=False, or remove 'run_info' from the loadlist")
@@ -219,14 +220,18 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                 event["run_info"][k] = v
 
     if "run_control" in loadlist:
-        run_ctrl_file = os.path.join(rundirectory, "rc.json")
+        run_ctrl_file = os.path.join(base_dir, "rc.json")
         if not FileExists(rundirectory, run_ctrl_file):
             if strictMode: 
                 raise FileNotFoundError("No run_control file present in the run directory. To disable this error, either pass strictMode=False, or remove 'run_control' from the loadlist")
             else:
                 warnings.warn("No run_control file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            with open(run_ctrl_file, "r") as f:
+            doopen = open if not is_tar else tarfile.open
+            toopen = run_ctrl_file if not is_tar else rundirectory
+            with doopen(toopen, "r") as f:
+                if is_tar:
+                    f = f.extractfile(run_ctrl_file)
                 run_ctrl_data = json.load(f)
             event["run_control"]["loaded"] = True
             for k, v in run_ctrl_data.items():
