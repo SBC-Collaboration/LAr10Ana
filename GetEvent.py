@@ -1,7 +1,6 @@
 import os
 import numpy as np
-from sbcbinaryformat import Streamer, Writer
-from TarStreamer import TarStreamer
+from sbcbinaryformat import Streamer, TarStreamer, Writer
 from PIL import Image
 import json
 import warnings
