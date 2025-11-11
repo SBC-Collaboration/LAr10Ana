@@ -33,6 +33,7 @@ import zipfile
 import sys
 from tabs.camera import Camera
 from tabs.piezo import Piezo
+from tabs.slow_daq import SlowDAQ
 from tabs.logviewer import LogViewer
 from tabs.configuration import Configuration
 from tabs.analysis import Analysis
@@ -62,7 +63,7 @@ class PopUpHandler(logging.Handler):
 
 
 # Sets width/height/zoom settings for each tk frame (rectangular window where widgets can be placed)
-class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubble, Scintillation):
+class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, ThreeDBubble, Scintillation):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
 
@@ -196,6 +197,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
 
         Camera.__init__(self)
         Piezo.__init__(self)
+        SlowDAQ.__init__(self)
         LogViewer.__init__(self)
         Analysis.__init__(self)
         ThreeDBubble.__init__(self)
@@ -243,7 +245,7 @@ class Application(Camera, Piezo, LogViewer, Configuration, Analysis, ThreeDBubbl
             print(e, 'Line: ', sys.exc_info()[2].tb_lineno)
 
         # Click on Log Viewer Tab
-        if tab_clicked == 2 or tab_clicked == 'Log Viewer':
+        if tab_clicked == 3 or tab_clicked == 'Log Viewer':
             # Show Log Viewer Widgets
             self.bottom_frame_5.grid(row=1, column=0, sticky='NW')
             self.fra2.pack(side='top')

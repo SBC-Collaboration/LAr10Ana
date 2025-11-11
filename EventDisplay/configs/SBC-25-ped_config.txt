@@ -3,7 +3,7 @@ Raw Directory:
 Scratch Directory:
 ./scratch
 Initial Run:
-20250611_0
+20251023_12
 PLC temperature var: 
 TE32
 Relative Path to images:
