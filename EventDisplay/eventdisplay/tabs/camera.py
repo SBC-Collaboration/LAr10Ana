@@ -17,6 +17,7 @@ class Camera(tk.Frame):
         self.load_event_sbc()
         self.load_plc_text()
         self.load_fastDAQ_piezo()
+        self.load_slowDAQ()
         # self.load_fastDAQ_dytran()
         self.load_fastdaq_scintillation()
         self.load_fastDAQ_analysis()
