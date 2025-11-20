@@ -18,8 +18,8 @@ import shutil
 import getpass
 import zipfile
 
-# tar_postfix = '.tar'
-tar_postfix = '.tar.gz'
+tar_postfix = '.tar'
+# tar_postfix = '.tar.gz'
 # tar_postfix = '.tgz'
 tar_postfix_len = len(tar_postfix)
 
