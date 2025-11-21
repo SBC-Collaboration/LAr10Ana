@@ -8,10 +8,10 @@ from tkinter import ttk, DISABLED, NORMAL
 import numpy as np
 import sys
 #
-# matplotlib.use('TkAgg')
-matplotlib.use('Agg')
+matplotlib.use('TkAgg')
+# matplotlib.use('Agg')
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from PIL import Image, ImageTk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 from GetEvent import GetEvent
@@ -64,6 +64,16 @@ class SlowDAQ(tk.Frame):
 
         self.slowDAQ_canvas = FigureCanvasTkAgg(self.slowDAQ_fig, self.slowDAQ_tab_right)
         self.slowDAQ_canvas.get_tk_widget().grid(row=0, column=0, sticky='nsew')
+
+        # Toolbar for navigation
+        self.slowDAQ_toolbar = NavigationToolbar2Tk(
+            self.slowDAQ_canvas,
+            self.slowDAQ_tab_right,
+            pack_toolbar=False,
+        )
+        self.slowDAQ_toolbar.update()
+        self.slowDAQ_toolbar.grid(row=1, column=0, sticky='w')
+
 
 
 
