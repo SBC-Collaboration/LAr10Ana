@@ -119,6 +119,10 @@ def SiPMPulses(ev, convert_adc2mV=False, smoothing=None, n_sigma_threshold=5):
     out["wvf_area"][t0_ind == 0] = np.nan
     out["second_pulse"][t0_ind == 0] = False
 
+    # Reorient shape from (SiPM, EVT) to (EVT, SiPM)
+    for k in out.keys():
+        out[k] = out[k].T
+
     return out
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from multiprocess import Pool
 from GetEvent import GetScint
 import numpy as np
 
-def BatchSiPMs(ev, ana_f, nwvf_batch=1000, maxwvf=0, progress=False, njob=1, **f_kwargs):
+def BatchSiPMs(ev, ana_f, nwvf_batch=1000, maxwvf=-1, progress=False, njob=1, **f_kwargs):
     # load defaults
     output = ana_f(None)
 
@@ -13,9 +13,13 @@ def BatchSiPMs(ev, ana_f, nwvf_batch=1000, maxwvf=0, progress=False, njob=1, **f
 
     # Call SiPMPulses in batches
     nwvf = ev["scintillation"]["length"]
-    if nwvf > maxwvf:
+    if maxwvf > 0 and nwvf > maxwvf:
         nwvf = maxwvf
+
     print("BATCHING %i pulses" % nwvf)
+
+    if nwvf == 0:
+        return output
 
     batched_outputs = []
 
@@ -43,6 +47,6 @@ def BatchSiPMs(ev, ana_f, nwvf_batch=1000, maxwvf=0, progress=False, njob=1, **f
 
     # concatenate the outputs
     for key in output.keys():
-        output[key] = np.concatenate([b[key] for b in batched_outputs], axis=1) 
+        output[key] = np.concatenate([b[key] for b in batched_outputs], axis=0) 
         
     return output

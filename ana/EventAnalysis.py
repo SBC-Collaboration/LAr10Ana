@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def EventAnalysis(ev):
     default_output = dict()
     try:
@@ -13,7 +12,6 @@ def EventAnalysis(ev):
                 
         return out
     except:
-        print("FAILED")
         return default_output
 
 if __name__ == "__main__":
