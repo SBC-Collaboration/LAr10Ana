@@ -17,6 +17,19 @@ echo $PYTHONPATH
 echo "COPY RUN TO LOCAL DIRECTORY"
 LOCAL_RUNDIR=`basename $RUNDIR`
 ifdh cp -r $RUNDIR $LOCAL_RUNDIR >>${LOG} 2>&1
+extension="${LOCAL_RUNDIR##*.}"
+
+if [[ "$extension" == ".tar" ]]; then
+    echo "Extracting .tar file" >>${LOG} 2>&1
+    tar -xf $LOCAL_RUNDIR
+    LOCAL_RUNDIR=extension
+    echo "Processing $LOCAL_RUNDIR" >>${LOG} 2>&1
+elif [[ "$extension" == ".tar.gz" ]]; then
+    echo "Extracting .tar.gz file" >>${LOG} 2>&1
+    tar -xvf $LOCAL_RUNDIR
+    LOCAL_RUNDIR=extension
+    echo "Processing $LOCAL_RUNDIR" >>${LOG} 2>&1
+fi
 
 echo "RUN EVENT DEALER" >>${LOG} 2>&1
 python3 ${INPUT_TAR_DIR_LOCAL}/RunEventDealer.py ./$LOCAL_RUNDIR ./${OUT} >>${LOG} 2>&1
