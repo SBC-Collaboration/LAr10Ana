@@ -12,30 +12,25 @@ from ana.AcousticT0 import AcousticAnalysis as aa
 from ana.ExposureAnalysis import ExposureAnalysis as expa 
 from ana.SiPMPulses import SiPMPulsesBatched as sa
 
-from GetEvent import GetEvent
+from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
 
 ANALYSES = {
     "event": eva,
-    "acoustic": aa,
+    # "acoustic": aa,
     "exposure": expa,
     "scintillation": sa,
 }
 
-def BuildEventList(rundir, first_event=0, last_event=-1):
+def BuildEventList(rundir, maxevt=-1):
     # Inputs:
     #   rundir: Directory for the run
-    #   first_event: Index of first event
-    #   last_event: Index of last_event
+    #   maxevt: Maximum number of events to process
     # Outputs: A sorted list of events from rundir
     # Possible Issues: If we ever move to a different naming scheme, this needs to be re-written.
-    eventdirlist = []
-    for f in os.listdir(rundir):
-        if f.isdigit() and os.path.isdir(os.path.join(rundir, f)):
-            eventdirlist.append(int(f))
-    eventdirlist = np.array(sorted(eventdirlist))
-    if last_event >= 0:
-        eventdirlist = eventdirlist[eventdirlist <= last_event]
+    eventdirlist = np.array(range(NEvent(rundir)))
+    if maxevt >= 0:
+        eventdirlist = eventdirlist[eventdirlist < maxevt]
     return eventdirlist
 
 # map numpy dtype.str names to those expected by sbcbinaryformat
@@ -46,18 +41,19 @@ def dname(s):
 
     return s
 
-def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None):
+def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, maxevt=-1):
     # Inputs:
     #   rundir: Location of raw data
     #   dataset: Indicator used for filtering which analyses to run
     #   recondir: Location of recon data/where we want to output our binary files
     #   process_list: List of analyses modules to run. example: ["acoustic", "event", ""]
+    #   maxevt: Maximum number of events to process
     # Outputs: Nothing. Saves binary files to recondir.
     if process_list is None:
         process_list = []  # This is needed since lists are mutable objects. If you have a default argument
                            # as a mutable object, then the default argument can *change* across multiple
                            # function calls since the argument is created ONCE when the function is defined.
-    runname = os.path.basename(rundir)
+    runname = os.path.basename(rundir).split(".")[0]
     runid_str = runname.split('_')
     runid = np.int32(runid_str)
     # run_recondir = os.path.join(recondir, runname)
@@ -95,13 +91,13 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None):
             parameter_config["acoustic"]["corr_upperf"] = upper_f
             
     print("Starting run " + rundir)
-    eventlist = BuildEventList(rundir)
+    eventlist = BuildEventList(rundir, maxevt=maxevt)
 
     for ev in eventlist:
         t0 = time.time()
         print('Starting event ' + runname + '/' + str(ev))
 
-        data = GetEvent(rundir, ev)
+        data = GetEvent(rundir, ev, strictMode=False)
         print('Time to load event:  '.rjust(35) +
               str(time.time() - t0) + ' seconds')
         npev = np.array([ev], dtype=np.int32)
@@ -121,7 +117,14 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None):
     for p in process_list:
         column_names = list(out[p][0].keys())
         dtypes = [dname(out[p][0][c].dtype.str) for c in column_names]
+
+        # squeeze sizes
         sizes = [list(np.squeeze(out[p][0][c]).shape) for c in column_names]
+        # set default
+        sizes = [s if len(s) else [1] for s in sizes]
+        # for outputs with a sub-event number, fix the sizes
+        sizes = [s[1:] if len(s) > 1 else s for s in sizes]
+
         writer = Writer(os.path.join(run_recondir, p + runname + ".bin"), column_names, dtypes, sizes)
         for evind in range(len(out[p])):
             writer.write(dict([(c, np.squeeze(out[p][evind][c])) for c in column_names]))

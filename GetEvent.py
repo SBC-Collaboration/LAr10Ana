@@ -56,6 +56,13 @@ def FileExists(rundirectory, file_name):
     else:
         raise ValueError("Input rundirectory (%s) must either be a directory or a tar file (.tar)" % rundirectory)
 
+def GetRun(rundirectory, *loadlist, strictMode=True, lazy_load_scintillation=True):
+    data = []
+    for n in range(NEvent(rundirectory)):
+        data.append(GetEvent(rundirectory, n, *loadlist, strictMode=strictMode, lazy_load_scintillation=lazy_load_scintillation))
+
+    return data
+
 def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillation=True):
     event = dict()
 
