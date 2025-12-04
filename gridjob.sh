@@ -22,12 +22,12 @@ extension="${LOCAL_RUNDIR##*.}"
 if [[ "$extension" == ".tar" ]]; then
     echo "Extracting .tar file" >>${LOG} 2>&1
     tar -xf $LOCAL_RUNDIR
-    LOCAL_RUNDIR=extension
+    LOCAL_RUNDIR="${LOCAL_RUNDIR%.*}" # remove extension
     echo "Processing $LOCAL_RUNDIR" >>${LOG} 2>&1
 elif [[ "$extension" == ".tar.gz" ]]; then
     echo "Extracting .tar.gz file" >>${LOG} 2>&1
     tar -xvf $LOCAL_RUNDIR
-    LOCAL_RUNDIR=extension
+    LOCAL_RUNDIR="${LOCAL_RUNDIR%.*}" # remove extension
     echo "Processing $LOCAL_RUNDIR" >>${LOG} 2>&1
 fi
 
