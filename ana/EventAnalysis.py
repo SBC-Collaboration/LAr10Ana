@@ -1,15 +1,16 @@
 import numpy as np
 
+keys = ['run_id', 'event_id', 'ev_exit_code', 'ev_livetime', 'cum_livetime', 'pset', 'pset_hi', 'pset_slope', 'pset_period', 'start_time', 'end_time', 'trigger_source']
+
 def EventAnalysis(ev):
     default_output = dict()
+    for k in keys:
+        default_output[k] = np.asarray(-1.)
+
     try:
-        if not ev['event_info']['loaded']:
-            return default_output
         out = default_output
-        for k in ev['event_info']:
-            if not (k == 'loaded'):
-                out['Event_' + k] = np.asarray(ev['event_info'][k])
-                
+        for k in keys:
+            out[k] = np.asarray(ev['event_info'][k])
         return out
     except:
         return default_output

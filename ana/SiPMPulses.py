@@ -8,17 +8,19 @@ def SiPMPulsesBatched(ev, nwvf_batch=1000, convert_adc2mV=False, smoothing=None,
         maxwvf=maxwvf, progress=progress, njob=njob)
 
 def SiPMPulses(ev, convert_adc2mV=False, smoothing=None, n_sigma_threshold=5):
+    default = [np.nan]*32 # number of SiPMs
+
     # Stuff to save, with defaults
     default_output = dict(
-        baseline=np.array([]),
-        rms=np.array([]),
-        hit_t0=np.array([]),
-        hit_tf=np.array([]),
-        hit_area=np.array([]),
-        hit_amp=np.array([]),
-        wvf_area=np.array([]),
-        second_pulse=np.array([]),
-        max_avg_fft_freq=np.array([]),
+        baseline=np.array(default),
+        rms=np.array(default),
+        hit_t0=np.array(default),
+        hit_tf=np.array(default),
+        hit_area=np.array(default),
+        hit_amp=np.array(default),
+        wvf_area=np.array(default),
+        second_pulse=np.array(default),
+        max_avg_fft_freq=np.array(default),
     )
     out = default_output
 
@@ -130,7 +132,7 @@ if __name__ == "__main__":
 
     TEST_RUN = "/exp/e961/data/SBC-25-daqdata/20250611_1/"
     TEST_EVENT = 0
-    out = SiPMPulses(GetEvent(TEST_RUN, TEST_EVENT))
+    out = SiPMPulses(GetEvent(TEST_RUN, TEST_EVENT, lazy_load_scintillation=False))
     print("OUTPUTS:", *out.keys())
     print("BASELINES:", ", ".join(map(str, list(out["baseline"].mean(axis=-1)))))
     print("RMS:", ", ".join(map(str, list(out["rms"].mean(axis=-1)))))
