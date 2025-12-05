@@ -40,7 +40,7 @@ def GetHistorian(instrument, start_time, end_time=None,
         # check parameters
         password = os.getenv(password_var)
         if password is None:
-            raise ValueError("Password environment variable is not declared")
+            raise ValueError(f"Password environment variable {password_var} is not declared.")
         if end_time is None: 
             end_time = dt.datetime.now()
     
