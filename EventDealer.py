@@ -98,8 +98,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
         print('Starting event ' + runname + '/' + str(ev))
 
         data = GetEvent(rundir, ev, strictMode=False)
-        print('Time to load event:  '.rjust(35) +
-              str(time.time() - t0) + ' seconds')
+        print('Time to load event:  '.rjust(35) + f"{time.time()-t0:.6f} seconds")
         npev = np.array([ev], dtype=np.int32)
 
         for p in process_list:
@@ -114,15 +113,23 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             out[p][-1]['runid'] = runid
             out[p][-1]['ev'] = npev
             et = time.time() - t1
-            print(('%s analysis:  ' % p).rjust(35) + str(et) + ' seconds')
+            print(('%s analysis:  ' % p).rjust(35) + f"{et:.6f} seconds")
 
-        print('*** Full event analysis ***  '.rjust(35) +
-              str(time.time() - t0) + ' seconds')
+        print('*** Full event analysis ***  '.rjust(35) + f"{time.time()-t0:.6f} seconds\n")
 
     # save everything
     for p in process_list:
+        if not out[p]:
+            continue
+        
         column_names = list(out[p][0].keys())
-        dtypes = [dname(out[p][0][c].dtype.str) for c in column_names]
+        dtypes = []
+        for c in column_names:
+            val = out[p][0][c]
+            # Convert to numpy array if it isn't already
+            if not isinstance(val, np.ndarray):
+                val = np.array(val)
+            dtypes.append(dname(val.dtype.str))
 
         # squeeze sizes
         sizes = [list(np.squeeze(out[p][0][c]).shape) for c in column_names]
@@ -131,7 +138,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
         # for outputs with a sub-event number, fix the sizes
         sizes = [s[1:] if len(s) > 1 else s for s in sizes]
 
-        writer = Writer(os.path.join(run_recondir, p + runname + ".bin"), column_names, dtypes, sizes)
+        writer = Writer(os.path.join(run_recondir, f"{p}.sbc"), column_names, dtypes, sizes)
         for evind in range(len(out[p])):
             writer.write(dict([(c, np.squeeze(out[p][evind][c])) for c in column_names]))
     return
