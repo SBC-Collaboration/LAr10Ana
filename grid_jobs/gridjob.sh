@@ -19,6 +19,7 @@ echo "PYTHONPATH: ${PYTHONPATH}" >>${LOG} 2>&1
 echo "COPY RUN TO LOCAL DIRECTORY"
 LOCAL_RUNDIR=$(basename $RUNDIR)
 ifdh cp -r $RUNDIR $LOCAL_RUNDIR >>${LOG} 2>&1
+ifdh rm $RUNDIR >>${LOG} 2>&1
 EXT="${LOCAL_RUNDIR##*.}"
 
 if [[ "${EXT}" == "tar" ]]; then
