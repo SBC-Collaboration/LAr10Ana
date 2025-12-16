@@ -11,6 +11,7 @@ from ana.EventAnalysis import EventAnalysis as eva
 from ana.AcousticT0 import AcousticAnalysis as aa
 from ana.ExposureAnalysis import ExposureAnalysis as expa 
 from ana.SiPMPulses import SiPMPulsesBatched as sa
+from ana.ScintRate import ScintillationRateAnalysis as sra
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
@@ -20,6 +21,7 @@ ANALYSES = {
     # "acoustic": aa,
     "exposure": expa,
     "scintillation": sa,
+    "scint_rate": sra,
 }
 
 def BuildEventList(rundir, maxevt=-1):
