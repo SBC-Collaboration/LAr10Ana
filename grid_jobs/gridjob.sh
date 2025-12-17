@@ -19,7 +19,6 @@ echo "PYTHONPATH: ${PYTHONPATH}" >>${LOG} 2>&1
 echo "COPY RUN TO LOCAL DIRECTORY"
 LOCAL_RUNDIR=$(basename $RUNDIR)
 ifdh cp -r $RUNDIR $LOCAL_RUNDIR >>${LOG} 2>&1
-ifdh rm $RUNDIR >>${LOG} 2>&1
 EXT="${LOCAL_RUNDIR##*.}"
 
 if [[ "${EXT}" == "tar" ]]; then
@@ -38,15 +37,15 @@ fi
 
 echo "Processing $LOCAL_RUNDIR" >>${LOG} 2>&1
 echo "RUN EVENT DEALER" >>${LOG} 2>&1
-python3 ${INPUT_TAR_DIR_LOCAL}/RunEventDealer.py ./$LOCAL_RUNDIR ./${OUT} >>${LOG} 2>&1
+python3 ${INPUT_TAR_DIR_LOCAL}/grid_jobs/RunEventDealer.py ./$LOCAL_RUNDIR ./${OUT} >>${LOG} 2>&1
 echo "EVENT DELAER COMPLETED WITH EXIT CODE $?" >>${LOG} 2>&1 
 
 echo "Copy data back to OUTDIR"
 OUTDIR_FULL="${OUTDIR}/${LOCAL_RUNDIR}-${CLUSTER}_${PROCESS}"
-ifdh rm -r "${OUTDIR_FULL}" 2>/dev/null || true
 ifdh mkdir ${OUTDIR_FULL}
 echo "OUTDIR created at ${OUTDIR_FULL}"
-ifdh cp -r ${LOG} ${OUT}/* ${OUTDIR_FULL} >>${LOG} 2>&1 
+VERSION_FILE="${INPUT_TAR_DIR_LOCAL}/version.txt"
+ifdh cp -r ${VERSION_FILE} ${LOG} ${OUT}/* ${OUTDIR_FULL} >>${LOG} 2>&1 
 ifdh_exit_code=$?
 echo "Data copy exited with code ${ifdh_exit_code}"
 

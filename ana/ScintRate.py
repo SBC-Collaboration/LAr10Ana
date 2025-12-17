@@ -52,32 +52,31 @@ def _unwrap_caen_timestamp(ts, max_ts):
     ts = np.asarray(ts, dtype=np.int64)
 
     # Detect rollovers
-    rollovers = np.diff(ts) < 0
+    rollovers = np.diff(ts, axis=-1, prepend=0) < 0
 
     # Cumulative count of rollovers
-    rollover_count = np.concatenate([[0], np.cumsum(rollovers)])
+    rollover_count = np.cumsum(rollovers, axis=-1)
     return ts + rollover_count * max_ts
 
 # Main function to compute SiPMs hit per each file
 def ScintillationRateAnalysis(ev):
-    print(f"Scintillation Rate Analysis: Processing \
-          {ev['event_info']['run_id'][0]} ev {ev['event_info']['event_id'][0]}")
     # default value
     output = {
         "n_hits": np.zeros(1, dtype=np.uint8),
         "good_event_mask": np.zeros(1, dtype=np.uint32),
     }
     if ev is None or not ev['event_info']['loaded'] or not ev['scintillation']['loaded']:
+        print("File not loaded. Quitting.")
         return output
 
     scint = ev["scintillation"]
     # Load the waveforms
-    waveforms = scint['Waveforms']
+    waveforms = scint['Waveforms']()
 
     # load other data which may be important
     sample_rate = 62.5e6
     decimation = ev['run_control']['caen']['global']['decimation']
-    scint_timestamps = _unwrap_caen_timestamp(scint['TriggerTimeTag'], 2**31)
+    scint_timestamps = _unwrap_caen_timestamp(scint['TriggerTimeTag'](), 2**31)
     livetime = scint_timestamps[-1] * 8e-9  # timestmap is 8 ns
 
     if decimation == 0: decimation = 1
@@ -97,8 +96,8 @@ def ScintillationRateAnalysis(ev):
     mask = signal_strength < signal_strength_limit
 
     # Sum the total number of hits in the event
-    NHists = np.sum(mask, axis=1).astype(np.uint8)
-    output["n_hits"] = NHists
+    NHits = np.sum(mask, axis=1).astype(np.uint8)
+    output["n_hits"] = NHits
 
     # convert boolean mask array to uint32
     weights = 2**np.arange(32, dtype=np.uint32)

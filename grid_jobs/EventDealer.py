@@ -2,11 +2,12 @@ import os
 import re
 import shutil
 import time
-
+import sys
 import numpy as np
 import copy
 import numpy.matlib
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ana.EventAnalysis import EventAnalysis as eva
 from ana.AcousticT0 import AcousticAnalysis as aa
 from ana.ExposureAnalysis import ExposureAnalysis as expa 
