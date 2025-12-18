@@ -62,8 +62,8 @@ def _unwrap_caen_timestamp(ts, max_ts):
 def ScintillationRateAnalysis(ev):
     # default value
     output = {
-        "n_hits": np.zeros(1, dtype=np.uint8),
-        "good_event_mask": np.zeros(1, dtype=np.uint32),
+        "n_hits": np.zeros((1,1), dtype=np.uint8),
+        "hits_mask": np.zeros((1,1), dtype=np.uint32),
     }
     if ev is None or not ev['event_info']['loaded'] or not ev['scintillation']['loaded']:
         print("File not loaded. Quitting.")
@@ -97,11 +97,11 @@ def ScintillationRateAnalysis(ev):
 
     # Sum the total number of hits in the event
     NHits = np.sum(mask, axis=1).astype(np.uint8)
-    output["n_hits"] = NHits
+    output["n_hits"] = NHits[:, np.newaxis]
 
     # convert boolean mask array to uint32
     weights = 2**np.arange(32, dtype=np.uint32)
-    output["good_event_mask"] = mask.dot(weights)
+    output["hits_mask"] = mask.dot(weights)[:, np.newaxis]
 
     return output
 

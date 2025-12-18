@@ -135,7 +135,10 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             dtypes.append(dname(val.dtype.str))
 
         # squeeze sizes
-        sizes = [list(np.squeeze(out[p][0][c]).shape) for c in column_names]
+        if p == "scint_rate":
+            sizes = [list(np.atleast_1d(out[p][0][c]).shape) for c in column_names]
+        else:
+            sizes = [list(np.squeeze(out[p][0][c]).shape) for c in column_names]
         # set default
         sizes = [s if len(s) else [1] for s in sizes]
         # for outputs with a sub-event number, fix the sizes
@@ -145,3 +148,16 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
         for evind in range(len(out[p])):
             writer.write(dict([(c, np.squeeze(out[p][evind][c])) for c in column_names]))
     return
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        ProcessSingleRun(
+            rundir=sys.argv[1],
+            recondir=sys.argv[2],
+            process_list = ["event", "exposure", "scintillation", "scint_rate"])
+    else:
+        ProcessSingleRun(
+            rundir="/exp/e961/data/SBC-25-daqdata/20251125_6.tar",
+            recondir="/exp/e961/data/users/gputnam/test-sbcdaq", # Use your own directory for testing~
+            process_list = ["event", "scint_rate"],
+            maxevt=2)

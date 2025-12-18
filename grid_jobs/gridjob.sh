@@ -37,7 +37,7 @@ fi
 
 echo "Processing $LOCAL_RUNDIR" >>${LOG} 2>&1
 echo "RUN EVENT DEALER" >>${LOG} 2>&1
-python3 ${INPUT_TAR_DIR_LOCAL}/grid_jobs/RunEventDealer.py ./$LOCAL_RUNDIR ./${OUT} >>${LOG} 2>&1
+python3 ${INPUT_TAR_DIR_LOCAL}/grid_jobs/EventDealer.py ./$LOCAL_RUNDIR ./${OUT} >>${LOG} 2>&1
 echo "EVENT DELAER COMPLETED WITH EXIT CODE $?" >>${LOG} 2>&1 
 
 echo "Copy data back to OUTDIR"
