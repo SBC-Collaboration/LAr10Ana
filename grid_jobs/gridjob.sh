@@ -2,7 +2,7 @@
 
 RUNDIR=$1
 OUTDIR=$2
-LOG="${CLUSTER}_${PROCESS}.log"
+LOG="${JOBSUBJOBID}.log"
 # LOG=/dev/stdout
 OUT=output
 

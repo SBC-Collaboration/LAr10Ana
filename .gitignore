@@ -3,6 +3,7 @@
 *.swp
 *.pyc
 .DS_Store
+version.txe
 
 #Scratch 
 /EventDisplay/scratch

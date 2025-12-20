@@ -24,7 +24,7 @@ LAR10ANA_DIR="${SCRIPT_DIR}/.."
 cd "${LAR10ANA_DIR}"
 VERSION_FILE="version.txt"
 git describe --tags --always >${VERSION_FILE}
-TARBALL="LAr10ana_${RUN_ID}.tar"
+TARBALL="LAr10ana.tar"
 tar -cf $TARBALL --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
 rm ${VERSION_FILE}
 echo "Data copied over. LAr10ana is tarred. Ready for job submission."
@@ -36,10 +36,10 @@ TAR_SIZE_GB=$((TAR_SIZE_BYTES / 1024 / 1024 / 1024))
 DISK_GB=$((TAR_SIZE_GB * 3 + 5))
 DISK_GB=$((DISK_GB < 5 ? 5 : DISK_GB))
 DISK_GB=$((DISK_GB > 500 ? 500 : DISK_GB))
-# RAM: 2x size + 2GB, minimum 2GB, max 64GB
-RAM_GB=$((TAR_SIZE_GB * 2 + 2))
+# RAM: 3x size + 2GB, minimum 2GB, max 256GB
+RAM_GB=$((TAR_SIZE_GB * 3 + 2))
 RAM_GB=$((RAM_GB < 2 ? 2 : RAM_GB))
-RAM_GB=$((RAM_GB > 64 ? 64 : RAM_GB))
+RAM_GB=$((RAM_GB > 256 ? 256 : RAM_GB))
 # Run time: 1h/5GB x size + 2h, minimum 2h, maximum 24h
 RUN_TIME=$((TAR_SIZE_GB / 5 + 2))
 RUN_TIME=$((RUN_TIME < 2 ? 2 : RUN_TIME))

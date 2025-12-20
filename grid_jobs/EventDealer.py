@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import copy
 import numpy.matlib
+import gc
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ana.EventAnalysis import EventAnalysis as eva
@@ -107,6 +108,20 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
         for p in process_list:
             t1 = time.time()
 
+            # Skip analysis if data not loaded
+            if (p == "scint_rate" or p == "scintillation") and not data["scintillation"]["loaded"]:
+                print(f"Skipping {p} analysis -- scintillation data not loaded.")
+                continue
+            elif p == "exposure" and not (data["event_info"]["loaded"] and data["slow_daq"]["loaded"]):
+                print(f"Skipping {p} analysis -- event info data not loaded.")
+                continue
+            elif p == "acoustic" and not data["acoustic"]["loaded"]:
+                print(f"Skipping {p} analysis -- acoustic data not loaded.")
+                continue
+            elif p == "event" and not data["event_info"]["loaded"]:
+                print(f"Skipping {p} analysis -- event info data not loaded.")
+                continue
+
             try:
                 out[p].append(ANALYSES[p](data, **parameter_config[p]))
             except Exception as e:
@@ -117,6 +132,9 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             out[p][-1]['ev'] = npev
             et = time.time() - t1
             print(('%s analysis:  ' % p).rjust(35) + f"{et:.6f} seconds")
+        
+        del data
+        gc.collect()
 
         print('*** Full event analysis ***  '.rjust(35) + f"{time.time()-t0:.6f} seconds\n")
 
