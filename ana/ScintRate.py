@@ -45,6 +45,9 @@ def ScintillationRateAnalysis(ev):
     scint = ev["scintillation"]
     # Load the waveforms
     waveforms = scint['Waveforms']()
+    # Remove non-functional SiPMs
+    nonfunctional_sipms = [24, 31]
+    waveforms = np.delete(waveforms, nonfunctional_sipms, axis=1)
 
     # load other data which may be important
     sample_rate = 62.5e6
