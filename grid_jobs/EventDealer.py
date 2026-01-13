@@ -97,6 +97,34 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
     print("Starting run " + rundir)
     eventlist = BuildEventList(rundir, maxevt=maxevt)
 
+    # Create writers before event loop
+    writers = {}
+    for p in process_list:
+        # Get column info from first event's analysis (or use defaults)
+        temp_data = defaults[p]
+        temp_data["runid"] = runid
+        temp_data["ev"] = np.array([0], dtype=np.int32)
+
+        column_names = list(temp_data.keys())
+        dtypes = []
+        sizes = []
+        
+        for c in column_names:
+            val = temp_data[c]
+            if not isinstance(val, np.ndarray):
+                val = np.array(val)
+            dtypes.append(dname(val.dtype.str))
+            
+            if p == "scint_rate":
+                shape = list(np.atleast_1d(val).shape)
+            else:
+                shape = list(np.squeeze(val).shape)
+            shape = shape if len(shape) else [1]
+            shape = shape[1:] if len(shape) > 1 else shape
+            sizes.append(shape)
+        
+        writers[p] = Writer(os.path.join(run_recondir, f"{p}.sbc"), column_names, dtypes, sizes)
+
     for ev in eventlist:
         t0 = time.time()
         print('Starting event ' + runname + '/' + str(ev))
@@ -123,12 +151,18 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                 continue
 
             try:
-                out[p].append(ANALYSES[p](data, **parameter_config[p]))
+                result = ANALYSES[p](data, **parameter_config[p])
             except Exception as e:
                 print("Analysis %s failed on event %i with error: %s" % (p, ev, str(e)))
-
-            out[p][-1]['runid'] = runid
-            out[p][-1]['ev'] = npev
+                continue
+            result['runid'] = runid
+            result['ev'] = npev
+            
+            # Write to file
+            column_names = list(result.keys())
+            writers[p].write(dict([(c, np.squeeze(result[c])) for c in column_names]))
+            del result
+            
             et = time.time() - t1
             print(('%s analysis:  ' % p).rjust(35) + f"{et:.6f} seconds")
         
@@ -137,33 +171,11 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
 
         print('*** Full event analysis ***  '.rjust(35) + f"{time.time()-t0:.6f} seconds\n")
 
-    # save everything
+    # delete all writers
     for p in process_list:
-        if not out[p]:
-            continue
-        
-        column_names = list(out[p][0].keys())
-        dtypes = []
-        for c in column_names:
-            val = out[p][0][c]
-            # Convert to numpy array if it isn't already
-            if not isinstance(val, np.ndarray):
-                val = np.array(val)
-            dtypes.append(dname(val.dtype.str))
-
-        # squeeze sizes
-        if p == "scint_rate":
-            sizes = [list(np.atleast_1d(out[p][0][c]).shape) for c in column_names]
-        else:
-            sizes = [list(np.squeeze(out[p][0][c]).shape) for c in column_names]
-        # set default
-        sizes = [s if len(s) else [1] for s in sizes]
-        # for outputs with a sub-event number, fix the sizes
-        sizes = [s[1:] if len(s) > 1 else s for s in sizes]
-
-        writer = Writer(os.path.join(run_recondir, f"{p}.sbc"), column_names, dtypes, sizes)
-        for evind in range(len(out[p])):
-            writer.write(dict([(c, np.squeeze(out[p][evind][c])) for c in column_names]))
+        if p in writers:
+            del writers[p]
+    
     return
 
 if __name__ == "__main__":
