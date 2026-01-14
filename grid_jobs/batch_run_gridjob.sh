@@ -46,8 +46,7 @@ count=0
 
 # Loop through all .tar files in DATA_DIR
 # in reverse order, since later runs tend to take longer
-# for ((i=${total}-1; i>=0; i--)); do
-for ((i=0; i<=${total}-1; i++)); do
+for ((i=${total}-1; i>=0; i--)); do
     tar_file="${tar_files[$i]}"
     # Extract run_id from filename and submit job
     run_id=$(basename "$tar_file" .tar)

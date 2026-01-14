@@ -37,9 +37,8 @@ def ScintillationRateAnalysis(ev):
         print("File not loaded. Quitting.")
         return output
 
-    scint = ev["scintillation"]
     # Load the waveforms
-    waveforms = scint['Waveforms']
+    waveforms = ev["scintillation"]['Waveforms']
     # Remove non-functional SiPMs
     nonfunctional_sipms = [24, 31]
     waveforms[:, nonfunctional_sipms, :] = 0

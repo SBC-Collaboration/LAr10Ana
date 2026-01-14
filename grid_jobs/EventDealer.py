@@ -13,7 +13,7 @@ from ana.EventAnalysis import EventAnalysis as eva
 from ana.AcousticT0 import AcousticAnalysis as aa
 from ana.ExposureAnalysis import ExposureAnalysis as expa 
 from ana.SiPMPulses import SiPMPulsesBatched as sa
-from ana.ScintRate import ScintillationRateAnalysis as sra
+from ana.ScintRate import ScintillationRateBatched as sra
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
