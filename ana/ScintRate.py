@@ -3,6 +3,7 @@
 # Import Libraries
 import sys
 import numpy as np
+from ana.BatchSiPMs import BatchSiPMs
 
 # Functions to run code
 
@@ -16,20 +17,14 @@ def _signal_ratio_filtering(waveforms):
     # Calculate the ratio of the signal, noise should be close to 1 (cancels out)
     signalDown = np.min(waveforms, axis=-1)
     signalUp = np.max(waveforms, axis=-1)
-    signalRatio = np.abs(signalDown/signalUp)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        signalRatio = np.abs(signalDown/signalUp)
+    signalRatio = np.nan_to_num(signalRatio, nan=0.0, posinf=0.0, neginf=0.0)
 
     return signalRatio
 
-# Simple function to unwrap CAEN timestamps
-def _unwrap_caen_timestamp(ts, max_ts):
-    ts = np.asarray(ts, dtype=np.int64)
-
-    # Detect rollovers
-    rollovers = np.diff(ts, axis=-1, prepend=0) < 0
-
-    # Cumulative count of rollovers
-    rollover_count = np.cumsum(rollovers, axis=-1)
-    return ts + rollover_count * max_ts
+def ScintillationRateBatched(ev, nwvf_batch=1000, maxwvf=-1, progress=False, njob=1):
+    return BatchSiPMs(ev, ScintillationRateAnalysis, nwvf_batch=nwvf_batch, maxwvf=maxwvf, progress=progress, njob=njob)
 
 # Main function to compute SiPMs hit per each file
 def ScintillationRateAnalysis(ev):
@@ -44,19 +39,10 @@ def ScintillationRateAnalysis(ev):
 
     scint = ev["scintillation"]
     # Load the waveforms
-    waveforms = scint['Waveforms']()
+    waveforms = scint['Waveforms']
     # Remove non-functional SiPMs
     nonfunctional_sipms = [24, 31]
-    waveforms = np.delete(waveforms, nonfunctional_sipms, axis=1)
-
-    # load other data which may be important
-    sample_rate = 62.5e6
-    decimation = ev['run_control']['caen']['global']['decimation']
-    scint_timestamps = _unwrap_caen_timestamp(scint['TriggerTimeTag'](), 2**31)
-    livetime = scint_timestamps[-1] * 8e-9  # timestmap is 8 ns
-
-    if decimation == 0: decimation = 1
-    dt = 1 / (sample_rate * decimation)        
+    waveforms[:, nonfunctional_sipms, :] = 0
     
     signal_ratio = _signal_ratio_filtering(waveforms)
 
