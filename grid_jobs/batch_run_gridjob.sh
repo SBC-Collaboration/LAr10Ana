@@ -9,6 +9,24 @@ RECON_DIR="/exp/e961/data/SBC-25-recon/dev-output"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 echo "Starting batch submission of grid jobs..."
 
+# Parse command line options
+force_rerun=false
+while getopts "f" opt; do
+  case $opt in
+    f)
+      force_rerun=true
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ "$force_rerun" = true ]; then
+    echo "Force rerun enabled: Skipping version checks."
+fi
+
 # Get current version
 CURRENT_VERSION=$(git describe --tags --always)
 CURRENT_TAG="${CURRENT_VERSION%%-*}"
@@ -39,7 +57,7 @@ for ((i=0; i<=${total}-1; i++)); do
     
     # Check if output directory exists and compare versions
     run_output_dir="${RECON_DIR}/${run_id}"
-    if [ -d "$run_output_dir" ]; then
+    if [ "$force_rerun" = false ] && [ -d "$run_output_dir" ]; then
         version_file="${run_output_dir}/version.txt"
         if [ -f "$version_file" ]; then
             existing_version=$(cat "$version_file")
@@ -57,6 +75,8 @@ for ((i=0; i<=${total}-1; i++)); do
         else
             echo "Proceeding: no version.txt found in existing output"
         fi
+    elif [ "$force_rerun" = true ]; then
+         echo "Proceeding: Force rerun enabled"
     else
         echo "Proceeding: no existing output found"
     fi
