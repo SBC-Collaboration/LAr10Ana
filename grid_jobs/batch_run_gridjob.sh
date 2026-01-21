@@ -53,7 +53,7 @@ for ((i=${total}-1; i>=0; i--)); do
     # Extract run_id from filename and submit job
     run_id=$(basename "$tar_file" .tar)
     count=$((count + 1))
-    echo -e "\n=========================================="
+    echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
     echo "Processing ${count}/${total}: Run ${run_id}"
     
     # Check if output directory exists and compare versions

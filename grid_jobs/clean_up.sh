@@ -23,6 +23,7 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
     job_id=$(echo "$folder_name" | cut -d'-' -f2)
     
     log_file=$(find "$folder" -name "*.log" -type f | head -n1)
+    echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
     echo "Processing output for run ${run_num}, job ${job_id}..."
 
     # Check exit code in log file
