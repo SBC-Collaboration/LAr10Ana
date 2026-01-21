@@ -40,19 +40,30 @@ def NEvent(rundirectory):
 
 def GetFiles(rundirectory, event_dir):
     if os.path.isdir(rundirectory):
-        return os.listdir(event_dir)
+        files = []
+        for fname in os.listdir(event_dir):
+            fpath = os.path.join(event_dir, fname)
+            if os.path.isfile(fpath) and os.path.getsize(fpath) > 0:
+                files.append(fname)
+        return files
     elif rundirectory.endswith(".tar"):
         with tarfile.open(rundirectory, "r") as tf:
-            return [m.name.split("/")[-1] for m in tf.getmembers() if m.name.startswith(event_dir + "/")]
+            return [m.name.split("/")[-1] for m in tf.getmembers() 
+                    if m.name.startswith(event_dir + "/") and m.isfile() and m.size > 0]
     else:
         raise ValueError("Input rundirectory (%s) must either be a directory or a tar file (.tar)" % rundirectory)
 
 def FileExists(rundirectory, file_name):
     if os.path.isdir(rundirectory):
-        return os.path.exists(file_name)
+        if not os.path.exists(file_name):
+            return False
+        return os.path.getsize(file_name) > 0
     elif rundirectory.endswith(".tar"):
         with tarfile.open(rundirectory, "r") as tf:
-            return file_name in tf.getnames()
+            if file_name not in tf.getnames():
+                return False
+            member = tf.getmember(file_name)
+            return member.size > 0
     else:
         raise ValueError("Input rundirectory (%s) must either be a directory or a tar file (.tar)" % rundirectory)
 
