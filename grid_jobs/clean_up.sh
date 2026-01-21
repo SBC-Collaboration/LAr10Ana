@@ -76,6 +76,12 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
         rm "$tar_file"
         echo "Deleted $tar_file"
     fi
+
+    # Remove job from CSV list
+    if [ -f "$JOBS_LIST" ]; then
+        sed -i "/, ${run_num}, /d" "$JOBS_LIST"
+        echo "Removed ${run_num} from job list"
+    fi
 done
 
 )

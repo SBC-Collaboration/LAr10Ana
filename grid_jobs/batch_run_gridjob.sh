@@ -7,6 +7,8 @@ DATA_DIR="/exp/e961/data/SBC-25-daqdata"
 # Directory where finished job outputs are copied to
 RECON_DIR="/exp/e961/data/SBC-25-recon/dev-output"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# File containing all submitted jobs
+JOBS_LIST="${HOME}/.cache/sbc_job_list.csv"
 echo "Starting batch submission of grid jobs..."
 
 # Parse command line options
@@ -56,28 +58,37 @@ for ((i=${total}-1; i>=0; i--)); do
     
     # Check if output directory exists and compare versions
     run_output_dir="${RECON_DIR}/${run_id}"
-    if [ "$force_rerun" = false ] && [ -d "$run_output_dir" ]; then
-        version_file="${run_output_dir}/version.txt"
-        if [ -f "$version_file" ]; then
-            existing_version=$(cat "$version_file")
-            existing_tag="${existing_version%%-*}"
-            echo "Found existing output with version: ${existing_version} (tag: ${existing_tag})"
-            if [[ "$existing_tag" == "$CURRENT_TAG" ]]; then
-                echo "Skipping ${run_id}: existing version is same"
-                continue
-            elif [[ "$(printf '%s\n' "$CURRENT_TAG" "$existing_tag" | sort -V | head -n1)" == "$CURRENT_TAG" ]]; then
-                echo "Skipping ${run_id}: existing version (${existing_tag}) is newer than current (${CURRENT_TAG})"
-                continue
+    if [ "$force_rerun" = false ]; then 
+        # Check if job is already submitted
+        if [ -f "$JOBS_LIST" ] && grep -q ", ${run_id}, " "$JOBS_LIST"; then
+            echo "Skipping ${run_id}: job already submitted (found in job list)"
+            continue
+        fi
+    
+        # if no current job, check version of existing output
+        if [ -d "$run_output_dir" ]; then
+            version_file="${run_output_dir}/version.txt"
+            if [ -f "$version_file" ]; then
+                existing_version=$(cat "$version_file")
+                existing_tag="${existing_version%%-*}"
+                echo "Found existing output with version: ${existing_version} (tag: ${existing_tag})"
+                if [[ "$existing_tag" == "$CURRENT_TAG" ]]; then
+                    echo "Skipping ${run_id}: existing version is same"
+                    continue
+                elif [[ "$(printf '%s\n' "$CURRENT_TAG" "$existing_tag" | sort -V | head -n1)" == "$CURRENT_TAG" ]]; then
+                    echo "Skipping ${run_id}: existing version (${existing_tag}) is newer than current (${CURRENT_TAG})"
+                    continue
+                else
+                    echo "Proceeding: current version (${CURRENT_VERSION}) is newer than existing (${existing_version})"
+                fi
             else
-                echo "Proceeding: current version (${CURRENT_VERSION}) is newer than existing (${existing_version})"
+                echo "Proceeding: no version.txt found in existing output"
             fi
         else
-            echo "Proceeding: no version.txt found in existing output"
+            echo "Proceeding: no existing output found"
         fi
-    elif [ "$force_rerun" = true ]; then
-         echo "Proceeding: Force rerun enabled"
     else
-        echo "Proceeding: no existing output found"
+         echo "Proceeding: Force rerun enabled"
     fi
     
     "${SCRIPT_DIR}/run_gridjob.sh" "$run_id"

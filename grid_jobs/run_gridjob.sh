@@ -4,12 +4,29 @@
 (
 set -e
 
-RUN_ID=$1
+# Parse options
+PRODUCTION_MODE=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --pro) PRODUCTION_MODE=true; shift ;;
+        *) RUN_ID=$1; shift ;;
+    esac
+done
+
+# Set user folder based on mode
+if [ "$PRODUCTION_MODE" = true ]; then
+    DEST_DIR="coupp"
+    ROLE_ARG="--role production"
+else
+    DEST_DIR="${USER}"
+    ROLE_ARG=""
+fi
+
 DATA_DIR="/exp/e961/data/SBC-25-daqdata"
 # Directory where run data will be copied to for this grid job
-TEMP_DIR="/pnfs/coupp/scratch/users/${USER}/temp_data"
+TEMP_DIR="/pnfs/coupp/scratch/users/${DEST_DIR}/temp_data"
 # Directory where job output will be saved to
-OUT_DIR="/pnfs/coupp/scratch/users/${USER}/grid_output"
+OUT_DIR="/pnfs/coupp/scratch/users/${DEST_DIR}/grid_output"
 # DIR to save a list of jobs. Cannot be on PNFS because it doesn't support append
 LIST_DIR="${HOME}/.cache/sbc_job_list.csv"
 mkdir -p "$TEMP_DIR"
@@ -25,7 +42,7 @@ cd "${LAR10ANA_DIR}"
 VERSION_FILE="version.txt"
 git describe --tags --always >${VERSION_FILE}
 TARBALL="LAr10ana.tar"
-tar -cf $TARBALL --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
+tar --mtime='1970-01-01 00:00:00' --sort=name -cf $TARBALL --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
 rm ${VERSION_FILE}
 echo "Data copied over. LAr10ana is tarred. Ready for job submission."
 
@@ -51,7 +68,7 @@ output=$( \
   jobsub_submit --disk=${DISK_GB}GB --expected-lifetime=${RUN_TIME}h --memory=${RAM_GB}GB -G coupp \
     --resource-provides=usage_model=OPPORTUNISTIC,OFFSITE,DEDICATED \
 	--tar_file_name dropbox:///${LAR10ANA_DIR}/${TARBALL} \
-	-N 1 \
+	-N 1 ${ROLE_ARG} \
 	file://${SCRIPT_DIR}/gridjob.sh \
 	"${TEMP_DIR}/${RUN_ID}.tar" \
     "${OUT_DIR}" \
