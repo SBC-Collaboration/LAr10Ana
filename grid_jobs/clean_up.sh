@@ -23,6 +23,7 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
     job_id=$(echo "$folder_name" | cut -d'-' -f2)
     
     log_file=$(find "$folder" -name "*.log" -type f | head -n1)
+    echo "Processing output for run ${run_num}, job ${job_id}..."
 
     # Check exit code in log file
     if [ -n "$log_file" ] && [ -f "$log_file" ]; then
@@ -40,27 +41,36 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
                     should_move=false
                     echo "Skipped $folder_name (no version info)"
                 elif [ "$new_version" = "$old_version" ]; then
-                    should_move=false
-                    echo "Skipped $folder_name (same version)"
+                    should_move=true
+                    echo "Moving $folder_name (same version)"
                 else
                     # Compare versions using sort -V
                     latest=$(printf "%s\n%s" "$old_version" "$new_version" | sort -V | tail -n1)
-                    if [ "$latest" = "$old_version" ]; then
-                        should_move=false
-                        echo "Skipped $folder_name (older version: $new_version <= $old_version)"
-                    else
-                        rm -rf "$dest_folder"
+                    if [ "$latest" = "$new_version" ]; then
+                        should_move=true
                         echo "Upgrading from $old_version to $new_version"
+                    else
+                        should_move=false
+                        echo "Skipping $folder_name (existing: $old_version, incoming: $new_version)"
                     fi
                 fi
             fi
             
             if [ "$should_move" = true ]; then
+                rm -rf "$dest_folder"
                 mv "$folder" "$dest_folder"
                 echo "Moved $folder_name to $dest_folder"
             else
                 rm -rf "$folder"
             fi
+
+            # Delete corresponding tar file
+            tar_file="$TEMP_DIR/${run_num}.tar"
+            if [ -f "$tar_file" ]; then
+                rm "$tar_file"
+                echo "Deleted $tar_file"
+            fi
+
         else
             # Failed: delete the folder
             rm -rf "$folder"
@@ -68,13 +78,6 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
         fi
     else
         echo "Warning: Log file not found for $folder_name"
-    fi
-    
-    # Delete corresponding tar file
-    tar_file="$TEMP_DIR/${run_num}.tar"
-    if [ -f "$tar_file" ]; then
-        rm "$tar_file"
-        echo "Deleted $tar_file"
     fi
 
     # Remove job from CSV list
