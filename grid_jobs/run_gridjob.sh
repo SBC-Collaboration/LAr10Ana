@@ -4,9 +4,6 @@
 (
 set -e
 
-# setup jobsub environment
-export PATH="/opt/jobsub_lite/bin:$PATH"
-
 # Parse options
 PRODUCTION_MODE=false
 VERBOSE=false
@@ -27,6 +24,13 @@ else
     ROLE_ARG=""
 fi
 
+# setup jobsub environment
+JOBSUB_LITE_SH="/etc/profile.d/jobsub_lite.sh"
+if [ -f "$JOBSUB_LITE_SH" ]; then
+    source "$JOBSUB_LITE_SH"
+fi
+export HTGETTOKENOPTS="--credkey=coupppro/managedtokens/fifeutilgpvm01.fnal.gov"
+
 DATA_DIR="/exp/e961/data/SBC-25-daqdata"
 # Directory where run data will be copied to for this grid job
 TEMP_DIR="/pnfs/coupp/scratch/users/${DEST_DIR}/temp_data"
@@ -36,7 +40,9 @@ OUT_DIR="/pnfs/coupp/scratch/users/${DEST_DIR}/grid_output"
 LIST_DIR="${HOME}/.cache/sbc_job_list.csv"
 mkdir -p "$TEMP_DIR"
 mkdir -p "$OUT_DIR"
-echo "Preparing files for grid job submission for run ${RUN_ID}."
+if [ $VERBOSE = true ]; then
+    echo "Preparing files for grid job submission for run ${RUN_ID}."
+fi
 
 # Copy run tar file over
 rsync -azh --chmod=777 "${DATA_DIR}/${RUN_ID}.tar" "${TEMP_DIR}/"
@@ -49,7 +55,9 @@ git describe --tags --always >${VERSION_FILE}
 TARBALL="LAr10ana.tar"
 tar --mtime='1970-01-01 00:00:00' --sort=name -cf $TARBALL --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
 rm ${VERSION_FILE}
-echo "Data copied over. LAr10ana is tarred. Ready for job submission."
+if [ $VERBOSE = true ]; then
+    echo "Data copied over. LAr10ana is tarred. Ready for job submission."
+fi
 
 # Calculate disk and memory usage by tar file size
 TAR_SIZE_BYTES=$(stat -f%z "${DATA_DIR}/${RUN_ID}.tar" 2>/dev/null || stat -c%s "${DATA_DIR}/${RUN_ID}.tar")
@@ -66,7 +74,9 @@ RAM_GB=$((RAM_GB > 256 ? 256 : RAM_GB))
 RUN_TIME=$((TAR_SIZE_GB / 5 + 2))
 RUN_TIME=$((RUN_TIME < 2 ? 2 : RUN_TIME))
 RUN_TIME=$((RUN_TIME > 24 ? 24 : RUN_TIME))
-echo "Tar size: ${TAR_SIZE_GB}GB, requesting Disk: ${DISK_GB}GB, RAM: ${RAM_GB}GB, Run Time ${RUN_TIME}h"
+if [ $VERBOSE = true ]; then
+    echo "Tar size: ${TAR_SIZE_GB}GB, requesting Disk: ${DISK_GB}GB, RAM: ${RAM_GB}GB, Run Time ${RUN_TIME}h"
+fi
 
 # Submit job and pipe output
 output=$( \
@@ -78,15 +88,21 @@ output=$( \
 	"${TEMP_DIR}/${RUN_ID}.tar" \
     "${OUT_DIR}" \
 )
-echo "$output"
+if [ $VERBOSE = true ]; then
+    echo -e "\nJob submission output:"
+    echo "$output"
+fi
+
 # Retrieve Job ID from output, and save to list
 JOB_ID=$(echo "$output" | grep -oP '\d+\.\d+@\S+\.fnal\.gov')
 echo "$(date '+%Y-%m-%d %H:%M:%S'), ${RUN_ID}, ${JOB_ID}" >> "${LIST_DIR}"
-echo "Job ${JOB_ID} successfully submitted at $(date '+%Y-%m-%d %H:%M:%S')"
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Job ${JOB_ID} for run ${RUN_ID} ($TAR_SIZE_GB GB) successfully submitted."
 rm $TARBALL
+rm -f "LAr10ana.tar*.tbz"  # remove the tbz files
 )
 
 if [[ $? -ne 0 ]]; then
   echo "An error occurred. Quitting."
-  rm -f "LAr10ana*.tar"
+  rm -f "LAr10ana.tar"
+  rm -f "LAr10ana.tar*.tbz"
 fi
