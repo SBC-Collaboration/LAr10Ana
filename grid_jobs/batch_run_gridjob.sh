@@ -12,11 +12,15 @@ JOBS_LIST="${HOME}/.cache/sbc_job_list.csv"
 echo "Starting batch submission of grid jobs..."
 
 # Parse command line options
-force_rerun=false
-while getopts "f" opt; do
+FORCE_RERUN=false
+VERBOSE=false
+while getopts "fv" opt; do
   case $opt in
     f)
-      force_rerun=true
+      FORCE_RERUN=true
+      ;;
+    v)
+      VERBOSE=true
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -25,7 +29,7 @@ while getopts "f" opt; do
   esac
 done
 
-if [ "$force_rerun" = true ]; then
+if [ "$FORCE_RERUN" = true ]; then
     echo "Force rerun enabled: Skipping version checks."
 fi
 
@@ -53,45 +57,93 @@ for ((i=${total}-1; i>=0; i--)); do
     # Extract run_id from filename and submit job
     run_id=$(basename "$tar_file" .tar)
     count=$((count + 1))
-    echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
-    echo "Processing ${count}/${total}: Run ${run_id}"
+
+    EXISTING_VERSION=""
+    EXISTING_TAG=""
+    CASE=0
     
     # Check if output directory exists and compare versions
     run_output_dir="${RECON_DIR}/${run_id}"
-    if [ "$force_rerun" = false ]; then 
+    if [ "$FORCE_RERUN" = false ]; then 
         # Check if job is already submitted
         if [ -f "$JOBS_LIST" ] && grep -q ", ${run_id}, " "$JOBS_LIST"; then
-            echo "Skipping ${run_id}: job already submitted (found in job list)"
-            continue
-        fi
-    
+            CASE=1 
         # if no current job, check version of existing output
-        if [ -d "$run_output_dir" ]; then
+        elif [ -d "$run_output_dir" ]; then
             version_file="${run_output_dir}/version.txt"
             if [ -f "$version_file" ]; then
-                existing_version=$(cat "$version_file")
-                existing_tag="${existing_version%%-*}"
-                echo "Found existing output with version: ${existing_version} (tag: ${existing_tag})"
-                if [[ "$existing_tag" == "$CURRENT_TAG" ]]; then
-                    echo "Skipping ${run_id}: existing version is same"
-                    continue
-                elif [[ "$(printf '%s\n' "$CURRENT_TAG" "$existing_tag" | sort -V | head -n1)" == "$CURRENT_TAG" ]]; then
-                    echo "Skipping ${run_id}: existing version (${existing_tag}) is newer than current (${CURRENT_TAG})"
-                    continue
+                EXISTING_VERSION=$(cat "$version_file")
+                EXISTING_TAG="${EXISTING_VERSION%%-*}"
+                if [[ "$EXISTING_TAG" == "$CURRENT_TAG" ]]; then
+                    CASE=2
+                elif [[ "$(printf '%s\n' "$CURRENT_TAG" "$EXISTING_TAG" | sort -V | head -n1)" == "$CURRENT_TAG" ]]; then
+                    CASE=3
                 else
-                    echo "Proceeding: current version (${CURRENT_VERSION}) is newer than existing (${existing_version})"
+                    CASE=4  # current version is newer
                 fi
             else
-                echo "Proceeding: no version.txt found in existing output"
+                CASE=5  # no version.txt
             fi
         else
-            echo "Proceeding: no existing output found"
+            CASE=6  # no existing output
         fi
     else
-         echo "Proceeding: Force rerun enabled"
+        CASE=7  # force rerun
     fi
+
+    # Log if verbose or not skipping
+    SKIPPING=false
+    if [ "$CASE" -eq 1 ] || [ "$CASE" -eq 2 ] || [ "$CASE" -eq 3 ]; then
+        SKIPPING=true
+    fi
+    if [ "$VERBOSE" = true ] || [ "$SKIPPING" = false ]; then
+        echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
+        echo "Processing ${count}/${total}: Run ${run_id}"
+        if [ -n "$EXISTING_VERSION" ] && [ "$VERBOSE" = true ]; then
+            echo "Found existing output with version: ${EXISTING_VERSION} (tag: ${EXISTING_TAG})"
+        fi
+    fi
+
+    case $CASE in
+        1) 
+            if [ "$VERBOSE" = true ]; then
+                echo "Skipping ${run_id}: job already submitted (found in job list)"
+            fi
+            ;;
+        2) 
+            if [ "$VERBOSE" = true ]; then
+                echo "Skipping ${run_id}: existing version is same"
+            fi
+            ;;
+        3) 
+            if [ "$VERBOSE" = true ]; then
+                echo "Skipping ${run_id}: existing version (${EXISTING_TAG}) is newer than current (${CURRENT_TAG})"
+            fi
+            ;;
+        4) 
+            echo "Proceeding: current version (${CURRENT_VERSION}) is newer than existing (${EXISTING_VERSION})"
+            ;;
+        5) 
+            echo "Proceeding: no version.txt found in existing output"
+            ;;
+        6) 
+            echo "Proceeding: no existing output found"
+            ;;
+        7) 
+            echo "Proceeding: Force rerun enabled"
+            ;;
+        *) echo "Unknown case $CASE"
+            ;;
+    esac
     
-    "${SCRIPT_DIR}/run_gridjob.sh" "$run_id"
+    if [ "$SKIPPING" = false ]; then
+        if [ "$VERBOSE" = true ]; then
+            VERBOSE_ARG="--verbose"
+        else
+            VERBOSE_ARG=""
+        fi
+        "${SCRIPT_DIR}/run_gridjob.sh" ${VERBOSE_ARG} "$run_id"
+    fi
 done
 
 echo "Batch submission of ${total} jobs complete."

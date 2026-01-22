@@ -4,11 +4,16 @@
 (
 set -e
 
+# setup jobsub environment
+export PATH="/opt/jobsub_lite/bin:$PATH"
+
 # Parse options
 PRODUCTION_MODE=false
+VERBOSE=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --pro) PRODUCTION_MODE=true; shift ;;
+        --verbose) VERBOSE=true; shift ;;
         *) RUN_ID=$1; shift ;;
     esac
 done
