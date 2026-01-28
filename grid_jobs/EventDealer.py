@@ -126,7 +126,6 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                 out[p].append(ANALYSES[p](data, **parameter_config[p]))
             except Exception as e:
                 print("Analysis %s failed on event %i with error: %s" % (p, ev, str(e)))
-                out[p].append(defaults[p])
 
             out[p][-1]['runid'] = runid
             out[p][-1]['ev'] = npev

@@ -21,7 +21,7 @@ while [[ "$#" -gt 0 ]]; do
         --pro|--production|-p) PRODUCTION_MODE=true; shift ;;
         --verbose|-v) VERBOSE=true; shift ;;
         *) RUN_ID=$1; shift ;;
-  esac
+    esac
 done
 
 if [ "$FORCE_RERUN" = true ]; then

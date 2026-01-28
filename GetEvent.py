@@ -264,8 +264,11 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 raise ValueError(f"Unrecognized sample rate format: '{sample_rate_str}'")
 
-            decimation = event['run_control']['caen']['global']['decimation']
-
+            decimation = event['run_control'].get('caen', {}).get('global', {}).get('decimation')
+            # if not old version of the config, then try another path, or default to 0
+            if decimation is None:
+                decimation = decimation = event['run_control'].get('scint', {}).get('caen', {}).get('decimation', 0)
+            
             event["acoustics"]["sample_rate"] = sample_rate
 
             if "scintillation" in loadlist:
