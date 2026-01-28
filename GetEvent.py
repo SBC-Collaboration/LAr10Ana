@@ -109,10 +109,16 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 warnings.warn("No acoustics file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            acoustic_data = Streamer(acoustic_file).to_dict() if not is_tar else TarStreamer(rundirectory, acoustic_file).to_dict()
-            event["acoustics"]["loaded"] = True
-            for k, v in acoustic_data.items():
-                event["acoustics"][k] = v
+            try:
+                acoustic_data = Streamer(acoustic_file).to_dict() if not is_tar else TarStreamer(rundirectory, acoustic_file).to_dict()
+                event["acoustics"]["loaded"] = True
+                for k, v in acoustic_data.items():
+                    event["acoustics"][k] = v
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load acoustics data with error: {e}")
         
     if "scintillation" in loadlist:
         scint_file = os.path.join(event_dir, "scintillation.sbc")
@@ -123,18 +129,24 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 warnings.warn("No scintillation file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            if lazy_load_scintillation:
-                scint = Streamer(scint_file, max_size=1000) if not is_tar else TarStreamer(rundirectory, scint_file, max_size=1000)
-                for c in scint.columns:
-                    event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
-                event["scintillation"]["length"] = scint.num_elems
-            else:
-                scint = Streamer(scint_file) if not is_tar else TarStreamer(rundirectory, scint_file)
-                scint = scint.to_dict()
-                for k, v in scint.items():
-                    event["scintillation"][k] = v
-                event["scintillation"]["length"] = scint["Waveforms"].shape[0]
-            event["scintillation"]["loaded"] = True
+            try:
+                if lazy_load_scintillation:
+                    scint = Streamer(scint_file, max_size=1000) if not is_tar else TarStreamer(rundirectory, scint_file, max_size=1000)
+                    for c in scint.columns:
+                        event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
+                    event["scintillation"]["length"] = scint.num_elems
+                else:
+                    scint = Streamer(scint_file) if not is_tar else TarStreamer(rundirectory, scint_file)
+                    scint = scint.to_dict()
+                    for k, v in scint.items():
+                        event["scintillation"][k] = v
+                    event["scintillation"]["length"] = scint["Waveforms"].shape[0]
+                event["scintillation"]["loaded"] = True
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load scintillation data with error: {e}")
 
     if "cam" in loadlist:
         event["cam"]["loaded"] = True
@@ -192,10 +204,16 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 warnings.warn("No event_info file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            event_data = Streamer(event_file).to_dict() if not is_tar else TarStreamer(rundirectory, event_file).to_dict()
-            event["event_info"]["loaded"] = True
-            for k, v in event_data.items():
-                event["event_info"][k] = v
+            try:
+                event_data = Streamer(event_file).to_dict() if not is_tar else TarStreamer(rundirectory, event_file).to_dict()
+                event["event_info"]["loaded"] = True
+                for k, v in event_data.items():
+                    event["event_info"][k] = v
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load event_info data with error: {e}")
 
     if "slow_daq" in loadlist:
         slow_daq_file = os.path.join(event_dir, "slow_daq.sbc")
@@ -205,10 +223,16 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 warnings.warn("No slow_daq file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            slow_daq_data = Streamer(slow_daq_file).to_dict() if not is_tar else TarStreamer(rundirectory, slow_daq_file).to_dict()
-            event["slow_daq"]["loaded"] = True
-            for k, v in slow_daq_data.items():
-                 event["slow_daq"][k] = v
+            try:
+                slow_daq_data = Streamer(slow_daq_file).to_dict() if not is_tar else TarStreamer(rundirectory, slow_daq_file).to_dict()
+                event["slow_daq"]["loaded"] = True
+                for k, v in slow_daq_data.items():
+                     event["slow_daq"][k] = v
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load slow_daq data with error: {e}")
 
     if "plc" in loadlist:
         plc_file = os.path.join(event_dir, "plc.sbc")
@@ -218,10 +242,16 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 warnings.warn("No plc file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            plc_data = Streamer(plc_file).to_dict() if not is_tar else TarStreamer(rundirectory, plc_file).to_dict()
-            event["plc"]["loaded"] = True
-            for k, v in plc_data.items():
-                event["plc"][k] = v
+            try:
+                plc_data = Streamer(plc_file).to_dict() if not is_tar else TarStreamer(rundirectory, plc_file).to_dict()
+                event["plc"]["loaded"] = True
+                for k, v in plc_data.items():
+                    event["plc"][k] = v
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load plc data with error: {e}")
 
     if "run_info" in loadlist:
         run_info_file = os.path.join(base_dir, "run_info.sbc")
@@ -231,10 +261,16 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 warnings.warn("No run_info file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            run_info_data = Streamer(run_info_file).to_dict() if not is_tar else TarStreamer(rundirectory, run_info_file).to_dict()
-            event["run_info"]["loaded"] = True
-            for k, v in run_info_data.items():
-                event["run_info"][k] = v
+            try:
+                run_info_data = Streamer(run_info_file).to_dict() if not is_tar else TarStreamer(rundirectory, run_info_file).to_dict()
+                event["run_info"]["loaded"] = True
+                for k, v in run_info_data.items():
+                    event["run_info"][k] = v
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load run_info data with error: {e}")
 
     if "run_control" in loadlist:
         run_ctrl_file = os.path.join(base_dir, "rc.json")
@@ -244,34 +280,41 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             else:
                 warnings.warn("No run_control file present in the run directory. Data will not be available in the returned dictionary.")
         else:
-            doopen = open if not is_tar else tarfile.open
-            toopen = run_ctrl_file if not is_tar else rundirectory
-            with doopen(toopen, "r") as f:
-                if is_tar:
-                    f = f.extractfile(run_ctrl_file)
-                run_ctrl_data = json.load(f)
-            event["run_control"]["loaded"] = True
-            for k, v in run_ctrl_data.items():
-                event["run_control"][k] = v
-            sample_rate_str = event['run_control']['acous']['sample_rate'].strip().upper()
+            try:
+                doopen = open if not is_tar else tarfile.open
+                toopen = run_ctrl_file if not is_tar else rundirectory
+                with doopen(toopen, "r") as f:
+                    if is_tar:
+                        f = f.extractfile(run_ctrl_file)
+                    run_ctrl_data = json.load(f)
+                event["run_control"]["loaded"] = True
+                for k, v in run_ctrl_data.items():
+                    event["run_control"][k] = v
+                sample_rate_str = event['run_control']['acous']['sample_rate'].strip().upper()
 
-            if "MS/S" in sample_rate_str:
-                sample_rate = int(sample_rate_str.replace("MS/S", "").strip()) * 1_000_000
-            elif "KS/S" in sample_rate_str:
-                sample_rate = int(sample_rate_str.replace("KS/S", "").strip()) * 1_000
-            elif "S/S" in sample_rate_str:
-                sample_rate = int(sample_rate_str.replace("S/S", "").strip())
-            else:
-                raise ValueError(f"Unrecognized sample rate format: '{sample_rate_str}'")
+                if "MS/S" in sample_rate_str:
+                    sample_rate = int(sample_rate_str.replace("MS/S", "").strip()) * 1_000_000
+                elif "KS/S" in sample_rate_str:
+                    sample_rate = int(sample_rate_str.replace("KS/S", "").strip()) * 1_000
+                elif "S/S" in sample_rate_str:
+                    sample_rate = int(sample_rate_str.replace("S/S", "").strip())
+                else:
+                    raise ValueError(f"Unrecognized sample rate format: '{sample_rate_str}'")
 
-            decimation = event['run_control'].get('caen', {}).get('global', {}).get('decimation')
-            # if not old version of the config, then try another path, or default to 0
-            if decimation is None:
-                decimation = decimation = event['run_control'].get('scint', {}).get('caen', {}).get('decimation', 0)
-            
-            event["acoustics"]["sample_rate"] = sample_rate
+                decimation = event['run_control'].get('caen', {}).get('global', {}).get('decimation')
+                # if not old version of the config, then try another path, or default to 0
+                if decimation is None:
+                    decimation = decimation = event['run_control'].get('scint', {}).get('caen', {}).get('decimation', 0)
+                
+                event["acoustics"]["sample_rate"] = sample_rate
 
-            if "scintillation" in loadlist:
-                event['scintillation']['sample_rate'] = 62500000 / (2**decimation)
+                if "scintillation" in loadlist:
+                    event['scintillation']['sample_rate'] = 62500000 / (2**decimation)
+
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load run_control data with error: {e}")
 
     return event
