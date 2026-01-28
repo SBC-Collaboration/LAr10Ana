@@ -9,19 +9,15 @@ PRODUCTION_MODE=false
 VERBOSE=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --pro) PRODUCTION_MODE=true; shift ;;
-        --verbose) VERBOSE=true; shift ;;
+        --pro|--production|-p) PRODUCTION_MODE=true; shift ;;
+        --verbose|-v) VERBOSE=true; shift ;;
         *) RUN_ID=$1; shift ;;
     esac
 done
 
-# Set user folder based on mode
+ROLE_ARG=""
 if [ "$PRODUCTION_MODE" = true ]; then
-    DEST_DIR="coupp"
     ROLE_ARG="--role production"
-else
-    DEST_DIR="${USER}"
-    ROLE_ARG=""
 fi
 
 # setup jobsub environment

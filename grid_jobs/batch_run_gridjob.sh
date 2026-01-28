@@ -14,18 +14,13 @@ echo "Starting batch submission of grid jobs..."
 # Parse command line options
 FORCE_RERUN=false
 VERBOSE=false
-while getopts "fv" opt; do
-  case $opt in
-    f)
-      FORCE_RERUN=true
-      ;;
-    v)
-      VERBOSE=true
-      ;;
-    \?)
-      echo "Invalid option: -$OPTARG" >&2
-      exit 1
-      ;;
+PRODUCTION_MODE=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --force|--force-rerun|-f) FORCE_RERUN=true; shift ;;
+        --pro|--production|-p) PRODUCTION_MODE=true; shift ;;
+        --verbose|-v) VERBOSE=true; shift ;;
+        *) RUN_ID=$1; shift ;;
   esac
 done
 
@@ -142,7 +137,14 @@ for ((i=${total}-1; i>=0; i--)); do
         else
             VERBOSE_ARG=""
         fi
-        "${SCRIPT_DIR}/run_gridjob.sh" ${VERBOSE_ARG} "$run_id"
+
+        if [ "$PRODUCTION_MODE" = true ]; then
+            ROLE_ARG="--production"
+        else
+            ROLE_ARG=""
+        fi
+
+        bash "${SCRIPT_DIR}/run_gridjob.sh" ${VERBOSE_ARG} ${ROLE_ARG} "$run_id"
     fi
 done
 
