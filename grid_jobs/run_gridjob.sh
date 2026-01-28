@@ -31,11 +31,15 @@ if [ -f "$JOBSUB_LITE_SH" ]; then
 fi
 export HTGETTOKENOPTS="--credkey=coupppro/managedtokens/fifeutilgpvm01.fnal.gov"
 
+DEST_DIR="/pnfs/coupp/scratch/users/${USER}"
+if [ "$USER" = "coupppro" ]; then
+    DEST_DIR="/pnfs/coupp/scratch/coupppro"
+fi
 DATA_DIR="/exp/e961/data/SBC-25-daqdata"
 # Directory where run data will be copied to for this grid job
-TEMP_DIR="/pnfs/coupp/scratch/users/${DEST_DIR}/temp_data"
+TEMP_DIR="${DEST_DIR}/temp_data"
 # Directory where job output will be saved to
-OUT_DIR="/pnfs/coupp/scratch/users/${DEST_DIR}/grid_output"
+OUT_DIR="${DEST_DIR}/grid_output"
 # DIR to save a list of jobs. Cannot be on PNFS because it doesn't support append
 LIST_DIR="${HOME}/.cache/sbc_job_list.csv"
 mkdir -p "$TEMP_DIR"

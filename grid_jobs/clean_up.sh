@@ -3,10 +3,14 @@
 # Quit if error happens, but don't kill the entire terminal in jupyter.
 (
 set -e
+DEST_DIR="/pnfs/coupp/scratch/users/${USER}"
+if [ "$USER" = "coupppro" ]; then
+    DEST_DIR="/pnfs/coupp/scratch/coupppro"
+fi
 # Directory where run data are copied to for the grid job
-TEMP_DIR="/pnfs/coupp/scratch/users/${USER}/temp_data"
+TEMP_DIR="${DEST_DIR}/temp_data"
 # Directory where job output are saved to
-OUT_DIR="/pnfs/coupp/scratch/users/${USER}/grid_output"
+OUT_DIR="${DEST_DIR}/grid_output"
 # Directory where finished job outputs are copied to
 RECON_DIR="/exp/e961/data/SBC-25-recon/dev-output"
 LOG_DIR="/exp/e961/data/SBC-25-recon/dev-logs"
