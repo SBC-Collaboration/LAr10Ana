@@ -69,11 +69,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
 
     # get processes
     process_list = [p.lower().strip() for p in process_list]
-
-    # output data and defaults
-    out = dict([(p, []) for p in process_list])
-    defaults = dict([(p, ANALYSES[p](None)) for p in process_list])
-
+    
     # process parameter configuraton
     parameter_config = dict([(p, {}) for p in process_list])
 
@@ -99,31 +95,6 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
 
     # Create writers before event loop
     writers = {}
-    for p in process_list:
-        # Get column info from first event's analysis (or use defaults)
-        temp_data = defaults[p]
-        temp_data["runid"] = runid
-        temp_data["ev"] = np.array([0], dtype=np.int32)
-
-        column_names = list(temp_data.keys())
-        dtypes = []
-        sizes = []
-        
-        for c in column_names:
-            val = temp_data[c]
-            if not isinstance(val, np.ndarray):
-                val = np.array(val)
-            dtypes.append(dname(val.dtype.str))
-            
-            if p == "scint_rate":
-                shape = list(np.atleast_1d(val).shape)
-            else:
-                shape = list(np.squeeze(val).shape)
-            shape = shape if len(shape) else [1]
-            shape = shape[1:] if len(shape) > 1 else shape
-            sizes.append(shape)
-        
-        writers[p] = Writer(os.path.join(run_recondir, f"{p}.sbc"), column_names, dtypes, sizes)
 
     for ev in eventlist:
         t0 = time.time()
@@ -163,6 +134,28 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             result['runid'] = runid
             result['ev'] = npev
             
+            # create writer if it doesn't exist
+            if p not in writers:
+                column_names = list(result.keys())
+                dtypes = []
+                sizes = []
+                
+                for c in column_names:
+                    val = result[c]
+                    if not isinstance(val, np.ndarray):
+                        val = np.array(val)
+                    dtypes.append(dname(val.dtype.str))
+                    
+                    if p == "scint_rate":
+                        shape = list(np.atleast_1d(val).shape)
+                    else:
+                        shape = list(np.squeeze(val).shape)
+                    shape = shape if len(shape) else [1]
+                    shape = shape[1:] if len(shape) > 1 else shape
+                    sizes.append(shape)
+                
+                writers[p] = Writer(os.path.join(run_recondir, f"{p}.sbc"), column_names, dtypes, sizes)
+
             # Write to file
             column_names = list(result.keys())
             writers[p].write(dict([(c, np.squeeze(result[c])) for c in column_names]))
