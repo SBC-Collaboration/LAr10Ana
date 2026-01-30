@@ -129,7 +129,12 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
         t0 = time.time()
         print('Starting event ' + runname + '/' + str(ev))
 
-        data = GetEvent(rundir, ev, strictMode=False)
+        try:
+            data = GetEvent(rundir, ev, strictMode=False)
+        except Exception as e:
+            print(f"Failed to load event {ev} with error: {e}. Skipping event.")
+            continue
+
         print('Time to load event:  '.rjust(35) + f"{time.time()-t0:.6f} seconds")
         npev = np.array([ev], dtype=np.int32)
 
