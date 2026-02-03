@@ -13,6 +13,7 @@ full_loadlist = [
     "cam",
     "event_info",
     "plc",
+    "digiscope",
     "slow_daq",
     "run_info",
     "run_control"
@@ -257,6 +258,25 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                     raise e
                 else:
                     warnings.warn(f"Failed to load plc data with error: {e}")
+    
+    if "digiscope" in loadlist:
+        digi_file = os.path.join(event_dir, "digiscope.sbc")
+        if not FileExists(rundirectory, digi_file):
+            if strictMode: 
+                raise FileNotFoundError("No digiscope file present in the run directory. To disable this error, either pass strictMode=False, or remove 'digiscope' from the loadlist")
+            else:
+                warnings.warn("No digiscope file present in the run directory. Data will not be available in the returned dictionary.")
+        else:
+            try:
+                digi_data = Streamer(digi_file).to_dict() if not is_tar else TarStreamer(rundirectory, digi_file).to_dict()
+                event["digiscope"]["loaded"] = True
+                for k, v in digi_data.items():
+                    event["digiscope"][k] = v
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load digiscope data with error: {e}")
 
     if "run_info" in loadlist:
         run_info_file = os.path.join(base_dir, "run_info.sbc")
