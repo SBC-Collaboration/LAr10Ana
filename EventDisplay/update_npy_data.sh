@@ -16,6 +16,7 @@ echo "Sourcing conda environment"
 source "$PROJECT_DIR/setup.sh"
 
 echo "Running convert_raw_to_npy_run_by_run.py"
+cd "$NPY_SCRIPT_DIR"
 python "$NPY_SCRIPT_DIR/convert_raw_to_npy_run_by_run.py" /exp/e961/data/SBC-25-daqdata "$NPY_SCRIPT_DIR/npy/SBC-25"
 
 echo "Running merge_raw_run_npy.py"
