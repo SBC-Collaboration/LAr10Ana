@@ -22,7 +22,7 @@ class Camera(tk.Frame):
         self.load_fastdaq_scintillation()
         self.load_fastDAQ_analysis()
         self.frame = self.init_frame
-        self.diff_checkbutton_var.set(False)
+        # self.diff_checkbutton_var.set(False)
         self.invert_checkbutton_var.set(False)
 
         for canvas in self.canvases:
