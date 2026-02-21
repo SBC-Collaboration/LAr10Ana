@@ -5,17 +5,31 @@ from skimage.draw import circle_perimeter, disk
 from skimage.measure import label, regionprops
 import diplib as dip
 
-#ev: event
+"""
+Args:
+  ev: event
+  cam: camera
+  num_pix_in_neighborhood: radius around the center of an identified bubble that 
+    is zeroed out for all radii in the accumulator array before looking at the next bubble candidate;
+    prevents the same bubble from being tagged twice 
+  noise_thresh: diff values below this threshold will be set to zero
 
-#cam: camera
+Returns:
+  bub_dict: dictionary of lists, where each row is a bubble frame from one camera
+    bub_num (int): index of bubbles. Each bubble in each frame from each camera will have its own index
+    cam (int): camera number of this bubble
+    pos (float, 2): x and y axis of the pixel position of the bubble
+    radius (float): radius of the bubble in pixels
+    significance (float):
+    frame (int): frame number of this bubble
+"""
 
-#num_pix_in_neighborhood: radius around the center of an identified bubble that 
-#is zeroed out for all radii in the accumulator array before looking at the next bubble candidate;
-#prevents the same bubble from being tagged twice 
+bub_dict_keys = ["bub_num", "cam", "pos", "radius", "significance", "frame"]
 
-#noise_thresh: diff values below this threshold will be set to zero
+def _new_bub_dict():
+    return dict([(key, []) for key in bub_dict_keys])
 
-def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
+def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
     #get mask for bubble region based on camera
     refIm = np.float32(np.average(ev['cam'][f'c{cam}']['frame0'],axis=2))
     imShape = refIm.shape
@@ -32,7 +46,23 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
         mask_circy, mask_circx = disk((440, 690), 270, shape=imShape)
 
     #initialize some variables and the bubble dictionary to be returned at the end
-    bub_dict = {}
+    if bub_dict is None:
+        bub_dict = _new_bub_dict()
+        start_num = 0
+    elif not isinstance(bub_dict, dict):
+        raise ValueError("bub_dict must be a dictionary")
+    elif len(bub_dict) == 0:
+        bub_dict = _new_bub_dict()
+        start_num = 0
+    elif not all(key in bub_dict for key in bub_dict_keys):
+        raise ValueError("bub_dict does not contain all required keys: %s" % bub_dict_keys)
+    elif not all(isinstance(bub_dict[key], list) for key in bub_dict_keys):
+        raise ValueError("All values in bub_dict must be lists")
+    elif not all(len(bub_dict[key]) == len(bub_dict["bub_num"]) for key in bub_dict_keys):
+        raise ValueError("All lists in bub_dict must have the same length as bub_dict['bub_num']")
+    else:
+        start_num = len(bub_dict["bub_num"])
+
     bub_num = start_num
     bubs_found = False
     first_found = False
@@ -100,7 +130,7 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
             else:
                 min_rad = min_est_rad - 2
                 max_rad = min_est_rad + 3
-            rad_cands = np.arange(min_rad,max_rad,1)
+            rad_cands = np.arange(min_rad, max_rad,1)
             
             #perform CHT
             for rad in rad_cands:
@@ -109,21 +139,21 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
                 dy = circy-400
                 offsets = [(dx[i],dy[i]) for i in range(len(dx))]
     
-                this_layer = np.zeros((imShape[0],imShape[1]))
+                this_layer = np.zeros((imShape[0], imShape[1]))
                 for offset in offsets:
-                    this_layer += np.roll(diff,offset,(0,1))
+                    this_layer += np.roll(diff, offset,(0,1))
     
                 if rad==rad_cands[0]:
                     accum = this_layer
                 else:
-                    accum = np.dstack((accum,this_layer))
+                    accum = np.dstack((accum, this_layer))
     
             accum_shape = accum.shape
     
             #get vote threshold -- 80% of highest peak number of votes
             largest_cy, largest_cx = largest_region.centroid
-            largest_y, largest_x = disk((largest_cy,largest_cx), 20, shape=imShape)
-            max_votes = np.max(accum[largest_y,largest_x])
+            largest_y, largest_x = disk((largest_cy, largest_cx), 20, shape=imShape)
+            max_votes = np.max(accum[largest_y, largest_x])
             vote_thresh = max_votes*.8
             
             #now we enter the candidate loop and decide based on votes whether to keep or discard each candidate
@@ -142,7 +172,7 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
                     while t0_found==False:
                         
                         #get diff
-                        pastIm = np.float32(np.average(ev['cam'][f'c{cam}'][f'frame{im_num-j}'],axis=2))
+                        pastIm = np.float32(np.average(ev['cam'][f'c{cam}'][f'frame{im_num-j}'], axis=2))
                         pastDiff = abs(pastIm - refIm)
                         pastDiff[pastDiff<noise_thresh] = 0
                         pastDiff-=dip.GetSinglePixels(pastDiff > 0)
@@ -155,20 +185,20 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
                             dy = circy-400
                             offsets = [(dx[i],dy[i]) for i in range(len(dx))]
     
-                            this_layer = np.zeros((imShape[0],imShape[1]))
+                            this_layer = np.zeros((imShape[0], imShape[1]))
                             for offset in offsets:
-                                this_layer += np.roll(pastDiff,offset,(0,1))
+                                this_layer += np.roll(pastDiff, offset,(0,1))
     
                             if rad==rad_cands[0]:
                                 past_accum = this_layer
                             else:
-                                past_accum = np.dstack((accum,this_layer))
+                                past_accum = np.dstack((accum, this_layer))
     
                         past_accum_shape = past_accum.shape
     
                         #paste relevant region of accumulator onto blank image
                         pastregIm = np.zeros(past_accum_shape)
-                        pastregIm[largest_y,largest_x] = past_accum[largest_y,largest_x]
+                        pastregIm[largest_y, largest_x] = past_accum[largest_y, largest_x]
     
                         #find peak candidate 
                         pcy, pcx, rad_ind = np.unravel_index(np.argmax(pastregIm), past_accum_shape)
@@ -176,16 +206,16 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
     
                         #check if bubble candidate meets intensity thresh for the noise in the image
                         past_intensity_thresh = np.average(pastDiff) + 2.5*np.std(pastDiff)
-                        bub_coords_y, bub_coords_x = disk((pcy,pcx), prad, shape=imShape)
-                        if np.average(pastDiff[bub_coords_y,bub_coords_x]) >= past_intensity_thresh:
+                        bub_coords_y, bub_coords_x = disk((pcy, pcx), prad, shape=imShape)
+                        if np.average(pastDiff[bub_coords_y, bub_coords_x]) >= past_intensity_thresh:
                             #add bubble to dictionary
-                            this_bub_dict = {}
-                            this_bub_dict['Pos'] = (pcx,pcy)
-                            this_bub_dict['Radius'] = prad
-                            this_bub_dict['Significance'] = 1.0
-                            this_bub_dict['Frame'] = im_num-j
-                            this_bub_dict['Camera'] = cam
-                            bub_dict[f'Bubble{bub_num}'] = this_bub_dict
+                            bub_dict["bub_num"].append([bub_num])
+                            bub_dict["cam"].append([cam])
+                            bub_dict["pos"].append([pcx, pcy])
+                            bub_dict["radius"].append([prad])
+                            bub_dict["significance"].append([1.0])
+                            bub_dict["frame"].append([im_num-j])
+
                             bub_num+=1
                             j+=1
                     
@@ -200,7 +230,7 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
                 rcy, rcx = region.centroid
                 ry, rx = disk((rcy,rcx), 20, shape=imShape)
                 regIm = np.zeros(accum_shape)
-                regIm[ry,rx] = accum[ry,rx]
+                regIm[ry,rx] = accum[ry, rx]
                 votes = np.max(regIm)
                 
                 if votes>=vote_thresh:
@@ -210,13 +240,13 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
                     prad = rad_ind + min_rad
     
                     #add bubble to dictionary
-                    this_bub_dict = {}
-                    this_bub_dict['Pos'] = (pcx,pcy)
-                    this_bub_dict['Radius'] = prad
-                    this_bub_dict['Significance'] = votes/max_votes
-                    this_bub_dict['Frame'] = im_num
-                    this_bub_dict['Camera'] = cam
-                    bub_dict[f'Bubble{bub_num}'] = this_bub_dict
+                    bub_dict["bub_num"].append([bub_num])
+                    bub_dict["cam"].append([cam])
+                    bub_dict["pos"].append([pcx, pcy])
+                    bub_dict["radius"].append([prad])
+                    bub_dict["significance"].append([votes/max_votes])
+                    bub_dict["frame"].append([im_num-j])
+
                     bub_num+=1
                 
                     #zero out accumulator array for all radii around this point
@@ -225,10 +255,11 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, start_num):
 
     return bub_dict
 
-def GetBubDict(ev, num_pix_in_neighborhood = 20, noise_thresh = 10):
-        
-    cam_dict1 = FindBubbles(ev, 1, num_pix_in_neighborhood, noise_thresh, start_num = 0)
-    cam_dict2 = FindBubbles(ev, 2, num_pix_in_neighborhood, noise_thresh, start_num = len(cam_dict1))
-    cam_dict3 = FindBubbles(ev, 3, num_pix_in_neighborhood, noise_thresh, start_num = len(cam_dict1)+len(cam_dict2))
+def BubbleFinder(ev, num_pix_in_neighborhood = 20, noise_thresh = 10):
+    
+    out = _new_bub_dict()
+    out = FindBubbles(ev, 1, num_pix_in_neighborhood, noise_thresh, bub_dict=out)
+    out = FindBubbles(ev, 2, num_pix_in_neighborhood, noise_thresh, bub_dict=out)
+    out = FindBubbles(ev, 3, num_pix_in_neighborhood, noise_thresh, bub_dict=out)
 
-    return cam_dict1 | cam_dict2 | cam_dict3
+    return out

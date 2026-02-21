@@ -14,6 +14,7 @@ from ana.AcousticT0 import AcousticAnalysis as aa
 from ana.ExposureAnalysis import ExposureAnalysis as expa 
 from ana.SiPMPulses import SiPMPulsesBatched as sa
 from ana.ScintRate import ScintillationRateBatched as sra
+from ana.BubbleFinder import BubbleFinder as bf
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
@@ -24,6 +25,7 @@ ANALYSES = {
     "exposure": expa,
     "scintillation": sa,
     "scint_rate": sra,
+    "bubble": bf
 }
 
 def BuildEventList(rundir, maxevt=-1):
@@ -146,7 +148,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                         val = np.array(val)
                     dtypes.append(dname(val.dtype.str))
                     
-                    if p == "scint_rate":
+                    if p == "scint_rate" or p == "bubble":
                         shape = list(np.atleast_1d(val).shape)
                     else:
                         shape = list(np.squeeze(val).shape)
@@ -181,10 +183,9 @@ if __name__ == "__main__":
         ProcessSingleRun(
             rundir=sys.argv[1],
             recondir=sys.argv[2],
-            process_list = ["event", "exposure", "scintillation", "scint_rate"])
+            process_list = ["event", "exposure", "scintillation", "scint_rate", "bubble"])
     else:
         ProcessSingleRun(
-            rundir="/exp/e961/data/SBC-25-daqdata/20251125_6.tar",
-            recondir="/exp/e961/data/users/gputnam/test-sbcdaq", # Use your own directory for testing~
-            process_list = ["event", "scint_rate"],
-            maxevt=2)
+            rundir="/exp/e961/data/SBC-25-daqdata/20260221_0.tar",
+            recondir="/home/zsheng/test", # Use your own directory for testing~
+            process_list = ["event", "bubble"])
