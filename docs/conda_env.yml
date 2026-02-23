@@ -1,0 +1,8 @@
+name: lar10ana
+channels:
+  - conda-forge
+dependencies:
+  - python==3.13
+  - sphinx>=8.2
+  - sphinx-rtd-theme>=3.0
+  - myst-parser>=4.0
