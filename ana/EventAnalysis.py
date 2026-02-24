@@ -1,19 +1,13 @@
+# EventAnalysis.py
 import numpy as np
 
-keys = ['run_id', 'event_id', 'ev_exit_code', 'ev_livetime', 'cum_livetime', 'pset', 'pset_hi', 'pset_slope', 'pset_period', 'start_time', 'end_time', 'trigger_source']
+keys = ['run_id', 'event_id', 'ev_exit_code', 'ev_livetime', 'cum_livetime', 'pset_lo', 'pset_hi', 'pset_ramp1', 'pset_ramp_down', 'pset_ramp_up', 'start_time', 'end_time', 'trigger_source']
 
 def EventAnalysis(ev):
-    default_output = dict()
+    out = dict()
     for k in keys:
-        default_output[k] = np.asarray(-1.)
-
-    try:
-        out = default_output
-        for k in keys:
-            out[k] = np.asarray(ev['event_info'][k])
-        return out
-    except:
-        return default_output
+        out[k] = np.asarray(ev['event_info'][k])
+    return out
 
 if __name__ == "__main__":
     from GetEvent import GetEvent
