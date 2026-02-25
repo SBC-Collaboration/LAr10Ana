@@ -129,6 +129,9 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             elif p == "event" and not data["event_info"]["loaded"]:
                 print(f"Skipping {p} analysis -- event info data not loaded.")
                 continue
+            elif p == "bubble" and not data["cam"]["loaded"]:
+                print(f"Skipping {p} analysis -- event info data not loaded.")
+                continue
 
             try:
                 result = ANALYSES[p](data, **parameter_config[p])

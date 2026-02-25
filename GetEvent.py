@@ -149,9 +149,8 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                     warnings.warn(f"Failed to load scintillation data with error: {e}")
 
     if "cam" in loadlist:
-        event["cam"]["loaded"] = True
         for cam_ind in range(1, 4):
-            event["cam"]["c%i" % cam_ind] = {}
+            event["cam"]["c%i" % cam_ind] = {"loaded": False}
             cam_file = os.path.join(event_dir, "cam%i-info.csv" % cam_ind)
             if not FileExists(rundirectory, cam_file):
                 if strictMode: 
@@ -182,6 +181,8 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
             for h, d in zip(cam_data_headers, cam_data):
                 event["cam"]["c%i" % cam_ind][h] = d
 
+            event["cam"]["c%i" % cam_ind]["loaded"] = True
+
         for fname in GetFiles(rundirectory, event_dir):
             if fname.startswith("cam") and fname.endswith(".png"):
                 img_file = os.path.join(event_dir, fname)
@@ -194,6 +195,10 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                     with tarfile.open(rundirectory, "r") as tf:
                         with tf.extractfile(img_file) as f:
                             event["cam"]["c%i" % cam_ind]["frame%i" % frame_ind] = np.array(Image.open(io.BytesIO(f.read())).convert("RGB"))
+        
+        event["cam"]["loaded"] = event["cam"]["c1"]["loaded"] or \
+                                 event["cam"]["c2"]["loaded"] or \
+                                 event["cam"]["c3"]["loaded"]
 
     if "event_info" in loadlist:
         event_file = os.path.join(event_dir, "event_info.sbc")

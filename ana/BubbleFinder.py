@@ -30,6 +30,9 @@ def _new_bub_dict():
     return dict([(key, []) for key in bub_dict_keys])
 
 def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
+    if not ev['cam'][f'c{cam}']['loaded']:
+        return bub_dict
+    
     #get mask for bubble region based on camera
     refIm = np.float32(np.average(ev['cam'][f'c{cam}']['frame0'],axis=2))
     imShape = refIm.shape
