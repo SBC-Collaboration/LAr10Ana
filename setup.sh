@@ -7,3 +7,6 @@ conda activate env
 # add current directory to python path
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 export PYTHONPATH=$PYTHONPATH:$SCRIPT_DIR
+
+# Add in path to REFPROP for SeitzModel
+export PYTHONPATH=$PYTHONPATH:/cvmfs/coupp.opensciencegrid.org/LAr10Ana/SeitzModel/REFPROP
