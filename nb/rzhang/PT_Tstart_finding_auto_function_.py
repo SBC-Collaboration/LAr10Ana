@@ -64,17 +64,36 @@ def single_run_daq_v1(path,i):
 
 
 
-    # find t_start
-    valve_difference = valve_filtered[1:] - valve_filtered[:-1]
-    chunked_valve = valve_difference[:compress_idx - 20]
+    # # find t_start -valve version
+    # valve_difference = valve_filtered[1:] - valve_filtered[:-1]
+    # chunked_valve = valve_difference[:compress_idx - 20]
+    # chunked_time = slowdaq_time[:compress_idx - 20]
+    # reverse_time = chunked_time[::-1]
+    # reverse_valve_delta = chunked_valve[::-1]
+    # time_width = reverse_time[-2] - reverse_time[-1]
+    # for i in range(len(reverse_valve_delta)):
+    #     if reverse_valve_delta[i] > 0.2:
+    #         t_start = reverse_time[i - 1] + (0.2 - reverse_valve_delta[i - 1]) * (reverse_time[i] - reverse_time[i - 1]) / (
+    #                 reverse_valve_delta[i] - reverse_valve_delta[i - 1])
+    #         break
+
+    # find t_start -PT version
+    numtaps = 100  # filter length (longer = sharper cutoff)
+    Fs = 100  # sampling rate
+    Fc = 1  # low pass filter in Hz
+    fir = firwin(numtaps, Fc, window='hamming', fs=Fs)
+    PT_filtered = filtfilt(fir, [1.0], slowdaq_PT)
+
+    PT_difference = PT_filtered[1:] - PT_filtered[:-1]
+    chunked_PT = PT_difference[:compress_idx - 20]
     chunked_time = slowdaq_time[:compress_idx - 20]
     reverse_time = chunked_time[::-1]
-    reverse_valve_delta = chunked_valve[::-1]
+    reverse_PT_delta = chunked_PT[::-1]
     time_width = reverse_time[-2] - reverse_time[-1]
-    for i in range(len(reverse_valve_delta)):
-        if reverse_valve_delta[i] > 0.2:
-            t_start = reverse_time[i - 1] + (0.2 - reverse_valve_delta[i - 1]) * (reverse_time[i] - reverse_time[i - 1]) / (
-                    reverse_valve_delta[i] - reverse_valve_delta[i - 1])
+    for i in range(len(reverse_PT_delta)):
+        if reverse_PT_delta[i] < -0.005:
+            t_start = reverse_time[i - 1] + (-0.005 - reverse_PT_delta[i - 1]) * (reverse_time[i] - reverse_time[i - 1]) / (
+                        reverse_PT_delta[i] - reverse_PT_delta[i - 1])
             break
 
     if compress_time-t_start<100: # expansion time less than 100 ms, treat as failure expansion
