@@ -2,6 +2,11 @@
 (
 set -e
 
+# Acquire a lock file
+lock_file="/tmp/sbc_batch_gridjobs.lock"
+exec 200>$lock_file
+flock -n 200 || { echo "File is already locked at ${lock_file}."; exit 1; }
+
 # Directory where data are stored
 DATA_DIR="/exp/e961/data/SBC-25-daqdata"
 # Directory where finished job outputs are copied to

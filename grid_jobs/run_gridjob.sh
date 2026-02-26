@@ -66,10 +66,10 @@ TAR_SIZE_GB=$((TAR_SIZE_BYTES / 1024 / 1024 / 1024))
 DISK_GB=$((TAR_SIZE_GB * 3 + 5))
 DISK_GB=$((DISK_GB < 5 ? 5 : DISK_GB))
 DISK_GB=$((DISK_GB > 500 ? 500 : DISK_GB))
-# RAM: 3x size + 2GB, minimum 2GB, max 128GB
-RAM_GB=$((TAR_SIZE_GB * 3 + 2))
+# RAM: 2x size + 2GB, minimum 2GB, max 16GB
+RAM_GB=$((TAR_SIZE_GB * 2 + 2))
 RAM_GB=$((RAM_GB < 2 ? 2 : RAM_GB))
-RAM_GB=$((RAM_GB > 128 ? 128 : RAM_GB))
+RAM_GB=$((RAM_GB > 16 ? 16 : RAM_GB))
 # Run time: 1h/5GB x size + 2h, minimum 2h, maximum 24h
 RUN_TIME=$((TAR_SIZE_GB / 5 + 2))
 RUN_TIME=$((RUN_TIME < 2 ? 2 : RUN_TIME))

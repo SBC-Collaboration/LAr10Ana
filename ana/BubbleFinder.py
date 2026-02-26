@@ -265,4 +265,7 @@ def BubbleFinder(ev, num_pix_in_neighborhood = 20, noise_thresh = 10):
     out = FindBubbles(ev, 2, num_pix_in_neighborhood, noise_thresh, bub_dict=out)
     out = FindBubbles(ev, 3, num_pix_in_neighborhood, noise_thresh, bub_dict=out)
 
+    if len(out["bub_num"]) == 0:
+        raise ValueError("No bubbles found in event")
+
     return out
