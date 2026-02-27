@@ -58,7 +58,7 @@ def PressureT0Finding(ev, expansion=False, t0_fitting = 0, a_fitting=0, t0_sigma
     piezo0 = piezo0.reshape(-1, average_window).mean(axis=1)
     time_list_ms = time_list_ms.reshape(-1, average_window).mean(axis=1)
 
-    print("time length", len(time_list_ms))
+    # print("time length", len(time_list_ms))
     # add low pass filter
     # assuming 1 microsecond time resolution 1e6Hz
     numtaps = 1000  # filter length (longer = sharper cutoff)
@@ -102,7 +102,7 @@ def PressureT0Finding(ev, expansion=False, t0_fitting = 0, a_fitting=0, t0_sigma
     # manually choose starting point and end point
     for index in range(len(time_list_ms)):
         if time_list_ms[index] > 800:
-            print(index)
+            # print(index)
             break
     # 8e5
 
@@ -111,7 +111,7 @@ def PressureT0Finding(ev, expansion=False, t0_fitting = 0, a_fitting=0, t0_sigma
     # f=a(x-t0)**2+c when x>t0
     slope_before_fit = slope0_filtered[starting_indx:fitting_ending_indx]
     time_fitting_range = time_list_ms[starting_indx:fitting_ending_indx]
-    print(time_fitting_range)
+    # print(time_fitting_range)
     # initial guesses:
     a0 = 8e-6
     t0 = 600  # t0 initial guess around 100ms
@@ -120,11 +120,11 @@ def PressureT0Finding(ev, expansion=False, t0_fitting = 0, a_fitting=0, t0_sigma
 
     # optionally set bounds: a>=0 , t within x-range, c in pressure range
     bounds = ([0, min(time_fitting_range)], [np.inf, max(time_fitting_range)])
-    print(bounds)
+    # print(bounds)
 
     res = least_squares(residuals_with_t, p0, args=(time_fitting_range, slope_before_fit), bounds=bounds)
     a_fit, t_fit = res.x
-    print("fitted a, t:", a_fit, t_fit)
+    # print("fitted a, t:", a_fit, t_fit)
 
     n = len(res.fun)
     p = len(res.x)
