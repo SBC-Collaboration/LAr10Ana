@@ -12,7 +12,7 @@ def piecewise_with_t(params, x):
     return y
 
 def residuals_with_t(params, x, y):
-    # chi sqaure
+    # chi square
     return piecewise_with_t(params, x) - y
 
 
