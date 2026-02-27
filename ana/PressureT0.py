@@ -28,7 +28,7 @@ def PressureT0Finding(ev, expansion=False, t0_fitting = 0, a_fitting=0, t0_sigma
                           t0_sigma = t0_sigma, a_sigma = a_sigma, t0_chi_sq=t0_chi_sq, t_start_daq=t_start_daq, t0_daq = t0_daq
                           )
     # try:
-    if ev is None or not (ev["acoustics"]["Waveforms"]):
+    if (ev is None) or (ev["acoustics"]["Waveforms"] is None):
         return default_output
 
     wvfs = ev["acoustics"]["Waveforms"]
