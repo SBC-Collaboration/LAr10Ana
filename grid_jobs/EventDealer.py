@@ -110,6 +110,9 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             print(f"Failed to load event {ev} with error: {e}. Skipping event.")
             continue
 
+        # key for analysis outputs
+        data["analysis"] = {}
+
         print('Time to load event:  '.rjust(35) + f"{time.time()-t0:.6f} seconds")
         npev = np.array([ev], dtype=np.int32)
 
@@ -140,6 +143,11 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                 continue
             result['runid'] = runid
             result['ev'] = npev
+
+            # Put the analysis output into data so that following modules have access to it
+            data["analysis"][p] = {}
+            for k in results.keys():
+                data["analysis"][p][k] = results[k] 
             
             # create writer if it doesn't exist
             if p not in writers:
