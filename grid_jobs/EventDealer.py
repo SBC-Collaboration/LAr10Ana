@@ -17,6 +17,7 @@ from ana.ExposureAnalysis import ExposureAnalysis as expa
 from ana.SiPMPulses import SiPMPulsesBatched as sa
 from ana.ScintRate import ScintillationRateBatched as sra
 from ana.BubbleFinder import BubbleFinder as bf
+from ana.Reconstruction3D.py import reconstruct_2D_to_3D as reco3D
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
@@ -28,6 +29,7 @@ ANALYSES = {
     "scintillation": sa,
     "scint_rate": sra,
     "bubble": bf
+    "reco3D": reco3D
 }
 
 def BuildEventList(rundir, maxevt=-1):
@@ -135,7 +137,10 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             elif p == "bubble" and not data["cam"]["loaded"]:
                 print(f"Skipping {p} analysis -- event info data not loaded.")
                 continue
-
+            elif p == "reco3D" and not data["event_info"]["loaded"]:
+                print(f"Skipping {p} analysis -- event info data not loaded.")
+                continue
+            
             try:
                 result = ANALYSES[p](data, **parameter_config[p])
             except Exception as e:
@@ -196,7 +201,7 @@ if __name__ == "__main__":
         ProcessSingleRun(
             rundir=sys.argv[1],
             recondir=sys.argv[2],
-            process_list = ["event", "exposure", "scintillation", "scint_rate", "bubble"])
+            process_list = ["event", "exposure", "scintillation", "scint_rate", "bubble", "reco3D"])
     else:
         ProcessSingleRun(
             rundir="/exp/e961/data/SBC-25-daqdata/20260221_0.tar",
