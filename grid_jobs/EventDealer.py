@@ -17,7 +17,7 @@ from ana.ExposureAnalysis import ExposureAnalysis as expa
 from ana.SiPMPulses import SiPMPulsesBatched as sa
 from ana.ScintRate import ScintillationRateBatched as sra
 from ana.BubbleFinder import BubbleFinder as bf
-from ana.Reconstruction3D.py import reconstruct_2D_to_3D as reco3D
+from ana.Reconstruction3D import reconstruct_2D_to_3D as reco
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
@@ -28,8 +28,8 @@ ANALYSES = {
     "exposure": expa,
     "scintillation": sa,
     "scint_rate": sra,
-    "bubble": bf
-    "reco3D": reco3D
+    "bubble": bf,
+    "reco": reco
 }
 
 def BuildEventList(rundir, maxevt=-1):
@@ -137,7 +137,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             elif p == "bubble" and not data["cam"]["loaded"]:
                 print(f"Skipping {p} analysis -- event info data not loaded.")
                 continue
-            elif p == "reco3D" and not data["event_info"]["loaded"]:
+            elif p == "reco" and not data["event_info"]["loaded"]:
                 print(f"Skipping {p} analysis -- event info data not loaded.")
                 continue
             
@@ -146,13 +146,14 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             except Exception as e:
                 print("Analysis %s failed on event %i with error: %s" % (p, ev, str(e)))
                 continue
+            
             result['runid'] = runid
             result['ev'] = npev
 
             # Put the analysis output into data so that following modules have access to it
             data["analysis"][p] = {}
-            for k in results.keys():
-                data["analysis"][p][k] = results[k] 
+            for k in result.keys():
+                data["analysis"][p][k] = result[k] 
             
             # create writer if it doesn't exist
             if p not in writers:

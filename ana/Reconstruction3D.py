@@ -1,7 +1,6 @@
 from sbcbinaryformat import Streamer, Writer
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
+
 
 
 
@@ -74,26 +73,21 @@ least two cameras are defined. Undefined camera stored as np.nan. Does NOT work
 correctly for multi-bubble events yet
 '''
 
-def pull_bubble_coords(bubble_data,event_number):
+def pull_bubble_coords(bubble_data):
     '''
     bubble_data: bubble finder output dictionary
-    event_number: event number in the run
 
     Returns:
         2D coordinates of bubble, [cam1x cam1y cam2x cam2y cam3x cam3y]
     '''
     run_bubbles = bubble_data
-    run_bubbles = run_bubbles.to_dict()
 
-    pick_event = run_bubbles['ev'] == event_number
+    cams = np.array([c[0] for c in run_bubbles['cam']])
+    frames = np.array([f[0] for f in run_bubbles['frame']])
+    pos = np.array(run_bubbles['pos'])
 
-    if not np.any(event_number): # Event number not found
-        return np.full(6, np.nan) 
-
-    cams = run_bubbles['cam'][pick_event]
-    pos = run_bubbles['pos'][pick_event]
-    frames = run_bubbles['frame'][pick_event]
-
+    if len(frames) == 0:
+        return np.full(6, np.nan) # No found bubbles
 
     # In order of frames
     frames_ordered = np.argsort(frames)
@@ -102,10 +96,9 @@ def pull_bubble_coords(bubble_data,event_number):
     frames = frames[frames_ordered]
     
     unique_frames = np.unique(frames)
-
     for frame in unique_frames:
 
-        pick_frame = frames == frame
+        pick_frame = (frames == frame)
 
         cams_f = cams[pick_frame]
         pos_f  = pos[pick_frame]
@@ -115,48 +108,42 @@ def pull_bubble_coords(bubble_data,event_number):
             continue
         
         output = np.full(6, np.nan)
+        used_cams = set()
 
         # Fill available cameras
         for cam_id, (x, y) in zip(cams_f, pos_f):
 
+            if cam_id in used_cams:
+                # multi-bubble?
+                continue
+
+            used_cams.add(cam_id)
+
             if cam_id == 1:
-                output[0] = x
-                output[1] = y
-
+                output[0:2] = [x, y]
             elif cam_id == 2:
-                output[2] = x
-                output[3] = y
-
+                output[2:4] = [x, y]
             elif cam_id == 3:
-                output[4] = x
-                output[5] = y
+                output[4:6] = [x, y]
 
         return output
-
-    # If no frame with 2+ cams
-    print('3D reconstruction failed: no frame with 2+ cams')
-    return np.full(6, np.nan)
-
-
 
 
 
 def reconstruct_2D_to_3D(data):
-    
-    if "bubble" in data["analysis"].keys():
+    if "bubble" in data["analysis"]:
         bubble_data = data["analysis"]["bubble"]
-        event = data['event_info']['event_id'][0]
-        
+
         # Pull 2D coordinate
-        coords_2D = pull_bubble_coords(bubble_data,event_number)
+        coords_2D = pull_bubble_coords(bubble_data)
+
         # Reconstruct
         coords_3D = triangulate_multi_cam_LS(coords_2D)
 
-        return coords_3D
+        return {"coords_3D": coords_3D}
 
     else:
-        print('3D Reconstruction failed: bubble finder data not found')
-        return np.full(3, np.nan)
+        return {"coords_3D": np.full(3, np.nan)}
 
 
 
