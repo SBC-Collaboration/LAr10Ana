@@ -12,6 +12,7 @@ import gc
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ana.EventAnalysis import EventAnalysis as eva
+from ana.RunAnalysis import RunAnalysis as runa
 from ana.AcousticT0 import AcousticAnalysis as aa
 from ana.ExposureAnalysis import ExposureAnalysis as expa 
 from ana.SiPMPulses import SiPMPulsesBatched as sa
@@ -24,6 +25,7 @@ from sbcbinaryformat import Streamer, Writer
 
 ANALYSES = {
     "event": eva,
+    "run": runa,
     # "acoustic": aa,
     "exposure": expa,
     "scintillation": sa,
@@ -202,7 +204,7 @@ if __name__ == "__main__":
         ProcessSingleRun(
             rundir=sys.argv[1],
             recondir=sys.argv[2],
-            process_list = ["event", "exposure", "scintillation", "scint_rate", "bubble", "reco3D"])
+            process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco"])
     else:
         ProcessSingleRun(
             rundir="/exp/e961/data/SBC-25-daqdata/20260221_0.tar",
