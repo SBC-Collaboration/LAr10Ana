@@ -42,8 +42,42 @@ def single_run_daq_v1(path,i):
             compress_idx = i
             break
 
+    
 
+     # # find t_start -PT version
+    # find t_start
+    time_cut  = -10
+    slowdaq_PT = data["slow_daq"]['PT2121']
+    slowdaq_time = data["slow_daq"]['time_ms']
+    t_start_time_window = slowdaq_time[:compress_idx+time_cut]
+    pressure_cut_compress = slowdaq_PT[:compress_idx+time_cut]
+    reverse_time_start = t_start_time_window[::-1]
+    reverse_time_start = [int(x) for x in reverse_time_start]
+    reverse_pressure =pressure_cut_compress[::-1]
+    time_width = reverse_time_start[-2]-reverse_time_start[-1]
+    p_set = float(data["event_info"]['pset_hi'])
+    # print("set", p_set, "mode",p_mode)
+    if reverse_pressure[0]<p_set+0.05:
+        for i in range(len(reverse_pressure)):
+            if reverse_pressure[i]<p_set+0.05 and reverse_pressure[i+1]>p_set+0.05:
+                interpolation_part = (p_set+0.05-reverse_pressure[i])*(reverse_time_start[i+1]-reverse_time_start[i])/(reverse_pressure[i+1]-reverse_pressure[i])
+                interpolation_time = reverse_time_start[i] + interpolation_part
+                # print((p_set+0.05-reverse_pressure[i]),(reverse_time_start[i+1]-reverse_time_start[i]),(reverse_pressure[i+1]-reverse_pressure[i]))
+                # print(interpolation_part, interpolation_time)
+                t_start = interpolation_time
+        
+        
+                break
+       
+                
+    else:
+        t_start = compress_time
 
+    time_diff = compress_time-t_start
+    if time_diff< 850:
+        return (False,  t_start, compress_time, compress_time ,0)
+    
+    # find t0 in valve channel find the turning point before compress time
 
     startpoint = 10000
     endpoint = 10750
@@ -61,57 +95,30 @@ def single_run_daq_v1(path,i):
     slowdaq_time_trigger_window = slowdaq_time[compress_idx - 80:compress_idx + time_offset]
     slowsaq_valve_trigger_window = slowdaq_Valve[compress_idx - 80:compress_idx + time_offset]
 
+    time_window= slowdaq_time[compress_idx-80:compress_idx+time_offset]
+    time_window_shifted = []
+    for i in range(len(time_window)):
+        time_window_shifted.append(time_window[i]- time_window[0])
 
-
-
-    # # find t_start -valve version
-    # valve_difference = valve_filtered[1:] - valve_filtered[:-1]
-    # chunked_valve = valve_difference[:compress_idx - 20]
-    # chunked_time = slowdaq_time[:compress_idx - 20]
-    # reverse_time = chunked_time[::-1]
-    # reverse_valve_delta = chunked_valve[::-1]
-    # time_width = reverse_time[-2] - reverse_time[-1]
-    # for i in range(len(reverse_valve_delta)):
-    #     if reverse_valve_delta[i] > 0.2:
-    #         t_start = reverse_time[i - 1] + (0.2 - reverse_valve_delta[i - 1]) * (reverse_time[i] - reverse_time[i - 1]) / (
-    #                 reverse_valve_delta[i] - reverse_valve_delta[i - 1])
-    #         break
-
-    # find t_start -PT version
-    numtaps = 100  # filter length (longer = sharper cutoff)
-    Fs = 100  # sampling rate
-    Fc = 1  # low pass filter in Hz
-    fir = firwin(numtaps, Fc, window='hamming', fs=Fs)
-    PT_filtered = filtfilt(fir, [1.0], slowdaq_PT)
-
-    PT_difference = PT_filtered[1:] - PT_filtered[:-1]
-    chunked_PT = PT_difference[:compress_idx - 20]
-    chunked_time = slowdaq_time[:compress_idx - 20]
-    reverse_time = chunked_time[::-1]
-    reverse_PT_delta = chunked_PT[::-1]
-    time_width = reverse_time[-2] - reverse_time[-1]
-    for i in range(len(reverse_PT_delta)):
-        if reverse_PT_delta[i] < -0.005:
-            t_start = reverse_time[i - 1] + (-0.005 - reverse_PT_delta[i - 1]) * (reverse_time[i] - reverse_time[i - 1]) / (
-                        reverse_PT_delta[i] - reverse_PT_delta[i - 1])
-            break
-
-    if compress_time-t_start<100: # expansion time less than 100 ms, treat as failure expansion
-        return(False, t_start, compress_time, 0 ,0)
-    # find the valve turning point before last one
-    valve_delta = valve_filtered[1:] - valve_filtered[:-1]
-    reverse_time = slowdaq_time_trigger_window[::-1]
-    reverse_valve_delta = valve_delta[::-1]
-    time_width = reverse_time[-2] - reverse_time[-1]
+    valve_delta = valve_filtered[1:]-valve_filtered[:-1]
+    reverse_time = time_window_shifted[::-1]
+    reverse_time = [int(x) for x in reverse_time]
+    reverse_valve_delta =valve_delta[::-1]
+    time_width = reverse_time[-2]-reverse_time[-1]
     for i in range(len(reverse_valve_delta)):
-        if reverse_valve_delta[i] > 0 and reverse_valve_delta[i + 1] < 0:
-            interpolation_time = reverse_time[i] + (0 - reverse_valve_delta[i]) * (
-                        reverse_time[i + 1] - reverse_time[i]) / (reverse_valve_delta[i + 1] - reverse_valve_delta[i])
-            t0_valve_acoustic = 800+ interpolation_time-compress_time
-            t0_valve_daq = interpolation_time
+        if reverse_valve_delta[i]<0 and reverse_valve_delta[i+1]>0:
+           
+            interpolation_part = (0-reverse_valve_delta[i])*(reverse_time[i+1]-reverse_time[i])/(reverse_valve_delta[i+1]-reverse_valve_delta[i])
+            interpolation_time = reverse_time[i] + interpolation_part
+            t0_valve_acoustic = interpolation_time
+            
             break
+    t0_valve_daq = t0_valve_acoustic+ time_window[0]
 
-    return (True, t_start, compress_time, t0_valve_daq ,t0_valve_acoustic)
+   
+    return (True,  t_start, compress_time, t0_valve_daq ,t0_valve_acoustic)
+
+    
     
 
     
