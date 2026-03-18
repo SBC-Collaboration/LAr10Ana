@@ -20,10 +20,10 @@ def residuals_with_t(params, x, y):
 v0 by Ryan
 output (Expansion success(bool),  t_start_daq, t_compression , expansion_time)
  expansion success: if the expansion is successful. i.e. pressure acheived at target pressure 1000 ms before the compression
- t_start_daq: start time of expansion point in slowdaq channel
- t_compression: compression time. This synchronize the trigger signal in all channels. It is when SERVO valve reaches 100% output
+ t_start_daq[ms]: start time of expansion point in slowdaq channel
+ t_compression[ms]: compression time. This synchronize the trigger signal in all channels. It is when SERVO valve reaches 100% output
  in slowDAQ channel. It matches 800ms timestamp in acoustic channel with pre-trigger on and 40th camera image timestamp in camera chanle with pre-trigger on
- expansion_time: the difference between t_start and t_compression. 
+ expansion_time[ms]: the difference between t_start and t_compression. 
  
  
  Notice: 
