@@ -113,6 +113,6 @@ if __name__ =="__main__":
     import importlib
 
     # data = GetEvent("/exp/e961/app/users/runze/data/20251120_12/", 3,strictMode=False) # success event
-    data = GetEvent("/exp/e961/app/users/runze/data/20260205_6/", 33, strictMode=False)  # success event
+    data = GetEvent("/exp/e961/app/users/runze/data/20260205_6/", 33, strictMode=False)  # failure event
     result  = SlowDAQTexpansionFinding(data)
     print(result)
