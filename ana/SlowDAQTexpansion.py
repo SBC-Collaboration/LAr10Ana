@@ -42,31 +42,31 @@ def SlowDAQTexpansionFinding(ev, expansion=False,  t_start_daq=0, t_compression 
     try:
 
 
-        slowdaq_PT = data["slow_daq"]['PT1101']
-        slowdaq_Valve = data["slow_daq"]['SERVO3321_OUT']
+        slowdaq_PT = ev["slow_daq"]['PT1101']
+        slowdaq_Valve = ev["slow_daq"]['SERVO3321_OUT']
         slowdaq_time = [i * 10 for i in range(len(slowdaq_PT))]
 
         # find compression time
         compress_idx = 0
-        for i in range(len(data["slow_daq"]['SERVO3321_OUT'])):
-            if data["slow_daq"]['SERVO3321_OUT'][i] > 75:
-                # print(i, data["slow_daq"]['SERVO3321_OUT'][i], data["slow_daq"]['time_ms'][i])
-                t_compression = data["slow_daq"]['time_ms'][i]
+        for i in range(len(ev["slow_daq"]['SERVO3321_OUT'])):
+            if ev["slow_daq"]['SERVO3321_OUT'][i] > 75:
+                # print(i, ev["slow_daq"]['SERVO3321_OUT'][i], ev["slow_daq"]['time_ms'][i])
+                t_compression = ev["slow_daq"]['time_ms'][i]
                 compress_idx = i
                 break
 
         # # find t_start -PT version
         # find t_start
         time_cut = -10
-        slowdaq_PT = data["slow_daq"]['PT2121']
-        slowdaq_time = data["slow_daq"]['time_ms']
+        slowdaq_PT = ev["slow_daq"]['PT2121']
+        slowdaq_time = ev["slow_daq"]['time_ms']
         t_start_time_window = slowdaq_time[:compress_idx + time_cut]
         pressure_cut_compress = slowdaq_PT[:compress_idx + time_cut]
         reverse_time_start = t_start_time_window[::-1]
         reverse_time_start = [int(x) for x in reverse_time_start]
         reverse_pressure = pressure_cut_compress[::-1]
         time_width = reverse_time_start[-2] - reverse_time_start[-1]
-        p_set = float(data["event_info"]['pset_hi'])
+        p_set = float(ev["event_info"]['pset_hi'])
         if reverse_pressure[0] < p_set + 0.05: # if expansion acheived the target pressure
             for i in range(len(reverse_pressure)):
                 if reverse_pressure[i] < p_set + 0.05 and reverse_pressure[i + 1] > p_set + 0.05:
