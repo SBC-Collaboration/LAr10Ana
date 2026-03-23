@@ -19,6 +19,8 @@ from ana.SiPMPulses import SiPMPulsesBatched as sa
 from ana.ScintRate import ScintillationRateBatched as sra
 from ana.BubbleFinder import BubbleFinder as bf
 from ana.Reconstruction3D import reconstruct_2D_to_3D as reco
+from ana.PressureT0 import PressureT0Finding as pt0
+from ana.SlowDAQTexpansion import SlowDAQTexpansionFinding as t_exp
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
@@ -31,7 +33,9 @@ ANALYSES = {
     "scintillation": sa,
     "scint_rate": sra,
     "bubble": bf,
-    "reco": reco
+    "reco": reco,
+    "pressure_t0": pt0,
+    "t_expansion": t_exp
 }
 
 def BuildEventList(rundir, maxevt=-1):
@@ -130,7 +134,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             elif p == "exposure" and not (data["event_info"]["loaded"] and data["slow_daq"]["loaded"]):
                 print(f"Skipping {p} analysis -- event info data not loaded.")
                 continue
-            elif p == "acoustic" and not data["acoustic"]["loaded"]:
+            elif p == "acoustic" and not data["acoustics"]["loaded"]:
                 print(f"Skipping {p} analysis -- acoustic data not loaded.")
                 continue
             elif p == "event" and not data["event_info"]["loaded"]:
@@ -142,7 +146,13 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             elif p == "reco" and not data["event_info"]["loaded"]:
                 print(f"Skipping {p} analysis -- event info data not loaded.")
                 continue
-            
+            elif p == "pressure_t0" and not data["acoustics"]["loaded"]:
+                print(f"Skipping {p} analysis -- acoustic data not loaded.")
+                continue
+            elif p == "t_expansion" and not data["slow_daq"]["loaded"]:
+                print(f"Skipping {p} analysis -- slow_daq data not loaded.")
+                continue
+
             try:
                 result = ANALYSES[p](data, **parameter_config[p])
             except Exception as e:
@@ -204,9 +214,9 @@ if __name__ == "__main__":
         ProcessSingleRun(
             rundir=sys.argv[1],
             recondir=sys.argv[2],
-            process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco"])
+            process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco", "pressure_t0", "t_expansion"])
     else:
         ProcessSingleRun(
             rundir="/exp/e961/data/SBC-25-daqdata/20260221_0.tar",
             recondir="/home/zsheng/test", # Use your own directory for testing~
-            process_list = ["event", "bubble"])
+            process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco", "pressure_t0", "t_expansion"])
