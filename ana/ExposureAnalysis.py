@@ -28,7 +28,7 @@ def ExposureAnalysis(ev, pressure_bins=np.linspace(0, 10, 201), PTs=PTs):
     for PT in PTs:
         output["PT%i_pressure" % PT] = 0.
         output["PT%i_livetime" % PT] = 0.
-    output["is_quiet_mode"] = np.array([0])
+    output["is_quiet_mode"] = False
 
     #try:
     if ev is None or not (ev['event_info']['loaded'] and ev['slow_daq']['loaded']):
@@ -44,6 +44,6 @@ def ExposureAnalysis(ev, pressure_bins=np.linspace(0, 10, 201), PTs=PTs):
     # In quiet mode?
     if "valves" in ev["slow_daq"]:
         if np.any(~cryomech_ON(ev["slow_daq"]["valves"])):
-            output["is_quiet_mode"] = np.array([1])
+            output["is_quiet_mode"] = True
 
     return output

@@ -132,7 +132,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                 print(f"Skipping {p} analysis -- scintillation data not loaded.")
                 continue
             elif p == "exposure" and not (data["event_info"]["loaded"] and data["slow_daq"]["loaded"]):
-                print(f"Skipping {p} analysis -- event info data not loaded.")
+                print(f"Skipping {p} analysis -- event info or slow daq data not loaded.")
                 continue
             elif p == "acoustic" and not data["acoustics"]["loaded"]:
                 print(f"Skipping {p} analysis -- acoustic data not loaded.")
@@ -141,7 +141,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                 print(f"Skipping {p} analysis -- event info data not loaded.")
                 continue
             elif p == "bubble" and not data["cam"]["loaded"]:
-                print(f"Skipping {p} analysis -- event info data not loaded.")
+                print(f"Skipping {p} analysis -- camera data not loaded.")
                 continue
             elif p == "reco" and not data["event_info"]["loaded"]:
                 print(f"Skipping {p} analysis -- event info data not loaded.")
