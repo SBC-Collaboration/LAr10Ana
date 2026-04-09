@@ -1,11 +1,13 @@
 # Getting started on FNAL servers
 
-1. Send a ticket requesting access to the coupp organization with the [Fermilab Service Desk](https://fermi.servicenowservices.com/wp)
+1. Send a ticket requesting access to the COUUP affiliation with the [Fermilab Service Desk](https://fermi.servicenowservices.com/com.glideapp.servicecatalog_cat_item_view.do?v=1&syspa[…]alog_view=catalog_default&sysparm_view=catalog_default). This can take up to 2 business days.
 2. Once you have access, ssh into the general purpose virtual machine (GPVM)
    ```
    kinit <username>@FNAL.GOV
    ssh -KYX <username>@couppsbcgpvm01.fnal.gov
    ```
+   If you see errors relating to permissions in your home directory, try using 
+   `kinit -f <username>>@fnal.gov` to make sure your credentials are being forwarded.
 3. Navigate to the app directory area, then make a new directory for yourself
    ```
    cd /exp/e961/app/users
@@ -34,7 +36,7 @@ cd /exp/e961/app/users/<username>
 You may get an authentication error if you have not run `kinit` in about a day. In that case, before `ssh`-ing, run:
 
 ```
-kinit <username>@FNAL.GOV
+kinit -f <username>@FNAL.GOV
 ```
 
 # Activating the SBCLAr10 Conda Environment
