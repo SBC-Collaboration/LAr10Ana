@@ -39,8 +39,8 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
     Tshape = imShape[::-1]
     
     if cam==1:
-        circy, circx = disk((375, 595), 280, shape=imShape)
-        coord_mask = 2.2*circx-1375<circy
+        circy, circx = disk((375, 595), 300, shape=imShape)
+        coord_mask = 1.9*circx-1200<circy
         mask_circx = circx[coord_mask]
         mask_circy = circy[coord_mask]
     elif cam==2:
