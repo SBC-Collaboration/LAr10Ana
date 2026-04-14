@@ -211,7 +211,10 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
                     t0_found = False
                     j = 0
                     while t0_found==False:
-                        
+
+                        if im_num-j<1:
+                          break
+                          
                         #get diff
                         pastIm = np.float32(np.average(ev['cam'][f'c{cam}'][f'frame{im_num-j}'], axis=2))
                         pastDiff = abs(pastIm - refIm)
