@@ -103,19 +103,27 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
     
         #get properties of labeled regions
         props = regionprops(labeled, intensity_image = diff)
+        if len(props) == 0:
+            continue
     
         #get intensities
         intensities = np.array([prop.intensity_mean for prop in props])
+        if intensities.size == 0:
+            continue
         intensity_thresh = np.average(intensities) + 3*np.std(intensities)
         intensity_mask = intensities>=intensity_thresh
     
         #get areas
         areas = np.array([prop.area for prop in props])
+        if areas.size == 0:
+            continue
         area_thresh = np.mean(areas) + 3*np.std(areas)
         area_mask = areas>=area_thresh
 
         #get lengths of regions
         lengths = np.array([prop.axis_major_length for prop in props])
+        if lengths.size == 0:
+            continue
         length_thresh = np.average(lengths) + 3*np.std(lengths)
         length_mask = lengths>=length_thresh
         
@@ -124,6 +132,9 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
             combined_mask = length_mask & area_mask & intensity_mask
         else:
             combined_mask = length_mask & area_mask
+        
+        if not np.any(combined_mask):
+            continue
         largest_regions = np.array(props)[combined_mask]
         
         #get region with most connected pixels 
