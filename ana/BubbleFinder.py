@@ -39,14 +39,14 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
     Tshape = imShape[::-1]
     
     if cam==1:
-        circy, circx = disk((375, 590), 280, shape=imShape)
-        coord_mask = 2.2*circx-1375<circy
+        circy, circx = disk((375, 595), 300, shape=imShape)
+        coord_mask = 1.9*circx-1200<circy
         mask_circx = circx[coord_mask]
         mask_circy = circy[coord_mask]
     elif cam==2:
-        mask_circy, mask_circx = disk((425, 670), 270, shape=imShape)
+        mask_circy, mask_circx = disk((420, 670), 300, shape=imShape)
     elif cam==3:
-        mask_circy, mask_circx = disk((440, 690), 270, shape=imShape)
+        mask_circy, mask_circx = disk((440, 690), 300, shape=imShape)
 
     #initialize some variables and the bubble dictionary to be returned at the end
     if bub_dict is None:
@@ -104,14 +104,33 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
         #get properties of labeled regions
         props = regionprops(labeled, intensity_image = diff)
     
-        #get 2.5 sigma threshold for region intensity
-        intensities = [prop.intensity_mean for prop in props]
-        intensity_thresh = np.average(intensities) + 2.5*np.std(intensities)
+        #get intensities
+        intensities = np.array([prop.intensity_mean for prop in props])
+        intensity_thresh = np.average(intensities) + 3*np.std(intensities)
+        intensity_mask = intensities>=intensity_thresh
     
-        #get areas so we can identify number of potential bubbles in image
+        #get areas
         areas = np.array([prop.area for prop in props])
-        area_mask = areas>=areas.max()/4
-        largest_regions = np.array(props)[area_mask]
+        area_thresh = np.mean(areas) + 3*np.std(areas)
+        area_mask = areas>=area_thresh
+
+        #get lengths of regions
+        lengths = np.array([prop.axis_major_length for prop in props])
+        length_thresh = np.average(lengths) + 3*np.std(lengths)
+        length_mask = lengths>=length_thresh
+        
+        #get regions that pass all thresholds
+        if intensities.std()>=1:
+            combined_mask = length_mask & area_mask & intensity_mask
+        else:
+            combined_mask = length_mask & area_mask
+        largest_regions = np.array(props)[combined_mask]
+        
+        #get region with most connected pixels 
+        if len(largest_regions)>0:
+            largest_region = max(largest_regions, key=lambda prop: prop.area)
+        else:
+            continue
     
         #get region with most connected pixels 
         largest_region = max(largest_regions, key=lambda prop: prop.area)
@@ -121,13 +140,32 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
         if (largest_region.area>=10 and largest_region.intensity_mean>=intensity_thresh) or bubs_found==True:
     
             if bubs_found==False:
-                stop_frame = im_num+5
+                stop_frame = im_num+10
                 bubs_found = True
                 first_found = True
                 
+            #group nearby regions
+            dist_thresh = num_pix_in_neighborhood
+            cents = np.array([prop.centroid for prop in props])[combined_mask]
+            centsx, centsy = cents[:,0], cents[:,1]
+            distsx = abs(np.subtract.outer(centsx, centsx))**2
+            distsy = abs(np.subtract.outer(centsy, centsy))**2
+            
+            short_dist_inds = np.where(np.sqrt(distsx+distsy)<=dist_thresh)
+            paired_inds = np.column_stack((short_dist_inds[0],short_dist_inds[1]))
+            near_pairs = np.unique(np.sort(paired_inds[short_dist_inds[0]!=short_dist_inds[1]]),axis=0)
+            
+            reg_mask = np.full(largest_regions.shape,True)
+            for pair in near_pairs:
+                if areas[pair[0]]>=areas[pair[1]]:
+                    reg_mask[pair[1]] = False
+                else:
+                    reg_mask[pair[0]] = False
+            largest_regions = largest_regions[reg_mask]
+    
             #estimate radii
-            min_est_rad = np.round((largest_region.axis_minor_length+largest_region.axis_major_length)/4)
-            if min_est_rad - 3 <=3:
+            min_est_rad = np.round(largest_region.axis_major_length)/2
+            if min_est_rad - 3 <= 3:
                 min_rad = 3
                 max_rad = 6
             else:
@@ -157,7 +195,7 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
             largest_cy, largest_cx = largest_region.centroid
             largest_y, largest_x = disk((largest_cy, largest_cx), 20, shape=imShape)
             max_votes = np.max(accum[largest_y, largest_x])
-            vote_thresh = max_votes*.8
+            vote_thresh = np.average(accum)+3*np.std(accum)
             
             #now we enter the candidate loop and decide based on votes whether to keep or discard each candidate
             for region in largest_regions:
@@ -171,9 +209,12 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
                     
                     #look for bubble in relevant region in past images
                     t0_found = False
-                    j = 1
+                    j = 0
                     while t0_found==False:
-                        
+
+                        if im_num-j<1:
+                          break
+                          
                         #get diff
                         pastIm = np.float32(np.average(ev['cam'][f'c{cam}'][f'frame{im_num-j}'], axis=2))
                         pastDiff = abs(pastIm - refIm)
