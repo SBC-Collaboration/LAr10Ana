@@ -5,8 +5,16 @@ keys = ['run_id', 'run_exit_code', 'num_events', 'run_livetime', 'comment', 'run
 
 def RunAnalysis(ev):
     out = dict()
+    run_info = ev["run_info"]
+
+    # convert the run info into new format
+    if ("pset_lo" not in run_info or "pset_hi" not in run_info) and "pset" in run_info:
+        run_info["pset_lo"] = run_info["pset"]
+        run_info["pset_hi"] = run_info["pset"]
+    
     for k in keys:
-        out[k] = np.asarray(ev['run_info'][k])
+        value = run_info.get(k)
+        out[k] = np.asarray(value) if value is not None else np.array([])
     return out
 
 if __name__ == "__main__":
