@@ -69,12 +69,12 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
                 rm -rf "$folder"
             fi
 
-            # Delete corresponding tar file
-            tar_file="$TEMP_DIR/${run_num}.tar"
-            if [ -f "$tar_file" ]; then
-                rm "$tar_file"
-                echo "Deleted $tar_file"
-            fi
+            # # Delete corresponding data tar file
+            # tar_file="$TEMP_DIR/${run_num}.tar"
+            # if [ -f "$tar_file" ]; then
+            #     rm "$tar_file"
+            #     echo "Deleted $tar_file"
+            # fi
 
         else
             # Failed: delete the folder
