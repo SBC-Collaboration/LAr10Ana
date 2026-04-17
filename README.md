@@ -218,3 +218,9 @@ This script is the one that actually runs on the grid node. It configures conda 
 
 ### 4. `cleanup.sh`
 This is another piece of script that needs to be run explicitly. Since all data and output files are in the scratch part of PNFS, they are not persistent. For each run in the `grid_output` folder, it checks the exit code of the log file. If the code is not zero, then the output folder is deleted. If it's zero, meaning success, it will then compare the version of the output to the run existing in the destination (`/exp/e961/data/SBC-25-recon/dev-outputs` in most cases). If the version is the same or newer, then the output in the destination will be overwritten by the new output. If not, the new output will be discarded. Then, it removes the run from `~/.cache/sbc_job_list.csv`. The raw data tarball is left in temp_data folder, to avoid repeated file operations. 
+
+## Further Resources for Documentation
+
+The [Run Control documentation](https://runcontrol.readthedocs.io/latest/) has information on the SBC Run Control, DAQ system, and raw data varaiables.
+
+A sub page in this documentation has information on the reconstructed/analysis output file variables: https://runcontrol.readthedocs.io/latest/recon_data_format.html.
