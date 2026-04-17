@@ -1,4 +1,4 @@
-# <img src="docs/assets/sbc_icon.png" width=40 height=40> LAr10Ana
+# <img src="docs/assets/sbc_icon_white.png" width=40 height=40> LAr10Ana
 [![GitHub Release](https://img.shields.io/github/v/release/SBC-Collaboration/LAr10Ana)](https://github.com/SBC-Collaboration/LAr10Ana/releases/latest)
 [![Read the Docs](https://img.shields.io/readthedocs/lar10ana/latest)](https://lar10ana.readthedocs.io/latest/)
 
