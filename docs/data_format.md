@@ -6,6 +6,10 @@ The reconstructed data is available at
 ```
 The output from the latest version will be available at `dev-output/` folder, and any new data will be processed and saved here. Older versions are archived in folders named by the version number, like `v0.0.5/`.
 
+```{seealso}
+For documentation on the raw data, see [Run Control Documentation](https://runcontrol.readthedocs.io/stable/data_format.html)
+```
+
 ## Version (`version.txt`)
 The `version.txt` file saves the [version of LAr10Ana](https://github.com/SBC-Collaboration/LAr10Ana/releases) repository that's run to produce the outputs. Between manually added tags (like `v0.0.1`), it displays the number of commits from last tag, and the hash of latest commit.  
 
@@ -87,7 +91,7 @@ Notice:
 
 ## PressureT0 (`pressure_t0.sbc`)
 This module (`PressureT0.py`) loads ["acoustics"]["Waveforms"] for each event and output t0 finding process:
-- **t0_fiting** (`float`, ms): bubble generation timestamp in acoustic channel
+- **t0_fitting** (`float`, ms): bubble generation timestamp in acoustic channel
 - **a_fitting** (`float`, bara/ms<sup>2</sup>): bubble generation pressure increase rate slope in the fitting
 - **t0_sigma** (`float`, ms): uncertainty of t0 fitting
 - **a_sigma** (`float`, bara/ms<sup>2</sup>): uncertainty of a fitting

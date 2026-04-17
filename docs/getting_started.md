@@ -3,14 +3,14 @@
 ## Getting started on FNAL servers
 1. Send a ticket requesting access to the COUUP affiliation with the [Fermilab Service Desk](https://fermi.servicenowservices.com/com.glideapp.servicecatalog_cat_item_view.do?v=1&syspa[…]alog_view=catalog_default&sysparm_view=catalog_default). This can take up to 2 business days.
 2. Once you have access, ssh into the general purpose virtual machine (GPVM)
-   ```
+   ```sh
    kinit <username>@FNAL.GOV
    ssh -KYX <username>@couppsbcgpvm01.fnal.gov
    ```
    If you see errors relating to permissions in your home directory, try using 
    `kinit -f <username>>@fnal.gov` to make sure your credentials are being forwarded.
 3. Navigate to the app directory area, then make a new directory for yourself
-   ```
+   ```sh
    cd /exp/e961/app/users
    mkdir <username>
    cd <username>
@@ -19,7 +19,7 @@
    if you do not already have one (follow the "Generating a new SSH key" steps), and then [add it to you github account](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account).
    Also copy the key to your home directory on `couppsbcgpvm01.fnal.gov` to: `~/.ssh/`. If you ran the ssh keygen on the `couppsbcgpvm01.fnal.gov` machine, it will be there already.
    Then clone the directory into you app users area:
-   ```
+   ```sh
    git clone git@github.com:SBC-Collaboration/LAr10Ana.git
    ```
    Now you have access to the code on the Fermilab servers! See below for instructions on other things you may want to do next:
@@ -29,14 +29,14 @@
 
 Once you have your account setup, to get back to your app area from your laptop, run:
 
-```
+```sh
 ssh -KYX <username>@couppsbcgpvm01.fnal.gov
 cd /exp/e961/app/users/<username>
 ```
 
 You may get an authentication error if you have not run `kinit` in about a day. In that case, before `ssh`-ing, run:
 
-```
+```sh
 kinit -f <username>@FNAL.GOV
 ```
 
@@ -45,7 +45,7 @@ kinit -f <username>@FNAL.GOV
 SBC analysis mostly relies on python code, with a few external dependencies. The code is managed in a central conda environment.
 Once you have the LAr10Ana repository downloaded, navigate to `LAr10Ana/`. Then run:
 
-```
+```sh
 source setup.sh
 ```
 
@@ -55,7 +55,7 @@ This will setup the conda environment in your current terminal.
 
 To run a jupyter notebook, you'll want to start a server from your terminal and then open it in a browser. First, login to the Fermilab server and forward port `8888`:
 
-```
+```sh
 ssh -KYX <username>@couppsbcgpvm01.fnal.gov -L 8888:localhost:8888
 ```
 
@@ -63,14 +63,14 @@ If you see an error in the login that port 8888 is taken, then try again with a 
 
 The first time you run a notebook, you'll want to add the conda environment to your list of available jupyterlab kernels. To do this, navigate to your `LAr10Ana` directory (`cd /path/to/LAr10Ana`), and run the commands:
 
-```
+```sh
 source setup.sh # This activates the conda environment. You'll need to run it every time you create a new terminal connection.
 source jupyter_init.sh # This tells jupyter about your conda environment. You only need to run it the first time you run the notebook.
 ```
 
 Now you're ready to start a jupyter notebook! To do this, start from a terminal inside `LAr10Ana` where you have already activated the conda environment (by running `setup.sh`). Then, run:
 
-```
+```sh
 jupyter notebook --no-browser --port <port>
 ```
 
@@ -85,7 +85,7 @@ To run the event display, you'll need to launch a VNC session on a free port.
 
 See which ports are already in use:
 
-```
+```sh
 /exp/e961/app/home/coupp/bin/RegisterVNCDesktop
 ```
 
@@ -93,7 +93,7 @@ Pick a two-digit number that isn't taken. For example, 50 would mean your VNC se
 
 Register your choice:
 
-```
+```sh
 /exp/e961/app/home/coupp/bin/RegisterVNCDesktop 50 "Optional short description"
 ```
 
@@ -103,7 +103,8 @@ If you don’t already have ~/.vnc/xstartup, make one. Also create ~/.vnc if nee
 
 Here's a working example:
 
-```#!/bin/sh
+```sh
+#!/bin/sh
 
 # Unset conflicting environment variables
 unset SESSION_MANAGER
@@ -119,7 +120,7 @@ exec icewm
 
 Make sure it’s executable:
 
-```
+```sh
 chmod +x ~/.vnc/xstartup
 ```
 
@@ -127,7 +128,7 @@ chmod +x ~/.vnc/xstartup
 
 Use the display number you picked earlier:
 
-```
+```sh
 vncserver :PORT_NUMBER
 ```
 
@@ -136,11 +137,13 @@ vncserver :PORT_NUMBER
 You will need to port forward your local VNC port to your localhost machine. This
 can be done using `ssh`
 
-`ssh -L <local_port>:localhost:<remote_port> <user>@<remote_host>`
+```sh
+ssh -L <local_port>:localhost:<remote_port> <user>@<remote_host>
+```
 
 After tunneling you can run the following commands to run the event display
 
-```
+```sh
 export DISPLAY=:PORT_NUMBER
 cd /exp/e961/app/LAr10Ana
 source setup.sh
