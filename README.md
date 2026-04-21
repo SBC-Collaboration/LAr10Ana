@@ -226,4 +226,4 @@ This is another piece of script that needs to be run explicitly. Since all data 
 
 The [Run Control documentation](https://runcontrol.readthedocs.io/latest/) has information on the SBC Run Control, DAQ system, and raw data varaiables.
 
-A sub page in this documentation has information on the reconstructed/analysis output file variables: https://runcontrol.readthedocs.io/latest/recon_data_format.html.
+The [Analysis documentation](https://lar10ana.readthedocs.io/latest/) has information on the modules in this repository, including documentation of the analysis output variables.
