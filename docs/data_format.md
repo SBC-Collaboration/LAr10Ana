@@ -46,14 +46,14 @@ This module (`ExposureAnalysis.py`) looks at pressure transducers PT2121 (CF4 cr
 
 ## Scintillation Analysis (`scintillation.sbc`)
 This module (`SiPMPulses.py`) loads the scintillation file for each event, and performs basic analysis on the waveform of each CAEN trigger. Then the triggers of all events are concatenated together in this file. All analysis are done per CAEN trigger per channel. If no hit is identified, it will be saved as `np.nan`.
-- **baseline**
-- **rms**
-- **hit_t0**
-- **hit_tf**
-- **hit_area**
-- **wvf_area**
-- **second_pulse**
-- **max_avg_fft_freq**
+- **baseline**: The baseline of the waveform, taken as the mean of the start of the waveform
+- **rms**: The root-mean-squared (RMS) value across the waveform, with signal regions removed
+- **hit_t0**: The initial time (t0) of the first hit in the waveform. Units of us.
+- **hit_tf**: The end time of the first hit in the waveform. Units of us.
+- **hit_area**: The sum of the ADC values within an identified hit. The baseline is subtracted such that this value is positive for a down-pulse. Units of mV.
+- **wvf_area**: The sum of the ADC values after the t0 from an identified hit. The baseline is subtracted such that this value is positive for a down-pulse. Units of mV.
+- **second_pulse**: Whether a second pulse also goes aabove threshold, after the first identified hit.
+- **max_avg_fft_freq**: The maximum frequency bin from the FFT of the waveform.
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
