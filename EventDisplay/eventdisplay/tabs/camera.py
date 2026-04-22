@@ -31,7 +31,6 @@ class Camera(tk.Frame):
         self.update_images()
 
     def get_image_path(self, cam, frame):
-        print(self.image_directory)
         if self.image_naming_convention == self.image_naming_conventions[0]:
             path = os.path.join(self.image_directory, 'cam{}_image{}.png'.format(cam, frame))
         elif self.image_naming_convention == self.image_naming_conventions[1]:
@@ -61,7 +60,7 @@ class Camera(tk.Frame):
                 first_frame = self.load_image(path, canvas)
 
                 image = ImageOps.autocontrast(ImageChops.difference(first_frame, image))
-                
+
                 template = 'frame: {} zoom: {}x (diff wrt {})                  {}/{}'
                 bottom_text = template.format(self.frame, zoom, self.first_frame, self.run, self.event)
             else:
@@ -218,34 +217,23 @@ class Camera(tk.Frame):
         for canvas in self.canvases:
             canvas.delete('crosshair')
 
-        if not self.draw_crosshairs_var.get() or not self.reco_row:  # no reco row means we don't have reco data
+        if not self.draw_crosshairs_var.get() or self.bubble_events is None:
             return
 
-        try:
-            if self.reco_row['nbub'] < 1:
-                return
-        except:
-            print('WARNING: no nbub var')
+        ev_bubbles = self.bubble_events[self.bubble_events['ev'] == self.event]
+        if len(ev_bubbles) == 0:
             return
 
-        for ibub in range(1, self.reco_row['nbub'] + 1):
-            # print('crosshair self.run pre-recorow: ', self.run)
-            # print('crosshair reco.run pre-recorow: ', self.reco_row['run'])
-            # print('crosshair self.ev pre-recorow: ', self.event)
-            # print('crosshair reco.ev pre-recorow: ', self.reco_row['ev'])
-            # print('crosshair reco.nbub pre-recorow: ', self.reco_row['nbub'])
-            self.load_reco_row(ibub)
-            # print('  crosshair self.run post-recorow: ', self.run)
-            # print('  crosshair reco.run post-recorow: ', self.reco_row['run'])
-            # print('  crosshair self.ev post-recorow: ', self.event)
-            # print('  crosshair reco.ev post-recorow: ', self.reco_row['ev'])
-            # print('  crosshair reco.nbub post-recorow: ', self.reco_row['nbub'])
+        for bub in ev_bubbles:
             for canvas in self.canvases:
+                if bub['cam'] != canvas.cam + 1:  # canvas.cam is 0-indexed, bubble.sbc cam is 1-indexed
+                    continue
+
                 x_zoom = canvas.image_width / self.native_image_width
                 y_zoom = canvas.image_height / self.native_image_height
 
-                bubble_x = self.reco_row['hori{}'.format(canvas.cam)]
-                bubble_y = self.reco_row['vert{}'.format(canvas.cam)]
+                bubble_x = bub['pos'][1]
+                bubble_y = bub['pos'][0]
 
                 x = canvas.image_width - (bubble_x + canvas.crop_left / x_zoom) * x_zoom
                 y = (bubble_y - canvas.crop_bottom / y_zoom) * y_zoom
@@ -253,11 +241,7 @@ class Camera(tk.Frame):
                 if self.image_orientation == '0':
                     x = (bubble_x - canvas.crop_left / x_zoom) * x_zoom
                     y = canvas.image_height - (bubble_y + canvas.crop_bottom / y_zoom) * y_zoom
-                
-                # print(' nbub: ', self.reco_row['nbub'])
-                # print(' ibub: ', ibub)
-                # print(' crosshair coord: ', str(x), str(y))
-                
+
                 canvas.create_line(x - 11, y, x - 5, y, fill='red', tag='crosshair')
                 canvas.create_line(x + 5, y, x + 11, y, fill='red', tag='crosshair')
                 canvas.create_line(x, y - 11, x, y - 5, fill='red', tag='crosshair')
@@ -285,6 +269,24 @@ class Camera(tk.Frame):
 
         self.update_images()
 
+    def on_canvas_leave(self, event):
+        event.widget.itemconfig(event.widget.top_text, text='x: -- y: --')
+
+    def on_mouse_motion(self, event):
+        canvas = event.widget
+        x_zoom = canvas.image_width / self.native_image_width
+        y_zoom = canvas.image_height / self.native_image_height
+
+        if self.image_orientation == '0':
+            native_x = (event.x + canvas.crop_left) / x_zoom
+            native_y = self.native_image_height - (event.y + canvas.crop_bottom) / y_zoom
+        else:
+            native_x = self.native_image_width - (event.x + canvas.crop_left) / x_zoom
+            native_y = (event.y + canvas.crop_bottom) / y_zoom
+
+        top_text = 'x: {:.0f} y: {:.0f}'.format(native_x, native_y)
+        canvas.itemconfig(canvas.top_text, text=top_text)
+
     def create_camera_widgets(self):
         self.camera_tab = tk.Frame(self.notebook)
         self.notebook.add(self.camera_tab, text='Camera')
@@ -294,9 +296,12 @@ class Camera(tk.Frame):
         for cam in range(0, self.num_cams):
             canvas = tk.Canvas(self.camera_tab, width=self.init_image_width, height=self.init_image_height)
             canvas.bind('<ButtonPress-1>', self.on_button_press)
+            canvas.bind('<Motion>', self.on_mouse_motion)
+            canvas.bind('<Leave>', self.on_canvas_leave)
             canvas.zoom = 0
 
             canvas.image = canvas.create_image(0, 0, anchor=tk.NW, image=None)
+            canvas.top_text = canvas.create_text(10, 20, anchor=tk.NW, fill='red')
             canvas.bottom_text = canvas.create_text(10, self.init_image_height - 20, anchor=tk.NW, text='', fill='red')
             canvas.grid(row=0, column=1 * cam, columnspan=1, sticky='NW')
             canvas.cam = cam

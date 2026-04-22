@@ -3,7 +3,7 @@ Raw Directory:
 Scratch Directory:
 ./scratch
 Initial Run:
-20251023_12
+20260330_2
 PLC temperature var: 
 TE32
 Relative Path to images:
@@ -30,3 +30,5 @@ Jar - Positive Z Height (mm):
 600
 Jar - Negative Z Height (mm):
 100
+Reco Directory:
+/exp/e961/data/SBC-25-recon

@@ -40,6 +40,7 @@ from tabs.analysis import Analysis
 from tabs.three_d_bubble import ThreeDBubble
 from tabs.scintillation import Scintillation
 from GetEvent import GetEvent
+from sbcbinaryformat import Streamer
 
 try:
     from ctypes import windll
@@ -191,6 +192,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.selected_reco_indices = None
         self.reco_events = None
         self.reco_row = None
+        self.bubble_events = None
 
         # Initial Functions
         self.create_widgets()
@@ -204,11 +206,11 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         Configuration.__init__(self)
         Scintillation.__init__(self)
 
-        # self.load_reco()
 
         # Initial Functions
         self.initialize_widget_values()
         self.reset_event()
+        self.load_reco()
 
         #Icon setup for Windows, Mac and Linux
         try:
@@ -295,7 +297,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
     # reads config file and sets given values, otherwise sets default values
     def load_config_values(self, path):
-        values = [None] * 16
+        values = [None] * 17
 
         defaults = []
         defaults.insert(0, str(self.raw_init_directory))
@@ -314,6 +316,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         defaults.insert(13, '500')
         defaults.insert(14, '1000')
         defaults.insert(15, '500')
+        defaults.insert(16, '')
 
         if os.path.isfile(path):
             f = open(path)
@@ -359,6 +362,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.radius = values[13]
         self.positive_z = values[14]
         self.negative_z = values[15]
+        self.reco_directory = str(self._resolve_path(values[16])) if values[16] else ''
         self.frame = self.init_frame
 
         self.base_directory = os.path.dirname(self.raw_init_directory)
@@ -614,6 +618,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.run = run
             if self.run != prevrun:
                 self.handle_run_folder_format()
+                self.load_reco()
             self.event = event
 
             if self.selected_events is None:
@@ -751,6 +756,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.run = run
             if self.run != prevrun:
                 self.handle_run_folder_format()
+                self.load_reco()
             self.event = event
             self.reco_row = None
             self.row_index = self.get_row(self.selected_events) - 1
@@ -832,6 +838,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.run = run
             if self.run != prevrun:
                 self.handle_run_folder_format()
+                self.load_reco()
             self.event = event
             self.reco_row = None
             self.row_index = self.get_row(self.selected_events) - 1
@@ -865,45 +872,21 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             # here the row index is the index relative to the selected event list
             self.reco_row = self.selected_events[self.row_index]
         else:
-            # here the row index is the index relative to the raw event list
-            reco_index_fast = self.raw_events[self.row_index]['reco index']
-            reco_index = self.get_row(self.reco_events)    # should give same result as above, but slower
-            if reco_index_fast != reco_index:
-                print('fast reco index is wrong: ')
-                print(' slow reco index: ', reco_index)
-                print(' fast reco index: ', reco_index_fast)
-            if reco_index >= 0:
-                self.reco_row = self.reco_events[reco_index]
-            else:
+            rows = np.argwhere(self.reco_events['ev'] == self.event).ravel()
+            print('load_reco_row: ev={}, rows found={}'.format(self.event, rows))
+            if len(rows) == 0:
                 self.reco_row = None
                 self.toggle_reco_widgets(state=tk.DISABLED)
                 for _, text, _ in self.display_vars:
                     text.set('N/A')
                 return
-            # print('reco_index: ', str(reco_index))
 
-        if ibub:
-            # print('  reco.run: ', self.reco_row['run'])
-            # print('  reco.ev: ', self.reco_row['ev'])
-            # print('  nbub: ', self.reco_row['nbub'])
-            offset = ibub - 1 if ibub > 1 else 0
-            if self.selected_reco_indices is not None:
-                # print('sel reco indices: ', self.selected_reco_indices)
-                row_fast_selection = self.selected_reco_indices[self.row_index]
-            else:
-                row_fast_selection = self.raw_events[self.row_index]['reco index']
-            row = self.get_row(self.reco_events)     # should give same result as above, but slower
-            if row_fast_selection != row:
-                print('fast row index is wrong: ')
-                print(' slow row index: ', row)
-                print(' fast row selection index: ', row_fast_selection)
-                print('   raw row index: ', self.row_index)
-                print('   ibub: ', ibub)
-                print('   offset: ', offset)
-            self.reco_row = self.reco_events[row + int(offset)]
-            # print('  ->reco.run: ', self.reco_row['run'])
-            # print('  ->reco.ev: ', self.reco_row['ev'])
-            # print('  ->nbub: ', self.reco_row['nbub'])
+            reco_index = rows[0]
+            if ibub:
+                offset = ibub - 1 if ibub > 1 else 0
+                reco_index = rows[0] + int(offset)
+
+            self.reco_row = self.reco_events[reco_index]
 
         self.toggle_reco_widgets(state=tk.NORMAL)
         for label, text, _ in self.display_vars:
@@ -955,6 +938,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.run = events[self.row_index]['run']
         if self.run != prevrun:
             self.handle_run_folder_format()
+            self.load_reco()
         self.event = events[self.row_index]['ev']
 
         self.update_run_entry()
@@ -1020,10 +1004,19 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
     def load_reco(self):
         self.reco_row = None
         self.reco_events = None
+        self.bubble_events = None
 
-        path = os.path.join(self.npy_directory, self.reco_filename)
+        if not self.reco_directory or not self.run:
+            self.logger.error('reco directory not set in config, reco data will be disabled')
+            self.reco_availability_label.config(text='Not Loaded')
+            self.toggle_reco_widgets(state=tk.DISABLED)
+            for _, text, _ in self.display_vars:
+                text.set('N/A')
+            return
+
+        path = os.path.join(self.reco_directory, 'dev-output', self.run, 'reco.sbc')
         if not os.path.isfile(path):
-            self.logger.error('cannot find {}, reco data will be disabled'.format(self.reco_filename))
+            self.logger.error('cannot find {}, reco data will be disabled'.format(path))
             self.reco_availability_label.config(text='Not Loaded')
             self.toggle_reco_widgets(state=tk.DISABLED)
             for _, text, _ in self.display_vars:
@@ -1032,12 +1025,28 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
         self.logger.info('using reco data from {}'.format(path))
 
-        events = np.load(path)
+        events = Streamer(path).data
         if len(events) == 0:
-            self.logger.error('could not find raw data for any reco events')
+            self.logger.error('no reco events found in {}'.format(path))
             return
 
-        self.reco_events = events
+        # convert coords_3D array field into scalar X, Y, Z for widgets
+        new_dtype = np.dtype([('X', '<f8'), ('Y', '<f8'), ('Z', '<f8'), ('ev', '<i4')])
+        coordinates = np.zeros(len(events), dtype=new_dtype)
+        coordinates['X'] = events['coords_3D'][:, 0]
+        coordinates['Y'] = events['coords_3D'][:, 1]
+        coordinates['Z'] = events['coords_3D'][:, 2]
+        coordinates['ev'] = events['ev']
+        self.reco_events = coordinates
+        print('reco loaded: {} rows, fields: {}'.format(len(self.reco_events), self.reco_events.dtype.names))
+        self.add_display_var_combobox['values'] = sorted(self.reco_events.dtype.names)
+
+        bubble_path = os.path.join(self.reco_directory, 'dev-output', self.run, 'bubble.sbc')
+        if os.path.isfile(bubble_path):
+            self.bubble_events = Streamer(bubble_path).data
+            print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
+        else:
+            self.logger.error('cannot find {}'.format(bubble_path))
 
     def do_handscan(self):
         if not os.path.exists(self.scan_directory):
