@@ -48,6 +48,20 @@ class Camera(tk.Frame):
 
         return path
 
+    def get_image_diff(self, image, canvas, threshold=10):
+        ref_frame = (int(self.frame) - 1
+                    if int(self.frame) > int(self.first_frame)
+                    else int(self.first_frame))
+
+        diff_path = self.get_image_path(canvas.cam, ref_frame)
+        diff_image = self.load_image(diff_path, canvas)
+
+        # Compute the absolute difference between the current image and the reference image
+        diff = ImageChops.difference(image, diff_image)
+        diff = diff.point(lambda p: p if p > threshold else 0)
+
+        return ImageOps.autocontrast(diff), ref_frame
+
     def update_images(self):
         error = ' '
         for canvas in self.canvases:
@@ -56,13 +70,10 @@ class Camera(tk.Frame):
 
             zoom = '{:.1f}'.format(canvas.image_width / self.native_image_width)
             if self.diff_checkbutton_var.get():
-                path = self.get_image_path(canvas.cam, self.first_frame)
-                first_frame = self.load_image(path, canvas)
-
-                image = ImageOps.autocontrast(ImageChops.difference(first_frame, image))
+                image, ref_frame = self.get_image_diff(image, canvas)
 
                 template = 'frame: {} zoom: {}x (diff wrt {})                  {}/{}'
-                bottom_text = template.format(self.frame, zoom, self.first_frame, self.run, self.event)
+                bottom_text = template.format(self.frame, zoom, ref_frame, self.run, self.event)
             else:
                 template = 'frame: {} zoom: {}x                                   {}/{}'
                 bottom_text = template.format(self.frame, zoom, self.run, self.event)
@@ -212,7 +223,7 @@ class Camera(tk.Frame):
                 subprocess.call(('ffplay', '-loop', '0', out_file_path))
         except:
             print("Video player ERROR -- failed to open video")
-    
+
     def draw_crosshairs(self):
         for canvas in self.canvases:
             canvas.delete('crosshair')
@@ -225,6 +236,9 @@ class Camera(tk.Frame):
             return
 
         for bub in ev_bubbles:
+            if(int(self.frame) != int(self.frame) - int(bub['frame'])):
+                continue
+            
             for canvas in self.canvases:
                 if bub['cam'] != canvas.cam + 1:  # canvas.cam is 0-indexed, bubble.sbc cam is 1-indexed
                     continue
