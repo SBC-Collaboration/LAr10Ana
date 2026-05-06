@@ -76,7 +76,7 @@ def GetRun(rundirectory, *loadlist, strictMode=True, lazy_load_scintillation=Tru
 
     return data
 
-def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillation=True, physical_units=True):
+def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillation=True, physical_units=False):
     event = dict()
 
     if os.path.isdir(rundirectory):
