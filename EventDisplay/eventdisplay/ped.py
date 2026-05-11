@@ -373,11 +373,11 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.reco_row = None
         self.row_index = -1
         self.zip_flag = False
-        self.increment_event(1)
 
-        # Change run to init_run, if starting run is set
         if self.init_run != '':
             self.load_run(self.init_run, 0)
+        else:
+            self.increment_event(1)
 
     def get_raw_events(self):
         # print('raw path: ', self.raw_directory, '\n')
@@ -489,18 +489,18 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         try:
             event_info = GetEvent(self.path, self.event, *selected)["event_info"]
             livetime = event_info["ev_livetime"][0]
-            pset = event_info["pset"][0]
+            pset = event_info.get("pset", event_info.get("pset_lo", [float("nan")]))[0]
             trigger_source = event_info["trigger_source"][0]
 
             self.trigger_type_label.set(f'trig: {trigger_source}')
             self.pset_label.set(f'pset: {pset:.1f}')
             self.livetime_label.set(f'lt: {livetime:.1f}')
 
-        except:
+        except Exception as e:
             self.trigger_type_label.set('trigger: N/A')
             self.pset_label.set('pset: N/A')
             self.livetime_label.set('lt: N/A')
-            self.error += 'cannot find event_info.sbc\n'
+            self.error += f'event_info error: {e}\n'
 
     def plc_text_zip_loader(self, path:str) -> None:
         with self.zipped_event.open(path) as file:
