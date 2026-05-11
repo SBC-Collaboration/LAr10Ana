@@ -339,7 +339,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.raw_init_directory = str(self._resolve_path(values[0]))
         self.raw_directory = self.raw_init_directory
         # Order matters here, we need to try removing -daqdata first, then -data
-        self.dataset = os.path.basename(self.raw_init_directory).removesuffix('-daqdata').removesuffix('-data')
+        self.dataset = os.path.basename(self.raw_init_directory).removesuffix('-daqdata').removesuffix('-data').removesuffix('-unpacked')
 
         # Relative directories
         self.scan_directory = str(self._resolve_path(f"scan_output_{self.dataset}"))

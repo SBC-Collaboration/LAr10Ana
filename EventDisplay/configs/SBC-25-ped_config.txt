@@ -1,5 +1,5 @@
 Raw Directory: 
-/exp/e961/data/SBC-25-daqdata
+/exp/e961/data/SBC-25-unpacked
 Scratch Directory:
 ./scratch
 Initial Run:
