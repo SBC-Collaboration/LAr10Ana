@@ -577,8 +577,8 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.raw_directory = self.raw_init_directory
         run_folder_path = os.path.join(self.raw_directory, self.run)
         if not os.path.exists(run_folder_path):
-            run_scratch_path = os.path.join(self.extraction_path, self.run, '0', 'Event.txt')
-            if os.path.exists(run_scratch_path):
+            run_scratch_path = os.path.join(self.extraction_path, self.run, '0')
+            if os.path.isdir(run_scratch_path):
                 self.raw_directory = self.extraction_path
                 self.logger.info('Non-empty run folder found in scratch dir')
             else:
