@@ -408,9 +408,12 @@ class Configuration(tk.Frame):
         for cam in range(0, self.num_cams):
             canvas = tk.Canvas(self.camera_tab, width=self.init_image_width, height=self.init_image_height)
             canvas.bind('<ButtonPress-1>', self.on_button_press)
+            canvas.bind('<Motion>', self.on_mouse_motion)
+            canvas.bind('<Leave>', self.on_canvas_leave)
             canvas.zoom = 0
 
             canvas.image = canvas.create_image(0, 0, anchor=tk.NW, image=None)
+            canvas.top_text = canvas.create_text(10, 20, anchor=tk.NW, fill='red')
             canvas.bottom_text = canvas.create_text(10, self.init_image_height - 20, anchor=tk.NW, text='',
                                                     fill='red')
             canvas.grid(row=0, column=1 * cam, columnspan=1, sticky='NW')
