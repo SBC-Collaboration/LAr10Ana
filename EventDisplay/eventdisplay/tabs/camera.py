@@ -236,9 +236,9 @@ class Camera(tk.Frame):
             return
 
         for bub in ev_bubbles:
-            if(int(self.frame) != int(self.frame) - int(bub['frame'])):
+            if int(self.frame) != int(bub['frame']):
                 continue
-            
+
             for canvas in self.canvases:
                 if bub['cam'] != canvas.cam + 1:  # canvas.cam is 0-indexed, bubble.sbc cam is 1-indexed
                     continue
