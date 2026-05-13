@@ -226,7 +226,7 @@ if __name__ == "__main__":
             rundir=sys.argv[1],
             recondir=sys.argv[2],
             process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco", "pressure_t0", "t_expansion",
-                            "acoustic_noise"])
+                            "acoustic_noise, scint_t0"])
     else:
         ProcessSingleRun(
             rundir="/exp/e961/data/SBC-25-daqdata/20260221_0.tar",
