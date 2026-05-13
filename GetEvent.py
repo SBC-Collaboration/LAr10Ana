@@ -6,6 +6,7 @@ import json
 import warnings
 import tarfile
 import io
+import scipy.signal as sg
 
 full_loadlist = [
     "acoustics",
@@ -13,6 +14,7 @@ full_loadlist = [
     "cam",
     "event_info",
     "plc",
+    "digiscope",
     "slow_daq",
     "run_info",
     "run_control"
@@ -22,7 +24,7 @@ def GetScint(ev, start=None, end=None, length=None):
     out_ev = dict([(k, v.copy()) for (k, v) in ev.items()]) # copy input
 
     for key in ev["scintillation"].keys():
-        if key == "loaded" or key == "length" or key == "sample_rate" or key == "EventCounter": # skip helper keys
+        if key == "loaded" or key == "length" or key == "sample_rate" or key == "EventCounter" or key == 'TriggerTimeTag': # skip helper keys
             continue
 
         out_ev["scintillation"][key] = ev["scintillation"][key](start=start, end=end, length=length)
@@ -74,7 +76,7 @@ def GetRun(rundirectory, *loadlist, strictMode=True, lazy_load_scintillation=Tru
 
     return data
 
-def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillation=True):
+def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillation=True, physical_units=False):
     event = dict()
 
     if os.path.isdir(rundirectory):
@@ -133,7 +135,10 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                 if lazy_load_scintillation:
                     scint = Streamer(scint_file, max_size=1000) if not is_tar else TarStreamer(rundirectory, scint_file, max_size=1000)
                     for c in scint.columns:
-                        event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
+                        if c == 'TriggerTimeTag':
+                            event["scintillation"][c] = scint.to_dict()[c]
+                        else:
+                            event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
                     event["scintillation"]["length"] = scint.num_elems
                 else:
                     scint = Streamer(scint_file) if not is_tar else TarStreamer(rundirectory, scint_file)
@@ -257,6 +262,25 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                     raise e
                 else:
                     warnings.warn(f"Failed to load plc data with error: {e}")
+    
+    if "digiscope" in loadlist:
+        digi_file = os.path.join(event_dir, "digiscope.sbc")
+        if not FileExists(rundirectory, digi_file):
+            if strictMode: 
+                raise FileNotFoundError("No digiscope file present in the run directory. To disable this error, either pass strictMode=False, or remove 'digiscope' from the loadlist")
+            else:
+                warnings.warn("No digiscope file present in the run directory. Data will not be available in the returned dictionary.")
+        else:
+            try:
+                digi_data = Streamer(digi_file).to_dict() if not is_tar else TarStreamer(rundirectory, digi_file).to_dict()
+                event["digiscope"]["loaded"] = True
+                for k, v in digi_data.items():
+                    event["digiscope"][k] = v
+            except Exception as e:
+                if strictMode:
+                    raise e
+                else:
+                    warnings.warn(f"Failed to load digiscope data with error: {e}")
 
     if "run_info" in loadlist:
         run_info_file = os.path.join(base_dir, "run_info.sbc")
@@ -309,7 +333,7 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                 decimation = event['run_control'].get('caen', {}).get('global', {}).get('decimation')
                 # if not old version of the config, then try another path, or default to 0
                 if decimation is None:
-                    decimation = decimation = event['run_control'].get('scint', {}).get('caen', {}).get('decimation', 0)
+                    decimation = event['run_control'].get('scint', {}).get('caen', {}).get('decimation', 0)
                 
                 event["acoustics"]["sample_rate"] = sample_rate
 
@@ -321,5 +345,63 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                     raise e
                 else:
                     warnings.warn(f"Failed to load run_control data with error: {e}")
+
+    if physical_units:
+        try:
+            event = ConvertPhysicalUnits(event, lazy_load_scintillation)
+        except Exception as e:
+            if strictMode:
+                raise e
+            else:
+                warnings.warn(f"Failed to convert to physical units with error: {e}")
+    
+    return event
+
+def ConvertPhysicalUnits(event, lazy_load_scintillation=True):
+    if event["scintillation"]["loaded"] and not lazy_load_scintillation:
+        scint = event["scintillation"]
+        clock_bit_depth = 31  # 31 bit clock
+        sample_rate = 62.5e6
+
+        timestamps = scint["TriggerTimeTag"].astype(np.int64)
+        wraps_ind = sg.find_peaks(np.abs(np.diff(timestamps)), height=2**(clock_bit_depth-1))[0]
+        for i in wraps_ind:
+            timestamps[i+1:]+=2**clock_bit_depth
+        timestamps = (timestamps - timestamps[0])/(2*sample_rate)
+        scint["TriggerTimeTag_s"] = timestamps
+        scint["livetime_s"] = timestamps[-1] - timestamps[0]
+
+        if event["run_control"]["loaded"]:
+            rc = event["run_control"]
+            decimation = rc["caen"]["global"]["decimation"]
+            post_trig = rc["caen"]["global"]["post_trig"]
+            range_v = [2 if rc["caen"][f"group{g}"]["range"]=="2 Vpp" else 0.5 for g in range(4)]
+            offset = [rc["caen"][f"group{g}"]["offset"] for g in range(4)]
+
+            clock_tick = 1/(2*sample_rate)
+            waveform_bit_depth = 12  # 12 bit ADC
+
+            waveform_phys = (scint["Waveforms"].astype("f") - offset[0]/2**4) / 2**waveform_bit_depth * range_v[0]
+            length = waveform_phys.shape[2]
+            scint_time = (np.array(range(length)) - length*(1-post_trig/100)) * clock_tick
+
+            scint["Waveforms_V"] = waveform_phys
+            scint["time_s"] = scint_time
+    
+    if event["digiscope"]["loaded"]:
+        clock_bit_depth = 32  # 32 bit clock
+        digi_clock = 40e6  # 40 MHz
+        digi_time = event["digiscope"]["t_ticks"].astype(np.int64)
+        wraps_ind = sg.find_peaks(np.abs(np.diff(digi_time)), height=2**(clock_bit_depth-1))[0]
+        for i in wraps_ind:
+            digi_time[i+1:]+=2**clock_bit_depth
+        digi_time = digi_time/digi_clock
+        event["digiscope"]["time_s"] = digi_time
+
+    if event["acoustics"]["loaded"]:
+        acous = event["acoustics"]
+        bit_depth = 16  # 16 bit ADC
+        acous["Waveforms_V"] = (acous["Waveforms"] - acous["DCOffset"][:,:,np.newaxis]) / 2**bit_depth * acous["Range"][:,:,np.newaxis] / 1000
+        acous["time_s"] = (np.array(range(acous["Waveforms"].shape[2] )) / acous["sample_rate"] - event["run_control"]["acous"]["pre_trig_len"])
 
     return event
