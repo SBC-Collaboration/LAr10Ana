@@ -16,10 +16,9 @@ import re
 import time
 import getpass
 import logging
-import linecache
 import matplotlib
 import numpy as np
-from pylab import *
+import matplotlib.pyplot as plt
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
@@ -267,8 +266,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.ped_config_file_path_combobox['values'] = self.get_configs()
         self.piezo_combobox['values'] = [self.piezo]
         self.piezo_combobox.current(0)
-        # self.dytran_combobox['values'] = [self.dytran]
-        # self.dytran_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
         if os.path.isfile(self.ped_config_file_path_var):
@@ -378,34 +375,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             try:
                 os.system("python \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_raw_to_npy_run_by_run.py"), self.raw_directory, self.npy_directory))
                 os.system("python \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "merge_raw_run_npy.py"), self.npy_directory))
-                # reco_path = os.path.join(self.npy_directory, self.reco_filename)
-                # if not os.path.isfile(reco_path):
-                #     reco_response = messagebox.askyesno('No raw_event.npy or reco_events.npy files found', 'NPY files being created now. \nWould you like to select a reco_events file?')
-                #     if reco_response == 0:
-                #         merged_all_response = messagebox.askyesno('Create a reco_events.npy file?', 'Would you like to select a merged_all file to create reco data?')
-                #         if merged_all_response == 0:
-                #             self.get_raw_events()
-                #         else:
-                #             merged_all = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a merged_all File", filetypes = (("Text files", "*.txt*"), ("all files", "*.*")))
-                #             os.system("python \"{}\" \"{}\" \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_reco_to_npy_and_reindex_raw_npy.py"), self.npy_directory, self.npy_directory, merged_all, user_date))
-                #             self.reco_filename = 'reco_events_{}.npy'.format(user_date)
-                #     else:
-                #         reco_filename = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a reco_events File", filetypes = (("NPY Files", "*.npy*"), ("all files", "*.*")))
-                #         if os.path.isfile(reco_filename):
-                #             reco_directory = os.path.split(reco_filename)[0]
-                #             if os.path.normpath(reco_directory) == os.path.normpath(self.npy_directory):
-                #                 self.reco_filename = os.path.split(reco_filename)[1]
-                #             else:
-                #                 directory_response = messagebox.askyesno('Selected File Not in NPY Directory', 'Current Dataset is: {}. \nSelected reco file is not in the NPY Directory for the current dataset. \nWould you still like to use the selected reco_events file?'.format(self.dataset))
-                #                 if directory_response == 1:
-                #                     self.reco_filename = os.path.split(reco_filename)[1]
-                #                 else:
-                #                     self.get_raw_events()
-                #         else:
-                #             self.get_raw_events()
-                #         self.reco_filename = os.path.split(reco_filename)[1]
-                # else:
-                #     messagebox.showinfo('No raw_events.npy file found', 'NPY files being created now. \nreco_event.npy file found. Reco data will be loaded from npy directory')
             except FileNotFoundError:
                 # this error should be handled when it crops up in the code
                 raise FileNotFoundError
@@ -492,42 +461,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.livetime_label.set('lt: N/A')
             self.error += f'event_info error: {e}\n'
 
-    def plc_text_zip_loader(self, path:str) -> None:
-        with self.zipped_event.open(path) as file:
-            try:
-                fields = file.readline()
-                fields = file.readline().split()
-                fields = [field.decode() for field in fields]
-                index = fields.index(self.plc_temp_var)
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline().split()
-                entries = [entry.decode() for entry in entries]
-                self.temp_label.set(self.plc_temp_var + ': {:.1f}'.format(float(entries[index])))
-            except:
-                self.error += 'cannot find ' + self.plc_temp_var + ' in PLC log file (via zip)\n'
-                self.temp_label.set(self.plc_temp_var + ': N/A')
-
-    def load_plc_text(self):
-        return
-        if self.zip_flag:
-            path = os.path.join(self.run, str(self.event), 'PLClog.txt')
-            self.plc_text_zip_loader(path)
-        else:
-            path = os.path.join(self.raw_directory, self.run, str(self.event), 'PLClog.txt')
-            try:
-                fields = linecache.getline(path, 2).split()
-                index = fields.index(self.plc_temp_var)
-                entries = linecache.getline(path, 7).split()
-                self.temp_label.set(self.plc_temp_var + ': {:.1f}'.format(float(entries[index])))
-                #print(f'fields: {fields}\n index: {index}\n entries:{entries}\n')
-            except ValueError:
-                self.temp_label.set(self.plc_temp_var + ': N/A')
-                self.error += 'cannot find ' + self.plc_temp_var + ' in PLC log file\n'
-
     def archive_file_helper(self, run_path:str, extract_path:str) -> bool:
         """helper function to find and extract zip and tarfiles
 
@@ -549,7 +482,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             #zipfile.ZipFile(test_path).extractall(self.raw_directory )
             return True
         else:
-            tar_postfixes = ['.tar', '.tar.gz', '.tgz']
             for ext in tar_postfixes:
                 test_path = run_path + ext
                 if os.path.exists(test_path):
