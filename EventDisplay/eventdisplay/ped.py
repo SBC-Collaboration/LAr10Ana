@@ -11,6 +11,7 @@ may need to add to your paths:
 # Imports
 import os
 os.umask(6)
+import json
 import re
 import time
 import getpass
@@ -163,6 +164,8 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.invert_checkbutton_var = tk.BooleanVar(value=False)
         self.diff_checkbutton_var = tk.BooleanVar(value=False)
         self.antialias_checkbutton_var = tk.BooleanVar(value=False)
+        self.diff_mode_var = tk.StringVar(value="off")
+        self.diff_threshold_var = tk.IntVar(value=10)
         self.load_dytran_checkbutton_var = tk.BooleanVar(value=False)
         self.piezo_plot_t0_checkbutton_var = tk.BooleanVar(value=False)
         self.load_fastDAQ_piezo_checkbutton_var = tk.BooleanVar(value=False)
@@ -206,23 +209,22 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         Configuration.__init__(self)
         Scintillation.__init__(self)
 
-
         # Initial Functions
         self.initialize_widget_values()
         self.reset_event()
         self.load_reco()
 
-        #Icon setup for Windows, Mac and Linux
+        # Icon setup for Windows, Mac and Linux
         try:
-           iconName = 'PICO'
-           windowSystem = self.master.tk.call("tk", "windowingsystem")
-           if windowSystem == "x11" or windowSystem =='aqua': # Unix and Mac
-               iconName = iconName + ".gif"
-               iconImage = tk.PhotoImage(file=os.path.join(self.ped_directory, iconName))
-               ROOT.call('wm', 'iconphoto', ROOT._w, iconImage)
-           else: # Windows
-               iconName += ".ico"
-               ROOT.iconbitmap(os.path.join(self.ped_directory, iconName))
+            iconName = 'PICO'
+            windowSystem = self.master.tk.call("tk", "windowingsystem")
+            if windowSystem == "x11" or windowSystem =='aqua': # Unix and Mac
+                iconName = iconName + ".gif"
+                iconImage = tk.PhotoImage(file=os.path.join(self.ped_directory, iconName))
+                ROOT.call('wm', 'iconphoto', ROOT._w, iconImage)
+            else: # Windows
+                iconName += ".ico"
+                ROOT.iconbitmap(os.path.join(self.ped_directory, iconName))
         except:
             print('Unable to add PICO icon to GUI')
 
@@ -248,27 +250,15 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
         # Click on Log Viewer Tab
         if tab_clicked == 3 or tab_clicked == 'Log Viewer':
-            # Show Log Viewer Widgets
+            self.bottom_bar.grid_remove()
             self.bottom_frame_5.grid(row=1, column=0, sticky='NW')
             self.fra2.pack(side='top')
-
-            # Hide Other Bottom Frames
-            self.bottom_frame_1.grid_remove()
-            self.bottom_frame_2.grid_remove()
-            self.bottom_frame_3.grid_remove()
-            self.bottom_frame_4.grid_remove()
         elif tab_clicked == '':
             return
         else:
-            # Show Other Bottom Frames
-            self.bottom_frame_1.grid(row=1, column=0, sticky='NW')
-            self.bottom_frame_2.grid(row=1, column=1, sticky='NW')
-            self.bottom_frame_3.grid(row=1, column=2, sticky='NW')
-            self.bottom_frame_4.grid(row=1, column=3, sticky='NW')
-
-            # Hide Log Viewer Widgets
             self.bottom_frame_5.grid_remove()
             self.fra2.pack_forget()
+            self.bottom_bar.grid(row=1, column=0, sticky='NW')
 
     def initialize_widget_values(self):
         values = sorted(self.reco_events.dtype.names) if self.reco_events is not None else ('')
@@ -604,6 +594,18 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                 self.row_index = self.get_row(self.raw_events)
         self.load_reco_row()
 
+    def get_runcontrol_frames(self):
+        try:
+            rc_path = os.path.join(self.raw_directory, self.run, 'rc.json')
+            with open(rc_path) as f:
+                rc = json.load(f)
+            cam = rc['cams']['cam1']
+            self.init_frame = cam['buffer_len'] - cam['post_trig']
+            self.last_frame = cam['buffer_len'] - 1    
+            self.frame = self.init_frame
+        except Exception:
+            pass
+
     def load_run(self, run, event):
         if run == self.run and event == self.event:
             self.logger.info('no action taken (run and event are unchanged)')
@@ -618,6 +620,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.run = run
             if self.run != prevrun:
                 self.handle_run_folder_format()
+                self.get_runcontrol_frames()
                 self.load_reco()
             self.event = event
 
@@ -1122,20 +1125,21 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         # Function to Run When Clicking Tabs
         self.notebook.bind('<Button-1>', self.click_tab)
 
-        self.notebook.grid(row=0, column=0, columnspan=5)
+        self.notebook.grid(row=0, column=0)
 
         # Setup frames to be used on the bottom
+        self.bottom_bar = tk.Frame(self.scbframe)
+        self.bottom_bar.grid(row=1, column=0, sticky='NW')
 
-        self.bottom_frame_1 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)
-        self.bottom_frame_1.grid(row=1, column=0, sticky='NW')
-        self.bottom_frame_2 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)
-        self.bottom_frame_2.grid(row=1, column=1, sticky='NW')
-        self.bottom_frame_3 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)
-        self.bottom_frame_3.grid(row=1, column=2, sticky='NW')
-        self.bottom_frame_4 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)
-        self.bottom_frame_4.grid(row=1, column=3, sticky='NW')
-        self.bottom_frame_5 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)  # Frame for Log Navigation
-        self.bottom_frame_5.grid(row=1, column=0, sticky='NW')  # Frame for Log Navigation
+        self.bottom_frame_1 = tk.Frame(self.bottom_bar, bd=5, relief=tk.SUNKEN)
+        self.bottom_frame_1.pack(side='left', anchor='nw')
+        self.bottom_frame_2 = tk.Frame(self.bottom_bar, bd=5, relief=tk.SUNKEN)
+        self.bottom_frame_2.pack(side='left', anchor='nw')
+        self.bottom_frame_3 = tk.Frame(self.bottom_bar, bd=5, relief=tk.SUNKEN)
+        self.bottom_frame_3.pack(side='left', anchor='nw')
+        self.bottom_frame_4 = tk.Frame(self.bottom_bar, bd=5, relief=tk.SUNKEN)
+        self.bottom_frame_4.pack(side='left', anchor='nw')
+        self.bottom_frame_5 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)  # Log Navigation
 
         self.run_label = tk.Label(self.bottom_frame_1, text='run:')
         self.run_label.grid(row=1, column=0, sticky='WE')
@@ -1160,11 +1164,11 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                                        command=lambda: self.increment_event(1))
         self.forward_event.grid(row=2, column=2, columnspan=2, sticky='WE')
 
-        self.back_1000events_button = tk.Button(self.bottom_frame_1, text='back 1000 events')
+        self.back_1000events_button = tk.Button(self.bottom_frame_1, text='back 1k events')
         self.back_1000events_button['command'] = lambda: self.increment_event(-1000)
         self.back_1000events_button.grid(row=3, column=0, columnspan=2, sticky='WE')
 
-        self.forward_1000events_button = tk.Button(self.bottom_frame_1, text='forward 1000 events')
+        self.forward_1000events_button = tk.Button(self.bottom_frame_1, text='forward 1k events')
         self.forward_1000events_button['command'] = lambda: self.increment_event(1000)
         self.forward_1000events_button.grid(row=3, column=2, columnspan=2, sticky='WE')
 
@@ -1201,7 +1205,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.apply_file_cuts_button.grid(row=7, column=2, columnspan=2, sticky='WE')
 
         self.use_cut_file_checkbutton = tk.Checkbutton(self.bottom_frame_1,
-            text='Use Cut File?',
+            text='Use Cut',
             variable=self.use_cut_file_checkbutton_var,
             command=self.use_cut_file)
         self.use_cut_file_checkbutton.grid(row=7, column=4, sticky='WE')
@@ -1259,42 +1263,71 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.trig_frame_button['command'] = lambda: self.load_frame(self.init_frame)
         self.trig_frame_button.grid(row=1, column=2, sticky='WE')
 
-        self.antialias_checkbutton = tk.Checkbutton(self.bottom_frame_3,
+        self.jump_frame_label = tk.Label(self.bottom_frame_3, text='jump to:')
+        self.jump_frame_label.grid(row=2, column=0, sticky='W')
+
+        self.jump_frame_entry = tk.Entry(self.bottom_frame_3, width=5)
+        self.jump_frame_entry.grid(row=2, column=1, sticky='WE')
+        self.jump_frame_entry.bind('<Return>', lambda e: self.load_frame(self.jump_frame_entry.get()))
+
+        self.jump_frame_button = tk.Button(self.bottom_frame_3, text='Go',
+            command=lambda: self.load_frame(self.jump_frame_entry.get()))
+        self.jump_frame_button.grid(row=2, column=2, sticky='WE')
+
+        self.image_options_frame = tk.LabelFrame(self.bottom_frame_3, text='Image Options', padx=4, pady=4)
+        self.image_options_frame.grid(row=3, column=0, columnspan=3, sticky='WE', pady=(4, 0))
+
+        self.antialias_checkbutton = tk.Checkbutton(self.image_options_frame,
             text='antialias',
             variable=self.antialias_checkbutton_var,
             command=self.update_images)
-        self.antialias_checkbutton.grid(row=2, column=0, sticky='WE')
+        self.antialias_checkbutton.grid(row=0, column=0, sticky='W')
 
-        self.diff_checkbutton = tk.Checkbutton(self.bottom_frame_3,
-            text='diff frame',
-            variable=self.diff_checkbutton_var,
-            command=self.update_images)
-        self.diff_checkbutton.grid(row=2, column=1, sticky='WE')
-
-        self.invert_checkbutton = tk.Checkbutton(self.bottom_frame_3,
+        self.invert_checkbutton = tk.Checkbutton(self.image_options_frame,
             text='invert',
             variable=self.invert_checkbutton_var,
             command=self.update_images)
-        self.invert_checkbutton.grid(row=2, column=2, sticky='WE')
+        self.invert_checkbutton.grid(row=0, column=1, sticky='W')
 
-        self.draw_crosshairs_button = tk.Checkbutton(self.bottom_frame_3,
-            text='draw crosshairs',
+        self.draw_crosshairs_button = tk.Checkbutton(self.image_options_frame,
+            text='crosshairs',
             variable=self.draw_crosshairs_var,
             command=self.draw_crosshairs,
             state=tk.DISABLED)
-        self.draw_crosshairs_button.grid(row=3, column=0, sticky='WE')
+        self.draw_crosshairs_button.grid(row=0, column=2, sticky='W')
 
-        self.make_video_button = tk.Button(self.bottom_frame_3,
-            text='make video',
-            command=self.make_video)
-        self.make_video_button.grid(row=4, column=0, sticky='WE')
+        self.diff_off_radio = tk.Radiobutton(self.image_options_frame,
+            text='no diff',
+            variable=self.diff_mode_var,
+            value='off',
+            command=self.update_images)
+        self.diff_off_radio.grid(row=1, column=0, sticky='W')
 
-        self.make_video_label = tk.Label(self.bottom_frame_3, text="cam")
-        self.make_video_label.grid(row=4, column=1, sticky='WE')
+        self.diff_prev_radio = tk.Radiobutton(self.image_options_frame,
+            text='diff prev',
+            variable=self.diff_mode_var,
+            value='prev',
+            command=self.update_images)
+        self.diff_prev_radio.grid(row=1, column=1, sticky='W')
 
-        self.make_video_entry = tk.Entry(self.bottom_frame_3, width=10)
-        self.make_video_entry.insert(0, '0')
-        self.make_video_entry.grid(row=4, column=2, sticky='WE')
+        self.diff_first_radio = tk.Radiobutton(self.image_options_frame,
+            text='diff first',
+            variable=self.diff_mode_var,
+            value='first',
+            command=self.update_images)
+        self.diff_first_radio.grid(row=1, column=2, sticky='W')
+
+        self.diff_threshold_label = tk.Label(self.image_options_frame, text='threshold:')
+        self.diff_threshold_label.grid(row=2, column=0, sticky='W')
+
+        self.diff_threshold_entry = tk.Entry(self.image_options_frame,
+            textvariable=self.diff_threshold_var, width=5)
+        self.diff_threshold_entry.grid(row=2, column=1, sticky='W')
+        self.diff_threshold_entry.bind('<Return>', lambda e: self.update_images())
+
+        self.diff_threshold_button = tk.Button(self.image_options_frame, text='apply',
+            command=self.update_images)
+        self.diff_threshold_button.grid(row=2, column=2, sticky='W')
 
         self.do_handscan_checkbutton = tk.Checkbutton(self.bottom_frame_4,
             text='do handscan',

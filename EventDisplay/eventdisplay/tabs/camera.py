@@ -48,10 +48,15 @@ class Camera(tk.Frame):
 
         return path
 
-    def get_image_diff(self, image, canvas, threshold=10):
-        ref_frame = (int(self.frame) - 1
-                    if int(self.frame) > int(self.first_frame)
-                    else int(self.first_frame))
+    def get_image_diff(self, image, canvas):
+        threshold = self.diff_threshold_var.get()
+
+        if self.diff_mode_var.get() == 'first':
+            ref_frame = int(self.first_frame)
+        else:
+            ref_frame = (int(self.frame) - 1
+                        if int(self.frame) > int(self.first_frame)
+                        else int(self.first_frame))
 
         diff_path = self.get_image_path(canvas.cam, ref_frame)
         diff_image = self.load_image(diff_path, canvas)
@@ -69,7 +74,7 @@ class Camera(tk.Frame):
             image = self.load_image(path, canvas)
 
             zoom = '{:.1f}'.format(canvas.image_width / self.native_image_width)
-            if self.diff_checkbutton_var.get():
+            if self.diff_mode_var.get() != 'off':
                 image, ref_frame = self.get_image_diff(image, canvas)
 
                 template = 'frame: {} zoom: {}x (diff wrt {})                  {}/{}'
@@ -270,6 +275,11 @@ class Camera(tk.Frame):
 
     # Moving forwards and backwards through image frames
     def load_frame(self, frame):
+        frame = int(frame)
+        if frame > int(self.last_frame):
+            frame = int(self.first_frame)
+        elif frame < int(self.first_frame):
+            frame = int(self.last_frame)
         self.frame = str(frame)
 
         path = self.get_image_path(0, self.frame)
