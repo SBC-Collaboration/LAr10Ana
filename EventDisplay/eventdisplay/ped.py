@@ -195,6 +195,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.reco_events = None
         self.reco_row = None
         self.bubble_events = None
+        self.bubble_t0 = {}
 
         # Initial Functions
         self.create_widgets()
@@ -491,7 +492,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                     t.extractall(self.raw_directory)
                     return True
         return False
-                
 
     # Deal with possibility that run folders are tarred
     def handle_run_folder_format(self):
@@ -504,11 +504,11 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                 self.raw_directory = self.extraction_path
                 self.logger.info('Non-empty run folder found in scratch dir')
             else:
-                #self.logger.error('Non-empty run folder does not exist. Searching for, and unzip/untarring  zip/tar version...')
+                # self.logger.error('Non-empty run folder does not exist. Searching for, and unzip/untarring  zip/tar version...')
                 archive_file_found = False
                 run_archive_path = os.path.join(self.raw_directory, self.run)
                 self.logger.info(run_archive_path)
-                #Check for tar/zip files
+                # Check for tar/zip files
                 archive_file_found = self.archive_file_helper(run_archive_path, self.extraction_path)
                 if not archive_file_found:
                     self.logger.error('zip/tar file not found.')
@@ -940,6 +940,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.reco_row = None
         self.reco_events = None
         self.bubble_events = None
+        self.bubble_t0 = {}
 
         if not self.reco_directory or not self.run:
             self.logger.error('reco directory not set in config, reco data will be disabled')
@@ -980,8 +981,48 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         if os.path.isfile(bubble_path):
             self.bubble_events = Streamer(bubble_path).data
             print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
+            self.compute_bubble_t0()
         else:
             self.logger.error('cannot find {}'.format(bubble_path))
+
+    def compute_bubble_t0(self):
+        # Bubble t0 per event is earliest bubble frame across cameras
+        # Events with a bubble at the buffer start (min frame <= 1) are skipped
+        self.bubble_t0 = {}
+        if self.bubble_events is None:
+            return
+
+        for ev in np.unique(self.bubble_events['ev']):
+            bubs = self.bubble_events[self.bubble_events['ev'] == ev]
+            cams = bubs['cam']
+            frames = bubs['frame']
+            t0_list = []
+
+            frames1 = frames[cams == 1]
+            frames2 = frames[cams == 2]
+            frames3 = frames[cams == 3]
+
+            if frames1.size != 0:
+                t0_list.append(min(frames1))
+            if frames2.size != 0:
+                t0_list.append(min(frames2))
+            if frames3.size != 0:
+                t0_list.append(min(frames3))
+
+            if not t0_list:
+                continue
+
+            if min(t0_list) > 1:
+                self.bubble_t0[int(ev)] = int(min(t0_list))
+
+    def event_has_bubble_t0(self):
+        return self.event is not None and int(self.event) in self.bubble_t0
+
+    def get_event_trig_frame(self):
+        # Priority is t0 OR rc.json OR config file trigger frame
+        if self.event_has_bubble_t0():
+            return self.bubble_t0[int(self.event)]
+        return int(self.init_frame)
 
     def do_handscan(self):
         if not os.path.exists(self.scan_directory):
@@ -1192,7 +1233,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.last_frame_button.grid(row=1, column=1, sticky='WE')
 
         self.trig_frame_button = tk.Button(self.bottom_frame_3, text='trig frame')
-        self.trig_frame_button['command'] = lambda: self.load_frame(self.init_frame)
+        self.trig_frame_button['command'] = lambda: self.load_frame(self.get_event_trig_frame())
         self.trig_frame_button.grid(row=1, column=2, sticky='WE')
 
         self.jump_frame_label = tk.Label(self.bottom_frame_3, text='jump to:')

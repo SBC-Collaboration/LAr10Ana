@@ -20,7 +20,8 @@ class Camera(tk.Frame):
         # self.load_fastDAQ_dytran()
         self.load_fastdaq_scintillation()
         self.load_fastDAQ_analysis()
-        self.frame = self.init_frame
+        self.frame = str(self.get_event_trig_frame())
+        self.trig_frame_button.config(text='t0 frame' if self.event_has_bubble_t0() else 'trig frame')
         # self.diff_checkbutton_var.set(False)
         self.invert_checkbutton_var.set(False)
 
@@ -239,6 +240,11 @@ class Camera(tk.Frame):
         if len(ev_bubbles) == 0:
             return
 
+        if int(self.frame) == self.bubble_t0.get(int(self.event), -1):
+            color = 'green' if self.invert_checkbutton_var.get() else 'yellow'
+        else:
+            color = 'red'
+
         for bub in ev_bubbles:
             if int(self.frame) != int(bub['frame']):
                 continue
@@ -260,11 +266,11 @@ class Camera(tk.Frame):
                     x = (bubble_x - canvas.crop_left / x_zoom) * x_zoom
                     y = canvas.image_height - (bubble_y + canvas.crop_bottom / y_zoom) * y_zoom
 
-                canvas.create_line(x - 11, y, x - 5, y, fill='red', tag='crosshair')
-                canvas.create_line(x + 5, y, x + 11, y, fill='red', tag='crosshair')
-                canvas.create_line(x, y - 11, x, y - 5, fill='red', tag='crosshair')
-                canvas.create_line(x, y + 5, x, y + 11, fill='red', tag='crosshair')
-                canvas.create_oval(x - 8, y - 8, x + 8, y + 8, outline='red', tag='crosshair')
+                canvas.create_line(x - 11, y, x - 5, y, fill=color, tag='crosshair')
+                canvas.create_line(x + 5, y, x + 11, y, fill=color, tag='crosshair')
+                canvas.create_line(x, y - 11, x, y - 5, fill=color, tag='crosshair')
+                canvas.create_line(x, y + 5, x, y + 11, fill=color, tag='crosshair')
+                canvas.create_oval(x - 8, y - 8, x + 8, y + 8, outline=color, tag='crosshair')
 
     def change_nbub(self):
         if self.nbub_button_var.get() > 1:
