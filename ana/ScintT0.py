@@ -56,7 +56,7 @@ def find_offset_correlation(t1_original, t2_original, bin_width=0.00001):
 def scint_t0(data):
     results = {}
 
-    results['Failed'] = False
+    results['Failed'] = 0
     results['latch_time_corrected'] = np.nan 
     results['pT0_in_scint_time'] = np.nan 
     results['biggest_pulse_pt0_20ms'] = np.nan 
@@ -85,7 +85,7 @@ def scint_t0(data):
     rising_edges = np.where((~bit0[:-1]) & (bit0[1:]))[0] + 1
 
     if len(rising_edges) == 0:
-        results['Failed'] = 'No digiscope latch found'
+        results['Failed'] = 1
         return results
         
     latch_idx = rising_edges[-1]
@@ -94,7 +94,7 @@ def scint_t0(data):
 
     caen_trig_idx = np.where(bit2)[0]
     if len(caen_trig_idx) == 0:
-        results['Failed'] = 'No digiscope triggers found'
+        results['Failed'] = 2
         return results
 
 
@@ -129,7 +129,7 @@ def scint_t0(data):
     TriggerTimeTag = _unwrap_caen_timestamp(scint_data['TriggerTimeTag'])
 
     if len(TriggerTimeTag) == 0:
-        results['Failed'] = 'No scint triggers found'
+        results['Failed'] = 3
         return results
         
     scint_livetime = (TriggerTimeTag[-1]-TriggerTimeTag[0]) / sample_rate
@@ -180,7 +180,7 @@ def scint_t0(data):
     X = digi_aligned_filtered.reshape(-1, 1)
     y = residuals_filtered
     if len(X) < 2:
-        results['Failed'] = 'Not enough points for RANSAC fit'
+        results['Failed'] = 4
         return results
         
     ransac = RANSACRegressor(LinearRegression(),
@@ -238,13 +238,13 @@ def scint_t0(data):
         pressureT0 = pressureT0_results['t0_fitting']  # ms
         
         if pressureT0 == 0:
-            results['Failed'] = 'pT0 = 0'
+            results['Failed'] = 5
             return results
             
         pt0_rel_to_trig = -1*((data['run_control']['acous']['pre_trig_len'] * 1000) - pressureT0)
     
     else:
-        results['Failed'] = 'pT0 results not found'
+        results['Failed'] = 6
         return results
 
     pressureT0_in_corrected_time = latch_time_corrected + pt0_rel_to_trig # ms
@@ -258,7 +258,7 @@ def scint_t0(data):
         scintillation_hits = data["analysis"]["scintillation"]
 
     else:
-        results['Failed'] = 'Scintillation hits results not found'
+        results['Failed'] = 7
         return results
 
 
