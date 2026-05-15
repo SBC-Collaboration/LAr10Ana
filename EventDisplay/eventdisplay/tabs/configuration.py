@@ -61,9 +61,6 @@ class Configuration(tk.Frame):
                 self.piezo_combobox.delete(0, tk.END)
                 self.piezo_combobox.insert(0, [self.piezo])
                 self.piezo_combobox.current(0)
-                # self.dytran_combobox.delete(0, tk.END)
-                # self.dytran_combobox.insert(0, [self.dytran])
-                # self.dytran_combobox.current(0)
                 self.piezo_selector_combobox.delete(0, tk.END)
                 self.piezo_selector_combobox.insert(0, [self.piezo])
                 self.piezo_selector_combobox.current(0)
@@ -222,8 +219,6 @@ class Configuration(tk.Frame):
 
         self.piezo_combobox['values'] = [self.piezo]
         self.piezo_combobox.current(0)
-        # self.dytran_combobox['values'] = [self.dytran]
-        # self.dytran_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
         self.piezo_plot_t0_checkbutton_var.set(False)
@@ -368,7 +363,6 @@ class Configuration(tk.Frame):
 
         # plc var
         self.plc_temp_var = self.plc_temp_config_entry.get()
-        self.load_plc_text()
 
         # image related vars
         self.image_orientation = self.image_orientation_select.get()
@@ -387,11 +381,9 @@ class Configuration(tk.Frame):
         # reset piezo & dytran combo boxes
         self.piezo_combobox['values'] = [self.piezo]
         self.piezo_combobox.current(0)
-        # self.dytran_combobox['values'] = [self.dytran]
-        # self.dytran_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
-        
+
         # reset other values
         self.show_all_reco_var.set(False)
         self.load_3d_bubble_data()
@@ -408,9 +400,12 @@ class Configuration(tk.Frame):
         for cam in range(0, self.num_cams):
             canvas = tk.Canvas(self.camera_tab, width=self.init_image_width, height=self.init_image_height)
             canvas.bind('<ButtonPress-1>', self.on_button_press)
+            canvas.bind('<Motion>', self.on_mouse_motion)
+            canvas.bind('<Leave>', self.on_canvas_leave)
             canvas.zoom = 0
 
             canvas.image = canvas.create_image(0, 0, anchor=tk.NW, image=None)
+            canvas.top_text = canvas.create_text(10, 20, anchor=tk.NW, fill='red')
             canvas.bottom_text = canvas.create_text(10, self.init_image_height - 20, anchor=tk.NW, text='',
                                                     fill='red')
             canvas.grid(row=0, column=1 * cam, columnspan=1, sticky='NW')

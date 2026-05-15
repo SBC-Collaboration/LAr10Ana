@@ -1,0 +1,13 @@
+name: analysis
+channels:
+  - conda-forge
+dependencies:
+  - python==3.14
+  - numpy
+  - pandas
+  - matplotlib>=3.10
+  - jupyter
+  - ipykernel
+  - pip>=25.0
+  - pip:
+      - git+https://github.com/SBC-Collaboration/SBCBinaryFormat.git@master#subdirectory=python

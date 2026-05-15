@@ -11,14 +11,14 @@ may need to add to your paths:
 # Imports
 import os
 os.umask(6)
+import json
 import re
 import time
 import getpass
 import logging
-import linecache
 import matplotlib
 import numpy as np
-from pylab import *
+import matplotlib.pyplot as plt
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
@@ -40,6 +40,7 @@ from tabs.analysis import Analysis
 from tabs.three_d_bubble import ThreeDBubble
 from tabs.scintillation import Scintillation
 from GetEvent import GetEvent
+from sbcbinaryformat import Streamer
 
 try:
     from ctypes import windll
@@ -162,6 +163,8 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.invert_checkbutton_var = tk.BooleanVar(value=False)
         self.diff_checkbutton_var = tk.BooleanVar(value=False)
         self.antialias_checkbutton_var = tk.BooleanVar(value=False)
+        self.diff_mode_var = tk.StringVar(value="off")
+        self.diff_threshold_var = tk.IntVar(value=10)
         self.load_dytran_checkbutton_var = tk.BooleanVar(value=False)
         self.piezo_plot_t0_checkbutton_var = tk.BooleanVar(value=False)
         self.load_fastDAQ_piezo_checkbutton_var = tk.BooleanVar(value=False)
@@ -191,6 +194,8 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.selected_reco_indices = None
         self.reco_events = None
         self.reco_row = None
+        self.bubble_events = None
+        self.bubble_t0 = {}
 
         # Initial Functions
         self.create_widgets()
@@ -204,23 +209,22 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         Configuration.__init__(self)
         Scintillation.__init__(self)
 
-        # self.load_reco()
-
         # Initial Functions
         self.initialize_widget_values()
         self.reset_event()
+        self.load_reco()
 
-        #Icon setup for Windows, Mac and Linux
+        # Icon setup for Windows, Mac and Linux
         try:
-           iconName = 'PICO'
-           windowSystem = self.master.tk.call("tk", "windowingsystem")
-           if windowSystem == "x11" or windowSystem =='aqua': # Unix and Mac
-               iconName = iconName + ".gif"
-               iconImage = tk.PhotoImage(file=os.path.join(self.ped_directory, iconName))
-               ROOT.call('wm', 'iconphoto', ROOT._w, iconImage)
-           else: # Windows
-               iconName += ".ico"
-               ROOT.iconbitmap(os.path.join(self.ped_directory, iconName))
+            iconName = 'PICO'
+            windowSystem = self.master.tk.call("tk", "windowingsystem")
+            if windowSystem == "x11" or windowSystem =='aqua': # Unix and Mac
+                iconName = iconName + ".gif"
+                iconImage = tk.PhotoImage(file=os.path.join(self.ped_directory, iconName))
+                ROOT.call('wm', 'iconphoto', ROOT._w, iconImage)
+            else: # Windows
+                iconName += ".ico"
+                ROOT.iconbitmap(os.path.join(self.ped_directory, iconName))
         except:
             print('Unable to add PICO icon to GUI')
 
@@ -246,27 +250,15 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
         # Click on Log Viewer Tab
         if tab_clicked == 3 or tab_clicked == 'Log Viewer':
-            # Show Log Viewer Widgets
+            self.bottom_bar.grid_remove()
             self.bottom_frame_5.grid(row=1, column=0, sticky='NW')
             self.fra2.pack(side='top')
-
-            # Hide Other Bottom Frames
-            self.bottom_frame_1.grid_remove()
-            self.bottom_frame_2.grid_remove()
-            self.bottom_frame_3.grid_remove()
-            self.bottom_frame_4.grid_remove()
         elif tab_clicked == '':
             return
         else:
-            # Show Other Bottom Frames
-            self.bottom_frame_1.grid(row=1, column=0, sticky='NW')
-            self.bottom_frame_2.grid(row=1, column=1, sticky='NW')
-            self.bottom_frame_3.grid(row=1, column=2, sticky='NW')
-            self.bottom_frame_4.grid(row=1, column=3, sticky='NW')
-
-            # Hide Log Viewer Widgets
             self.bottom_frame_5.grid_remove()
             self.fra2.pack_forget()
+            self.bottom_bar.grid(row=1, column=0, sticky='NW')
 
     def initialize_widget_values(self):
         values = sorted(self.reco_events.dtype.names) if self.reco_events is not None else ('')
@@ -275,8 +267,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.ped_config_file_path_combobox['values'] = self.get_configs()
         self.piezo_combobox['values'] = [self.piezo]
         self.piezo_combobox.current(0)
-        # self.dytran_combobox['values'] = [self.dytran]
-        # self.dytran_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
         if os.path.isfile(self.ped_config_file_path_var):
@@ -295,7 +285,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
     # reads config file and sets given values, otherwise sets default values
     def load_config_values(self, path):
-        values = [None] * 16
+        values = [None] * 17
 
         defaults = []
         defaults.insert(0, str(self.raw_init_directory))
@@ -314,6 +304,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         defaults.insert(13, '500')
         defaults.insert(14, '1000')
         defaults.insert(15, '500')
+        defaults.insert(16, '')
 
         if os.path.isfile(path):
             f = open(path)
@@ -336,7 +327,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.raw_init_directory = str(self._resolve_path(values[0]))
         self.raw_directory = self.raw_init_directory
         # Order matters here, we need to try removing -daqdata first, then -data
-        self.dataset = os.path.basename(self.raw_init_directory).removesuffix('-daqdata').removesuffix('-data')
+        self.dataset = os.path.basename(self.raw_init_directory).removesuffix('-daqdata').removesuffix('-data').removesuffix('-unpacked')
 
         # Relative directories
         self.scan_directory = str(self._resolve_path(f"scan_output_{self.dataset}"))
@@ -359,6 +350,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.radius = values[13]
         self.positive_z = values[14]
         self.negative_z = values[15]
+        self.reco_directory = str(self._resolve_path(values[16])) if values[16] else ''
         self.frame = self.init_frame
 
         self.base_directory = os.path.dirname(self.raw_init_directory)
@@ -369,11 +361,11 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.reco_row = None
         self.row_index = -1
         self.zip_flag = False
-        self.increment_event(1)
 
-        # Change run to init_run, if starting run is set
         if self.init_run != '':
             self.load_run(self.init_run, 0)
+        else:
+            self.increment_event(1)
 
     def get_raw_events(self):
         # print('raw path: ', self.raw_directory, '\n')
@@ -384,34 +376,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             try:
                 os.system("python \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_raw_to_npy_run_by_run.py"), self.raw_directory, self.npy_directory))
                 os.system("python \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "merge_raw_run_npy.py"), self.npy_directory))
-                # reco_path = os.path.join(self.npy_directory, self.reco_filename)
-                # if not os.path.isfile(reco_path):
-                #     reco_response = messagebox.askyesno('No raw_event.npy or reco_events.npy files found', 'NPY files being created now. \nWould you like to select a reco_events file?')
-                #     if reco_response == 0:
-                #         merged_all_response = messagebox.askyesno('Create a reco_events.npy file?', 'Would you like to select a merged_all file to create reco data?')
-                #         if merged_all_response == 0:
-                #             self.get_raw_events()
-                #         else:
-                #             merged_all = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a merged_all File", filetypes = (("Text files", "*.txt*"), ("all files", "*.*")))
-                #             os.system("python \"{}\" \"{}\" \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_reco_to_npy_and_reindex_raw_npy.py"), self.npy_directory, self.npy_directory, merged_all, user_date))
-                #             self.reco_filename = 'reco_events_{}.npy'.format(user_date)
-                #     else:
-                #         reco_filename = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a reco_events File", filetypes = (("NPY Files", "*.npy*"), ("all files", "*.*")))
-                #         if os.path.isfile(reco_filename):
-                #             reco_directory = os.path.split(reco_filename)[0]
-                #             if os.path.normpath(reco_directory) == os.path.normpath(self.npy_directory):
-                #                 self.reco_filename = os.path.split(reco_filename)[1]
-                #             else:
-                #                 directory_response = messagebox.askyesno('Selected File Not in NPY Directory', 'Current Dataset is: {}. \nSelected reco file is not in the NPY Directory for the current dataset. \nWould you still like to use the selected reco_events file?'.format(self.dataset))
-                #                 if directory_response == 1:
-                #                     self.reco_filename = os.path.split(reco_filename)[1]
-                #                 else:
-                #                     self.get_raw_events()
-                #         else:
-                #             self.get_raw_events()
-                #         self.reco_filename = os.path.split(reco_filename)[1]
-                # else:
-                #     messagebox.showinfo('No raw_events.npy file found', 'NPY files being created now. \nreco_event.npy file found. Reco data will be loaded from npy directory')
             except FileNotFoundError:
                 # this error should be handled when it crops up in the code
                 raise FileNotFoundError
@@ -485,54 +449,18 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         try:
             event_info = GetEvent(self.path, self.event, *selected)["event_info"]
             livetime = event_info["ev_livetime"][0]
-            pset = event_info["pset"][0]
+            pset = event_info.get("pset", event_info.get("pset_lo", [float("nan")]))[0]
             trigger_source = event_info["trigger_source"][0]
 
             self.trigger_type_label.set(f'trig: {trigger_source}')
             self.pset_label.set(f'pset: {pset:.1f}')
             self.livetime_label.set(f'lt: {livetime:.1f}')
 
-        except:
+        except Exception as e:
             self.trigger_type_label.set('trigger: N/A')
             self.pset_label.set('pset: N/A')
             self.livetime_label.set('lt: N/A')
-            self.error += 'cannot find event_info.sbc\n'
-
-    def plc_text_zip_loader(self, path:str) -> None:
-        with self.zipped_event.open(path) as file:
-            try:
-                fields = file.readline()
-                fields = file.readline().split()
-                fields = [field.decode() for field in fields]
-                index = fields.index(self.plc_temp_var)
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline().split()
-                entries = [entry.decode() for entry in entries]
-                self.temp_label.set(self.plc_temp_var + ': {:.1f}'.format(float(entries[index])))
-            except:
-                self.error += 'cannot find ' + self.plc_temp_var + ' in PLC log file (via zip)\n'
-                self.temp_label.set(self.plc_temp_var + ': N/A')
-
-    def load_plc_text(self):
-        return
-        if self.zip_flag:
-            path = os.path.join(self.run, str(self.event), 'PLClog.txt')
-            self.plc_text_zip_loader(path)
-        else:
-            path = os.path.join(self.raw_directory, self.run, str(self.event), 'PLClog.txt')
-            try:
-                fields = linecache.getline(path, 2).split()
-                index = fields.index(self.plc_temp_var)
-                entries = linecache.getline(path, 7).split()
-                self.temp_label.set(self.plc_temp_var + ': {:.1f}'.format(float(entries[index])))
-                #print(f'fields: {fields}\n index: {index}\n entries:{entries}\n')
-            except ValueError:
-                self.temp_label.set(self.plc_temp_var + ': N/A')
-                self.error += 'cannot find ' + self.plc_temp_var + ' in PLC log file\n'
+            self.error += f'event_info error: {e}\n'
 
     def archive_file_helper(self, run_path:str, extract_path:str) -> bool:
         """helper function to find and extract zip and tarfiles
@@ -555,7 +483,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             #zipfile.ZipFile(test_path).extractall(self.raw_directory )
             return True
         else:
-            tar_postfixes = ['.tar', '.tar.gz', '.tgz']
             for ext in tar_postfixes:
                 test_path = run_path + ext
                 if os.path.exists(test_path):
@@ -565,7 +492,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                     t.extractall(self.raw_directory)
                     return True
         return False
-                
 
     # Deal with possibility that run folders are tarred
     def handle_run_folder_format(self):
@@ -573,16 +499,16 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.raw_directory = self.raw_init_directory
         run_folder_path = os.path.join(self.raw_directory, self.run)
         if not os.path.exists(run_folder_path):
-            run_scratch_path = os.path.join(self.extraction_path, self.run, '0', 'Event.txt')
-            if os.path.exists(run_scratch_path):
+            run_scratch_path = os.path.join(self.extraction_path, self.run, '0')
+            if os.path.isdir(run_scratch_path):
                 self.raw_directory = self.extraction_path
                 self.logger.info('Non-empty run folder found in scratch dir')
             else:
-                #self.logger.error('Non-empty run folder does not exist. Searching for, and unzip/untarring  zip/tar version...')
+                # self.logger.error('Non-empty run folder does not exist. Searching for, and unzip/untarring  zip/tar version...')
                 archive_file_found = False
                 run_archive_path = os.path.join(self.raw_directory, self.run)
                 self.logger.info(run_archive_path)
-                #Check for tar/zip files
+                # Check for tar/zip files
                 archive_file_found = self.archive_file_helper(run_archive_path, self.extraction_path)
                 if not archive_file_found:
                     self.logger.error('zip/tar file not found.')
@@ -600,6 +526,18 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                 self.row_index = self.get_row(self.raw_events)
         self.load_reco_row()
 
+    def get_runcontrol_frames(self):
+        try:
+            rc_path = os.path.join(self.raw_directory, self.run, 'rc.json')
+            with open(rc_path) as f:
+                rc = json.load(f)
+            cam = rc['cams']['cam1']
+            self.init_frame = cam['buffer_len'] - cam['post_trig']
+            self.last_frame = cam['buffer_len'] - 1    
+            self.frame = self.init_frame
+        except Exception:
+            pass
+
     def load_run(self, run, event):
         if run == self.run and event == self.event:
             self.logger.info('no action taken (run and event are unchanged)')
@@ -614,6 +552,8 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.run = run
             if self.run != prevrun:
                 self.handle_run_folder_format()
+                self.get_runcontrol_frames()
+                self.load_reco()
             self.event = event
 
             if self.selected_events is None:
@@ -751,6 +691,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.run = run
             if self.run != prevrun:
                 self.handle_run_folder_format()
+                self.load_reco()
             self.event = event
             self.reco_row = None
             self.row_index = self.get_row(self.selected_events) - 1
@@ -832,6 +773,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.run = run
             if self.run != prevrun:
                 self.handle_run_folder_format()
+                self.load_reco()
             self.event = event
             self.reco_row = None
             self.row_index = self.get_row(self.selected_events) - 1
@@ -865,45 +807,21 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             # here the row index is the index relative to the selected event list
             self.reco_row = self.selected_events[self.row_index]
         else:
-            # here the row index is the index relative to the raw event list
-            reco_index_fast = self.raw_events[self.row_index]['reco index']
-            reco_index = self.get_row(self.reco_events)    # should give same result as above, but slower
-            if reco_index_fast != reco_index:
-                print('fast reco index is wrong: ')
-                print(' slow reco index: ', reco_index)
-                print(' fast reco index: ', reco_index_fast)
-            if reco_index >= 0:
-                self.reco_row = self.reco_events[reco_index]
-            else:
+            rows = np.argwhere(self.reco_events['ev'] == self.event).ravel()
+            print('load_reco_row: ev={}, rows found={}'.format(self.event, rows))
+            if len(rows) == 0:
                 self.reco_row = None
                 self.toggle_reco_widgets(state=tk.DISABLED)
                 for _, text, _ in self.display_vars:
                     text.set('N/A')
                 return
-            # print('reco_index: ', str(reco_index))
 
-        if ibub:
-            # print('  reco.run: ', self.reco_row['run'])
-            # print('  reco.ev: ', self.reco_row['ev'])
-            # print('  nbub: ', self.reco_row['nbub'])
-            offset = ibub - 1 if ibub > 1 else 0
-            if self.selected_reco_indices is not None:
-                # print('sel reco indices: ', self.selected_reco_indices)
-                row_fast_selection = self.selected_reco_indices[self.row_index]
-            else:
-                row_fast_selection = self.raw_events[self.row_index]['reco index']
-            row = self.get_row(self.reco_events)     # should give same result as above, but slower
-            if row_fast_selection != row:
-                print('fast row index is wrong: ')
-                print(' slow row index: ', row)
-                print(' fast row selection index: ', row_fast_selection)
-                print('   raw row index: ', self.row_index)
-                print('   ibub: ', ibub)
-                print('   offset: ', offset)
-            self.reco_row = self.reco_events[row + int(offset)]
-            # print('  ->reco.run: ', self.reco_row['run'])
-            # print('  ->reco.ev: ', self.reco_row['ev'])
-            # print('  ->nbub: ', self.reco_row['nbub'])
+            reco_index = rows[0]
+            if ibub:
+                offset = ibub - 1 if ibub > 1 else 0
+                reco_index = rows[0] + int(offset)
+
+            self.reco_row = self.reco_events[reco_index]
 
         self.toggle_reco_widgets(state=tk.NORMAL)
         for label, text, _ in self.display_vars:
@@ -955,6 +873,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.run = events[self.row_index]['run']
         if self.run != prevrun:
             self.handle_run_folder_format()
+            self.load_reco()
         self.event = events[self.row_index]['ev']
 
         self.update_run_entry()
@@ -1020,10 +939,20 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
     def load_reco(self):
         self.reco_row = None
         self.reco_events = None
+        self.bubble_events = None
+        self.bubble_t0 = {}
 
-        path = os.path.join(self.npy_directory, self.reco_filename)
+        if not self.reco_directory or not self.run:
+            self.logger.error('reco directory not set in config, reco data will be disabled')
+            self.reco_availability_label.config(text='Not Loaded')
+            self.toggle_reco_widgets(state=tk.DISABLED)
+            for _, text, _ in self.display_vars:
+                text.set('N/A')
+            return
+
+        path = os.path.join(self.reco_directory, 'dev-output', self.run, 'reco.sbc')
         if not os.path.isfile(path):
-            self.logger.error('cannot find {}, reco data will be disabled'.format(self.reco_filename))
+            self.logger.error('cannot find {}, reco data will be disabled'.format(path))
             self.reco_availability_label.config(text='Not Loaded')
             self.toggle_reco_widgets(state=tk.DISABLED)
             for _, text, _ in self.display_vars:
@@ -1032,12 +961,68 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
         self.logger.info('using reco data from {}'.format(path))
 
-        events = np.load(path)
+        events = Streamer(path).data
         if len(events) == 0:
-            self.logger.error('could not find raw data for any reco events')
+            self.logger.error('no reco events found in {}'.format(path))
             return
 
-        self.reco_events = events
+        # convert coords_3D array field into scalar X, Y, Z for widgets
+        new_dtype = np.dtype([('X', '<f8'), ('Y', '<f8'), ('Z', '<f8'), ('ev', '<i4')])
+        coordinates = np.zeros(len(events), dtype=new_dtype)
+        coordinates['X'] = events['coords_3D'][:, 0]
+        coordinates['Y'] = events['coords_3D'][:, 1]
+        coordinates['Z'] = events['coords_3D'][:, 2]
+        coordinates['ev'] = events['ev']
+        self.reco_events = coordinates
+        print('reco loaded: {} rows, fields: {}'.format(len(self.reco_events), self.reco_events.dtype.names))
+        self.add_display_var_combobox['values'] = sorted(self.reco_events.dtype.names)
+
+        bubble_path = os.path.join(self.reco_directory, 'dev-output', self.run, 'bubble.sbc')
+        if os.path.isfile(bubble_path):
+            self.bubble_events = Streamer(bubble_path).data
+            print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
+            self.compute_bubble_t0()
+        else:
+            self.logger.error('cannot find {}'.format(bubble_path))
+
+    def compute_bubble_t0(self):
+        # Bubble t0 per event is earliest bubble frame across cameras
+        # Events with a bubble at the buffer start (min frame <= 1) are skipped
+        self.bubble_t0 = {}
+        if self.bubble_events is None:
+            return
+
+        for ev in np.unique(self.bubble_events['ev']):
+            bubs = self.bubble_events[self.bubble_events['ev'] == ev]
+            cams = bubs['cam']
+            frames = bubs['frame']
+            t0_list = []
+
+            frames1 = frames[cams == 1]
+            frames2 = frames[cams == 2]
+            frames3 = frames[cams == 3]
+
+            if frames1.size != 0:
+                t0_list.append(min(frames1))
+            if frames2.size != 0:
+                t0_list.append(min(frames2))
+            if frames3.size != 0:
+                t0_list.append(min(frames3))
+
+            if not t0_list:
+                continue
+
+            if min(t0_list) > 1:
+                self.bubble_t0[int(ev)] = int(min(t0_list))
+
+    def event_has_bubble_t0(self):
+        return self.event is not None and int(self.event) in self.bubble_t0
+
+    def get_event_trig_frame(self):
+        # Priority is t0 OR rc.json OR config file trigger frame
+        if self.event_has_bubble_t0():
+            return self.bubble_t0[int(self.event)]
+        return int(self.init_frame)
 
     def do_handscan(self):
         if not os.path.exists(self.scan_directory):
@@ -1113,20 +1098,21 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         # Function to Run When Clicking Tabs
         self.notebook.bind('<Button-1>', self.click_tab)
 
-        self.notebook.grid(row=0, column=0, columnspan=5)
+        self.notebook.grid(row=0, column=0)
 
         # Setup frames to be used on the bottom
+        self.bottom_bar = tk.Frame(self.scbframe)
+        self.bottom_bar.grid(row=1, column=0, sticky='NW')
 
-        self.bottom_frame_1 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)
-        self.bottom_frame_1.grid(row=1, column=0, sticky='NW')
-        self.bottom_frame_2 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)
-        self.bottom_frame_2.grid(row=1, column=1, sticky='NW')
-        self.bottom_frame_3 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)
-        self.bottom_frame_3.grid(row=1, column=2, sticky='NW')
-        self.bottom_frame_4 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)
-        self.bottom_frame_4.grid(row=1, column=3, sticky='NW')
-        self.bottom_frame_5 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)  # Frame for Log Navigation
-        self.bottom_frame_5.grid(row=1, column=0, sticky='NW')  # Frame for Log Navigation
+        self.bottom_frame_1 = tk.Frame(self.bottom_bar, bd=5, relief=tk.SUNKEN)
+        self.bottom_frame_1.pack(side='left', anchor='nw')
+        self.bottom_frame_2 = tk.Frame(self.bottom_bar, bd=5, relief=tk.SUNKEN)
+        self.bottom_frame_2.pack(side='left', anchor='nw')
+        self.bottom_frame_3 = tk.Frame(self.bottom_bar, bd=5, relief=tk.SUNKEN)
+        self.bottom_frame_3.pack(side='left', anchor='nw')
+        self.bottom_frame_4 = tk.Frame(self.bottom_bar, bd=5, relief=tk.SUNKEN)
+        self.bottom_frame_4.pack(side='left', anchor='nw')
+        self.bottom_frame_5 = tk.Frame(self.scbframe, bd=5, relief=tk.SUNKEN)  # Log Navigation
 
         self.run_label = tk.Label(self.bottom_frame_1, text='run:')
         self.run_label.grid(row=1, column=0, sticky='WE')
@@ -1151,11 +1137,11 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                                        command=lambda: self.increment_event(1))
         self.forward_event.grid(row=2, column=2, columnspan=2, sticky='WE')
 
-        self.back_1000events_button = tk.Button(self.bottom_frame_1, text='back 1000 events')
+        self.back_1000events_button = tk.Button(self.bottom_frame_1, text='back 1k events')
         self.back_1000events_button['command'] = lambda: self.increment_event(-1000)
         self.back_1000events_button.grid(row=3, column=0, columnspan=2, sticky='WE')
 
-        self.forward_1000events_button = tk.Button(self.bottom_frame_1, text='forward 1000 events')
+        self.forward_1000events_button = tk.Button(self.bottom_frame_1, text='forward 1k events')
         self.forward_1000events_button['command'] = lambda: self.increment_event(1000)
         self.forward_1000events_button.grid(row=3, column=2, columnspan=2, sticky='WE')
 
@@ -1192,7 +1178,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.apply_file_cuts_button.grid(row=7, column=2, columnspan=2, sticky='WE')
 
         self.use_cut_file_checkbutton = tk.Checkbutton(self.bottom_frame_1,
-            text='Use Cut File?',
+            text='Use Cut',
             variable=self.use_cut_file_checkbutton_var,
             command=self.use_cut_file)
         self.use_cut_file_checkbutton.grid(row=7, column=4, sticky='WE')
@@ -1247,45 +1233,74 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.last_frame_button.grid(row=1, column=1, sticky='WE')
 
         self.trig_frame_button = tk.Button(self.bottom_frame_3, text='trig frame')
-        self.trig_frame_button['command'] = lambda: self.load_frame(self.init_frame)
+        self.trig_frame_button['command'] = lambda: self.load_frame(self.get_event_trig_frame())
         self.trig_frame_button.grid(row=1, column=2, sticky='WE')
 
-        self.antialias_checkbutton = tk.Checkbutton(self.bottom_frame_3,
+        self.jump_frame_label = tk.Label(self.bottom_frame_3, text='jump to:')
+        self.jump_frame_label.grid(row=2, column=0, sticky='W')
+
+        self.jump_frame_entry = tk.Entry(self.bottom_frame_3, width=5)
+        self.jump_frame_entry.grid(row=2, column=1, sticky='WE')
+        self.jump_frame_entry.bind('<Return>', lambda e: self.load_frame(self.jump_frame_entry.get()))
+
+        self.jump_frame_button = tk.Button(self.bottom_frame_3, text='Go',
+            command=lambda: self.load_frame(self.jump_frame_entry.get()))
+        self.jump_frame_button.grid(row=2, column=2, sticky='WE')
+
+        self.image_options_frame = tk.LabelFrame(self.bottom_frame_3, text='Image Options', padx=4, pady=4)
+        self.image_options_frame.grid(row=3, column=0, columnspan=3, sticky='WE', pady=(4, 0))
+
+        self.antialias_checkbutton = tk.Checkbutton(self.image_options_frame,
             text='antialias',
             variable=self.antialias_checkbutton_var,
             command=self.update_images)
-        self.antialias_checkbutton.grid(row=2, column=0, sticky='WE')
+        self.antialias_checkbutton.grid(row=0, column=0, sticky='W')
 
-        self.diff_checkbutton = tk.Checkbutton(self.bottom_frame_3,
-            text='diff frame',
-            variable=self.diff_checkbutton_var,
-            command=self.update_images)
-        self.diff_checkbutton.grid(row=2, column=1, sticky='WE')
-
-        self.invert_checkbutton = tk.Checkbutton(self.bottom_frame_3,
+        self.invert_checkbutton = tk.Checkbutton(self.image_options_frame,
             text='invert',
             variable=self.invert_checkbutton_var,
             command=self.update_images)
-        self.invert_checkbutton.grid(row=2, column=2, sticky='WE')
+        self.invert_checkbutton.grid(row=0, column=1, sticky='W')
 
-        self.draw_crosshairs_button = tk.Checkbutton(self.bottom_frame_3,
-            text='draw crosshairs',
+        self.draw_crosshairs_button = tk.Checkbutton(self.image_options_frame,
+            text='crosshairs',
             variable=self.draw_crosshairs_var,
             command=self.draw_crosshairs,
             state=tk.DISABLED)
-        self.draw_crosshairs_button.grid(row=3, column=0, sticky='WE')
+        self.draw_crosshairs_button.grid(row=0, column=2, sticky='W')
 
-        self.make_video_button = tk.Button(self.bottom_frame_3,
-            text='make video',
-            command=self.make_video)
-        self.make_video_button.grid(row=4, column=0, sticky='WE')
+        self.diff_off_radio = tk.Radiobutton(self.image_options_frame,
+            text='no diff',
+            variable=self.diff_mode_var,
+            value='off',
+            command=self.update_images)
+        self.diff_off_radio.grid(row=1, column=0, sticky='W')
 
-        self.make_video_label = tk.Label(self.bottom_frame_3, text="cam")
-        self.make_video_label.grid(row=4, column=1, sticky='WE')
+        self.diff_prev_radio = tk.Radiobutton(self.image_options_frame,
+            text='diff prev',
+            variable=self.diff_mode_var,
+            value='prev',
+            command=self.update_images)
+        self.diff_prev_radio.grid(row=1, column=1, sticky='W')
 
-        self.make_video_entry = tk.Entry(self.bottom_frame_3, width=10)
-        self.make_video_entry.insert(0, '0')
-        self.make_video_entry.grid(row=4, column=2, sticky='WE')
+        self.diff_first_radio = tk.Radiobutton(self.image_options_frame,
+            text='diff first',
+            variable=self.diff_mode_var,
+            value='first',
+            command=self.update_images)
+        self.diff_first_radio.grid(row=1, column=2, sticky='W')
+
+        self.diff_threshold_label = tk.Label(self.image_options_frame, text='threshold:')
+        self.diff_threshold_label.grid(row=2, column=0, sticky='W')
+
+        self.diff_threshold_entry = tk.Entry(self.image_options_frame,
+            textvariable=self.diff_threshold_var, width=5)
+        self.diff_threshold_entry.grid(row=2, column=1, sticky='W')
+        self.diff_threshold_entry.bind('<Return>', lambda e: self.update_images())
+
+        self.diff_threshold_button = tk.Button(self.image_options_frame, text='apply',
+            command=self.update_images)
+        self.diff_threshold_button.grid(row=2, column=2, sticky='W')
 
         self.do_handscan_checkbutton = tk.Checkbutton(self.bottom_frame_4,
             text='do handscan',
