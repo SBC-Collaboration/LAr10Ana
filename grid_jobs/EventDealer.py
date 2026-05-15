@@ -21,6 +21,8 @@ from ana.BubbleFinder import BubbleFinder as bf
 from ana.Reconstruction3D import reconstruct_2D_to_3D as reco
 from ana.PressureT0 import PressureT0Finding as pt0
 from ana.SlowDAQTexpansion import SlowDAQTexpansionFinding as t_exp
+from ana.AcousticNoise import acoustic_noise as acousN
+from ana.ScintT0 import scint_t0 as st0
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
@@ -35,7 +37,9 @@ ANALYSES = {
     "bubble": bf,
     "reco": reco,
     "pressure_t0": pt0,
-    "t_expansion": t_exp
+    "t_expansion": t_exp,
+    "acoustic_noise": acousN,
+    "scint_t0": st0
 }
 
 def BuildEventList(rundir, maxevt=-1):
@@ -152,6 +156,12 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             elif p == "t_expansion" and not data["slow_daq"]["loaded"]:
                 print(f"Skipping {p} analysis -- slow_daq data not loaded.")
                 continue
+            elif p == "acoustic_noise" and not data["acoustics"]["loaded"]:
+                print(f"Skipping {p} analysis -- acoustic data not loaded.")
+                continue
+            elif p == "scint_t0" and not data["scintillation"]["loaded"]:
+                print(f"Skipping {p} analysis -- scintillation data not loaded.")
+                continue
 
             try:
                 result = ANALYSES[p](data, **parameter_config[p])
@@ -192,11 +202,12 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             # Write to file
             column_names = list(result.keys())
             writers[p].write(dict([(c, np.squeeze(result[c])) for c in column_names]))
+    
             del result
             
             et = time.time() - t1
             print(('%s analysis:  ' % p).rjust(35) + f"{et:.6f} seconds")
-        
+    
         del data
         gc.collect()
 
@@ -214,7 +225,8 @@ if __name__ == "__main__":
         ProcessSingleRun(
             rundir=sys.argv[1],
             recondir=sys.argv[2],
-            process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco", "pressure_t0", "t_expansion"])
+            process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco", "pressure_t0", "t_expansion",
+                            "acoustic_noise, scint_t0"])
     else:
         ProcessSingleRun(
             rundir="/exp/e961/data/SBC-25-daqdata/20260221_0.tar",
