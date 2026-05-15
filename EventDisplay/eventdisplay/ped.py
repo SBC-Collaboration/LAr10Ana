@@ -16,10 +16,9 @@ import re
 import time
 import getpass
 import logging
-import linecache
 import matplotlib
 import numpy as np
-from pylab import *
+import matplotlib.pyplot as plt
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
@@ -196,6 +195,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.reco_events = None
         self.reco_row = None
         self.bubble_events = None
+        self.bubble_t0 = {}
 
         # Initial Functions
         self.create_widgets()
@@ -267,8 +267,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.ped_config_file_path_combobox['values'] = self.get_configs()
         self.piezo_combobox['values'] = [self.piezo]
         self.piezo_combobox.current(0)
-        # self.dytran_combobox['values'] = [self.dytran]
-        # self.dytran_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
         if os.path.isfile(self.ped_config_file_path_var):
@@ -378,34 +376,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             try:
                 os.system("python \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_raw_to_npy_run_by_run.py"), self.raw_directory, self.npy_directory))
                 os.system("python \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "merge_raw_run_npy.py"), self.npy_directory))
-                # reco_path = os.path.join(self.npy_directory, self.reco_filename)
-                # if not os.path.isfile(reco_path):
-                #     reco_response = messagebox.askyesno('No raw_event.npy or reco_events.npy files found', 'NPY files being created now. \nWould you like to select a reco_events file?')
-                #     if reco_response == 0:
-                #         merged_all_response = messagebox.askyesno('Create a reco_events.npy file?', 'Would you like to select a merged_all file to create reco data?')
-                #         if merged_all_response == 0:
-                #             self.get_raw_events()
-                #         else:
-                #             merged_all = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a merged_all File", filetypes = (("Text files", "*.txt*"), ("all files", "*.*")))
-                #             os.system("python \"{}\" \"{}\" \"{}\" \"{}\" \"{}\"".format(os.path.join(self.ped_directory, "convert_reco_to_npy_and_reindex_raw_npy.py"), self.npy_directory, self.npy_directory, merged_all, user_date))
-                #             self.reco_filename = 'reco_events_{}.npy'.format(user_date)
-                #     else:
-                #         reco_filename = filedialog.askopenfilename(initialdir = self.npy_directory, title = "Select a reco_events File", filetypes = (("NPY Files", "*.npy*"), ("all files", "*.*")))
-                #         if os.path.isfile(reco_filename):
-                #             reco_directory = os.path.split(reco_filename)[0]
-                #             if os.path.normpath(reco_directory) == os.path.normpath(self.npy_directory):
-                #                 self.reco_filename = os.path.split(reco_filename)[1]
-                #             else:
-                #                 directory_response = messagebox.askyesno('Selected File Not in NPY Directory', 'Current Dataset is: {}. \nSelected reco file is not in the NPY Directory for the current dataset. \nWould you still like to use the selected reco_events file?'.format(self.dataset))
-                #                 if directory_response == 1:
-                #                     self.reco_filename = os.path.split(reco_filename)[1]
-                #                 else:
-                #                     self.get_raw_events()
-                #         else:
-                #             self.get_raw_events()
-                #         self.reco_filename = os.path.split(reco_filename)[1]
-                # else:
-                #     messagebox.showinfo('No raw_events.npy file found', 'NPY files being created now. \nreco_event.npy file found. Reco data will be loaded from npy directory')
             except FileNotFoundError:
                 # this error should be handled when it crops up in the code
                 raise FileNotFoundError
@@ -492,42 +462,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.livetime_label.set('lt: N/A')
             self.error += f'event_info error: {e}\n'
 
-    def plc_text_zip_loader(self, path:str) -> None:
-        with self.zipped_event.open(path) as file:
-            try:
-                fields = file.readline()
-                fields = file.readline().split()
-                fields = [field.decode() for field in fields]
-                index = fields.index(self.plc_temp_var)
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline()
-                entries = file.readline().split()
-                entries = [entry.decode() for entry in entries]
-                self.temp_label.set(self.plc_temp_var + ': {:.1f}'.format(float(entries[index])))
-            except:
-                self.error += 'cannot find ' + self.plc_temp_var + ' in PLC log file (via zip)\n'
-                self.temp_label.set(self.plc_temp_var + ': N/A')
-
-    def load_plc_text(self):
-        return
-        if self.zip_flag:
-            path = os.path.join(self.run, str(self.event), 'PLClog.txt')
-            self.plc_text_zip_loader(path)
-        else:
-            path = os.path.join(self.raw_directory, self.run, str(self.event), 'PLClog.txt')
-            try:
-                fields = linecache.getline(path, 2).split()
-                index = fields.index(self.plc_temp_var)
-                entries = linecache.getline(path, 7).split()
-                self.temp_label.set(self.plc_temp_var + ': {:.1f}'.format(float(entries[index])))
-                #print(f'fields: {fields}\n index: {index}\n entries:{entries}\n')
-            except ValueError:
-                self.temp_label.set(self.plc_temp_var + ': N/A')
-                self.error += 'cannot find ' + self.plc_temp_var + ' in PLC log file\n'
-
     def archive_file_helper(self, run_path:str, extract_path:str) -> bool:
         """helper function to find and extract zip and tarfiles
 
@@ -549,7 +483,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             #zipfile.ZipFile(test_path).extractall(self.raw_directory )
             return True
         else:
-            tar_postfixes = ['.tar', '.tar.gz', '.tgz']
             for ext in tar_postfixes:
                 test_path = run_path + ext
                 if os.path.exists(test_path):
@@ -559,7 +492,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                     t.extractall(self.raw_directory)
                     return True
         return False
-                
 
     # Deal with possibility that run folders are tarred
     def handle_run_folder_format(self):
@@ -572,11 +504,11 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                 self.raw_directory = self.extraction_path
                 self.logger.info('Non-empty run folder found in scratch dir')
             else:
-                #self.logger.error('Non-empty run folder does not exist. Searching for, and unzip/untarring  zip/tar version...')
+                # self.logger.error('Non-empty run folder does not exist. Searching for, and unzip/untarring  zip/tar version...')
                 archive_file_found = False
                 run_archive_path = os.path.join(self.raw_directory, self.run)
                 self.logger.info(run_archive_path)
-                #Check for tar/zip files
+                # Check for tar/zip files
                 archive_file_found = self.archive_file_helper(run_archive_path, self.extraction_path)
                 if not archive_file_found:
                     self.logger.error('zip/tar file not found.')
@@ -1008,6 +940,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.reco_row = None
         self.reco_events = None
         self.bubble_events = None
+        self.bubble_t0 = {}
 
         if not self.reco_directory or not self.run:
             self.logger.error('reco directory not set in config, reco data will be disabled')
@@ -1048,8 +981,48 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         if os.path.isfile(bubble_path):
             self.bubble_events = Streamer(bubble_path).data
             print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
+            self.compute_bubble_t0()
         else:
             self.logger.error('cannot find {}'.format(bubble_path))
+
+    def compute_bubble_t0(self):
+        # Bubble t0 per event is earliest bubble frame across cameras
+        # Events with a bubble at the buffer start (min frame <= 1) are skipped
+        self.bubble_t0 = {}
+        if self.bubble_events is None:
+            return
+
+        for ev in np.unique(self.bubble_events['ev']):
+            bubs = self.bubble_events[self.bubble_events['ev'] == ev]
+            cams = bubs['cam']
+            frames = bubs['frame']
+            t0_list = []
+
+            frames1 = frames[cams == 1]
+            frames2 = frames[cams == 2]
+            frames3 = frames[cams == 3]
+
+            if frames1.size != 0:
+                t0_list.append(min(frames1))
+            if frames2.size != 0:
+                t0_list.append(min(frames2))
+            if frames3.size != 0:
+                t0_list.append(min(frames3))
+
+            if not t0_list:
+                continue
+
+            if min(t0_list) > 1:
+                self.bubble_t0[int(ev)] = int(min(t0_list))
+
+    def event_has_bubble_t0(self):
+        return self.event is not None and int(self.event) in self.bubble_t0
+
+    def get_event_trig_frame(self):
+        # Priority is t0 OR rc.json OR config file trigger frame
+        if self.event_has_bubble_t0():
+            return self.bubble_t0[int(self.event)]
+        return int(self.init_frame)
 
     def do_handscan(self):
         if not os.path.exists(self.scan_directory):
@@ -1260,7 +1233,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.last_frame_button.grid(row=1, column=1, sticky='WE')
 
         self.trig_frame_button = tk.Button(self.bottom_frame_3, text='trig frame')
-        self.trig_frame_button['command'] = lambda: self.load_frame(self.init_frame)
+        self.trig_frame_button['command'] = lambda: self.load_frame(self.get_event_trig_frame())
         self.trig_frame_button.grid(row=1, column=2, sticky='WE')
 
         self.jump_frame_label = tk.Label(self.bottom_frame_3, text='jump to:')
