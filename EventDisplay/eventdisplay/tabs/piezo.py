@@ -7,11 +7,10 @@ import tkinter as tk
 from tkinter import ttk, DISABLED, NORMAL
 import numpy as np
 import sys
-#
-# matplotlib.use('TkAgg')
-matplotlib.use('Agg')
+
+matplotlib.use('TkAgg')
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from PIL import Image, ImageTk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 from GetEvent import GetEvent
@@ -44,6 +43,12 @@ class Piezo(tk.Frame):
         self.piezo_ax = self.piezo_fig.add_subplot(111)
         self.piezo_canvas = FigureCanvasTkAgg(self.piezo_fig, self.piezo_tab_right)
 
+        # Navigation toolbar (pan/zoom/save)
+        self.piezo_toolbar = NavigationToolbar2Tk(
+            self.piezo_canvas, self.piezo_tab_right, pack_toolbar=False)
+        self.piezo_toolbar.update()
+        self.piezo_toolbar.grid(row=1, column=1, sticky='w')
+
     def load_fastDAQ_piezo(self):
         if not self.load_fastDAQ_piezo_checkbutton_var.get():
             self.piezo_tab_right.grid_forget()
@@ -57,11 +62,22 @@ class Piezo(tk.Frame):
         path = os.path.join(self.raw_directory, self.run)
 
         try:
-            selected = ["run_control", "acoustics"]
-            self.fastDAQ_event = GetEvent(path, self.event, *selected)
-            
-            wf_key = "Waveforms" if "Waveforms" in self.fastDAQ_event["acoustics"] else "Waveform"
-            channels = [f"Channel {i+1}" for i in range(self.fastDAQ_event['acoustics'][wf_key].shape[1])]
+            self.fastDAQ_event = GetEvent(path, self.event, "run_control", "acoustics",
+                                          physical_units=True)
+        except FileNotFoundError:
+            self.piezo_error("No data")
+            return
+        except Exception as e:
+            self.piezo_error("GetEvent error", e)
+            return
+
+        try:
+            acous_config = self.fastDAQ_event['run_control'].get('acous', {})
+            num_channels = self.fastDAQ_event['acoustics']['Waveforms_V'].shape[1]
+            channels = [
+                acous_config.get(f'ch{i+1}', {}).get('name', f'Channel {i+1}')
+                for i in range(num_channels)
+            ]
             self.piezo_combobox['values'] = channels
 
             if channels:
@@ -73,8 +89,7 @@ class Piezo(tk.Frame):
 
             self.draw_fastDAQ_piezo()
         except Exception as e:
-            print(e)
-            self.piezo_error()
+            self.piezo_error("EventDisplay error", e)
 
         # Garbage Collecting
         gc.collect()
@@ -94,11 +109,6 @@ class Piezo(tk.Frame):
         else:
             self.piezo_tab_right.grid(row=0, column=1, sticky='NW')
 
-        # if int(self.run_type) == 10:
-        #     # logger.error('not allowed for run_type=10')
-        #     self.error += 'not allowed to view piezo data for run_type=10\n'
-        #     self.destroy_children(self.piezo_tab_right)
-        #     return
         self.check_t0_exists()
         self.piezo = self.piezo_combobox.get()
         self.piezo_cutoff_low = int(self.piezo_cutoff_low_entry.get())
@@ -113,22 +123,24 @@ class Piezo(tk.Frame):
 
     def draw_filtered_piezo_trace(self, piezo):
         try:
-            wf_key = "Waveforms" if "Waveforms" in self.fastDAQ_event["acoustics"] else "Waveform"
-            piezo_v = self.fastDAQ_event['acoustics'][wf_key][0][self.piezo_combobox.current()]
-            piezo_time = np.arange(len(piezo_v)) * (1 / self.fastDAQ_event['acoustics']['sample_rate'])
-            fn = len(piezo_v)/(piezo_time[-1]-piezo_time[0])/2
-            # if (self.piezo_cutoff_high / fn) > 1:
-            #     self.logger.error('Cutoff freq > Nyquist, setting = Nyquist')
-            #     self.piezo_cutoff_high = int(fn)
-            #     self.piezo_cutoff_high_entry.delete(0,tk.END)
-            #     self.piezo_cutoff_high_entry.insert(0,self.piezo_cutoff_high)
-                
-            # b, a = scipy.signal.butter(3, self.piezo_cutoff_high / fn)
-            # filtered_piezo_v = scipy.signal.lfilter(b, a, piezo_v)
-            # b, a = scipy.signal.butter(3, self.piezo_cutoff_low / fn, 'high')
-            # filtered_piezo_v = scipy.signal.lfilter(b, a, filtered_piezo_v)
+            acoustics = self.fastDAQ_event['acoustics']
+            channel = self.piezo_combobox.current()
+            piezo_time = np.asarray(acoustics['time_s'])
+            piezo_v = np.asarray(acoustics['Waveforms_V'][0][channel])
 
-            filtered_piezo_v = piezo_v
+            # Nyquist frequency
+            fn = acoustics['sample_rate'] / 2
+            if (self.piezo_cutoff_high / fn) > 1:
+                self.logger.error('Cutoff freq > Nyquist, setting = Nyquist')
+                self.piezo_cutoff_high = int(fn)
+                self.piezo_cutoff_high_entry.delete(0, tk.END)
+                self.piezo_cutoff_high_entry.insert(0, self.piezo_cutoff_high)
+
+            # Bandpass: low-pass at cutoff_high, then high-pass at cutoff_low
+            b, a = scipy.signal.butter(3, self.piezo_cutoff_high / fn)
+            filtered_piezo_v = scipy.signal.lfilter(b, a, piezo_v)
+            b, a = scipy.signal.butter(3, self.piezo_cutoff_low / fn, 'high')
+            filtered_piezo_v = scipy.signal.lfilter(b, a, filtered_piezo_v)
 
             # Set Plot Labels
             self.piezo_ax.clear()
@@ -136,30 +148,23 @@ class Piezo(tk.Frame):
             self.piezo_ax.set_xlabel('[s]')
             self.piezo_ax.set_ylabel('[V]')
 
-            # if not self.piezo_timerange_checkbutton_var.get():
-            #     self.piezo_ending_time_entry['state'] = tk.NORMAL
-            #     self.piezo_beginning_time_entry['state'] = tk.NORMAL
-            #     self.piezo_beginning_time_label['state'] = tk.NORMAL
-            #     self.piezo_ending_time_label['state'] = tk.NORMAL
-            #     window = (piezo_time > self.piezo_beginning_time) & (piezo_time < self.piezo_ending_time)
-            #     piezo_time = piezo_time[window]
-            #     filtered_piezo_v = filtered_piezo_v[window]
-            #     self.piezo_ax.set_xlim(self.piezo_beginning_time, self.piezo_ending_time)
-            # else:
-            #     self.piezo_ending_time_entry['state'] = tk.DISABLED
-            #     self.piezo_beginning_time_entry['state'] = tk.DISABLED
-            #     self.piezo_beginning_time_label['state'] = tk.DISABLED
-            #     self.piezo_ending_time_label['state'] = tk.DISABLED
-            #     self.piezo_ax.set_xlim(piezo_time[0], piezo_time[-1])
+            if not self.piezo_timerange_checkbutton_var.get():
+                self.piezo_ending_time_entry['state'] = tk.NORMAL
+                self.piezo_beginning_time_entry['state'] = tk.NORMAL
+                self.piezo_beginning_time_label['state'] = tk.NORMAL
+                self.piezo_ending_time_label['state'] = tk.NORMAL
+                window = (piezo_time > self.piezo_beginning_time) & (piezo_time < self.piezo_ending_time)
+                piezo_time = piezo_time[window]
+                filtered_piezo_v = filtered_piezo_v[window]
+                self.piezo_ax.set_xlim(self.piezo_beginning_time, self.piezo_ending_time)
+            else:
+                self.piezo_ending_time_entry['state'] = tk.DISABLED
+                self.piezo_beginning_time_entry['state'] = tk.DISABLED
+                self.piezo_beginning_time_label['state'] = tk.DISABLED
+                self.piezo_ending_time_label['state'] = tk.DISABLED
+                self.piezo_ax.set_xlim(piezo_time[0], piezo_time[-1])
 
-            # Plot - Create Lines First Time, Update Data For Line Afterwards
-            try:
-                self.piezo_ax.lines[0].set_xdata(piezo_time)
-                self.piezo_ax.lines[0].set_ydata(filtered_piezo_v)
-            except:
-                # self.piezo_ax.plot(piezo_time, filtered_piezo_v)
-                # We don't need to draw every data point unless with have a million-pixel display. shoot for 4000 data points max
-                self.piezo_ax.plot(piezo_time[::int(len(piezo_time)/40)], filtered_piezo_v[::int(len(filtered_piezo_v)/40)])
+            self.piezo_ax.plot(piezo_time, filtered_piezo_v)
             # Rescale Axis
             self.piezo_ax.relim()
             self.piezo_ax.autoscale_view()
@@ -283,13 +288,15 @@ class Piezo(tk.Frame):
                                                      command=self.draw_fastDAQ_piezo)
         self.reload_fastDAQ_piezo_button.grid(row=8, column=0, sticky='WE')
 
-    def piezo_error(self):
-        print(f"No acoustics.sbc for {self.run} - {self.event}")
+    def piezo_error(self, label, error=None):
+        if error is not None:
+            print(f"{label}: {error}")
+
         self.fastDAQ_event = None
         self.piezo_combobox['values'] = []
         self.piezo_combobox.set('')
         self.piezo_ax.clear()
-        self.piezo_ax.text(0.2, 0.5, f"No data for {self.run} - {self.event}", transform=self.piezo_ax.transAxes, fontsize=15)
+        self.piezo_ax.text(0.2, 0.5, f"{label} for {self.run} - {self.event}", transform=self.piezo_ax.transAxes, fontsize=15)
 
         self.piezo_ax.set_xlabel('[s]')
         self.piezo_ax.set_ylabel('[V]')
