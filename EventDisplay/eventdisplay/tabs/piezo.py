@@ -78,10 +78,14 @@ class Piezo(tk.Frame):
                 acous_config.get(f'ch{i+1}', {}).get('name', f'Channel {i+1}')
                 for i in range(num_channels)
             ]
+            previous = self.piezo_combobox.get()
             self.piezo_combobox['values'] = channels
 
             if channels:
-                self.piezo_combobox.set(channels[0])
+                if previous in channels:
+                    self.piezo_combobox.set(previous)
+                else:
+                    self.piezo_combobox.set(channels[0])
                 self.piezo_combobox.state(['!disabled', 'readonly'])
             else:
                 self.piezo_combobox.set('')
