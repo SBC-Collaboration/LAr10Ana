@@ -137,8 +137,15 @@ class SlowDAQ(tk.Frame):
         path = os.path.join(self.raw_directory, self.run)
 
         try:
-            selected = ["run_control", "slow_daq"]
-            self.slowDAQ_event = GetEvent(path, self.event, *selected)
+            self.slowDAQ_event = GetEvent(path, self.event, "run_control", "slow_daq")
+        except FileNotFoundError:
+            self.slowDAQ_error("No data")
+            return
+        except Exception as e:
+            self.slowDAQ_error("GetEvent error", e)
+            return
+
+        try:
             data = self.slowDAQ_event.get('slow_daq', self.slowDAQ_event)
 
             sensor_keys = [
@@ -148,19 +155,21 @@ class SlowDAQ(tk.Frame):
             ]
             sensor_keys.sort()
 
+            previous = self.slowDAQ_combobox.get()
             self.slowDAQ_combobox['values'] = sensor_keys
             if sensor_keys:
-                self.slowDAQ_combobox.set(sensor_keys[0])
+                if previous in sensor_keys:
+                    self.slowDAQ_combobox.set(previous)
+                else:
+                    self.slowDAQ_combobox.set(sensor_keys[0])
                 self.slowDAQ_combobox.state(['!disabled', 'readonly'])
             else:
                 self.slowDAQ_combobox.set('')
                 self.slowDAQ_combobox.state(['disabled'])
 
             self.draw_slowDAQ()
-
         except Exception as e:
-            print(e)
-            self.slowDAQ_error("Error loading slowDAQ")
+            self.slowDAQ_error("EventDisplay error", e)
 
         gc.collect()
 
@@ -259,9 +268,9 @@ class SlowDAQ(tk.Frame):
         self.slowDAQ_fig.tight_layout()
         self.slowDAQ_canvas.draw_idle()
     
-    def slowDAQ_error(self, message):
-        # Show error when getEvent fails
-        print(message)
+    def slowDAQ_error(self, label, error=None):
+        if error is not None:
+            print(f"{label}: {error}")
 
         self.slowDAQ_event = None
         self.slowDAQ_combobox['values'] = []
@@ -270,7 +279,7 @@ class SlowDAQ(tk.Frame):
 
         self.slowDAQ_ax.clear()
         self.slowDAQ_ax.text(
-            0.5, 0.5, message,
+            0.5, 0.5, f"{label} for {self.run} - {self.event}",
             transform=self.slowDAQ_ax.transAxes,
             ha='center', va='center', fontsize=12, wrap=True
         )
