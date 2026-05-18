@@ -43,7 +43,7 @@ class Piezo(tk.Frame):
         self.piezo_ax = self.piezo_fig.add_subplot(111)
         self.piezo_canvas = FigureCanvasTkAgg(self.piezo_fig, self.piezo_tab_right)
 
-        # Matplotlib's built in pan and zoom toolbar
+        # Matplotlib's built-in pan and zoom toolbar
         self.piezo_toolbar = NavigationToolbar2Tk(
             self.piezo_canvas, self.piezo_tab_right, pack_toolbar=False)
         self.piezo_toolbar.update()
@@ -149,6 +149,12 @@ class Piezo(tk.Frame):
                 self.piezo_cutoff_high_entry.insert(0, self.piezo_cutoff_high)
 
             low_wn = self.piezo_cutoff_low / fn
+            if low_wn >= high_wn or low_wn >= 1:
+                self.logger.error('Cutoff low >= cutoff high, clamping')
+                low_wn = high_wn / 2
+                self.piezo_cutoff_low = max(int(fn * low_wn), 1)
+                self.piezo_cutoff_low_entry.delete(0, tk.END)
+                self.piezo_cutoff_low_entry.insert(0, self.piezo_cutoff_low)
 
             b, a = scipy.signal.butter(3, high_wn)
             filtered_piezo_v = scipy.signal.lfilter(b, a, piezo_v)
