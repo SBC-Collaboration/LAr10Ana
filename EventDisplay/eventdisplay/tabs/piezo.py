@@ -133,17 +133,24 @@ class Piezo(tk.Frame):
             piezo_v = np.asarray(acoustics['Waveforms_V'][0][channel])
 
             # Nyquist frequency
+            # scipy.signal.butter requires 0 < Wn < 1 strictly.
+            # no need for lower clamp because we force the widget to be at least 1 hz
+            # low-pass at cutoff_high, high-pass at cutoff_low
             fn = acoustics['sample_rate'] / 2
-            if (self.piezo_cutoff_high / fn) > 1:
-                self.logger.error('Cutoff freq > Nyquist, setting = Nyquist')
-                self.piezo_cutoff_high = int(fn)
+            max_wn = 0.99999
+            high_wn = self.piezo_cutoff_high / fn
+            if high_wn >= 1:
+                self.logger.error('Cutoff high >= Nyquist, clamping below Nyquist')
+                high_wn = max_wn
+                self.piezo_cutoff_high = int(fn * high_wn)
                 self.piezo_cutoff_high_entry.delete(0, tk.END)
                 self.piezo_cutoff_high_entry.insert(0, self.piezo_cutoff_high)
 
-            # Bandpass: low-pass at cutoff_high, then high-pass at cutoff_low
-            b, a = scipy.signal.butter(3, self.piezo_cutoff_high / fn)
+            low_wn = self.piezo_cutoff_low / fn
+
+            b, a = scipy.signal.butter(3, high_wn)
             filtered_piezo_v = scipy.signal.lfilter(b, a, piezo_v)
-            b, a = scipy.signal.butter(3, self.piezo_cutoff_low / fn, 'high')
+            b, a = scipy.signal.butter(3, low_wn, 'high')
             filtered_piezo_v = scipy.signal.lfilter(b, a, filtered_piezo_v)
 
             # Set Plot Labels
