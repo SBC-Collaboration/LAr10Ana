@@ -43,7 +43,7 @@ class Piezo(tk.Frame):
         self.piezo_ax = self.piezo_fig.add_subplot(111)
         self.piezo_canvas = FigureCanvasTkAgg(self.piezo_fig, self.piezo_tab_right)
 
-        # Navigation toolbar (pan/zoom/save)
+        # Matplotlib's built in pan and zoom toolbar
         self.piezo_toolbar = NavigationToolbar2Tk(
             self.piezo_canvas, self.piezo_tab_right, pack_toolbar=False)
         self.piezo_toolbar.update()
@@ -78,6 +78,8 @@ class Piezo(tk.Frame):
                 acous_config.get(f'ch{i+1}', {}).get('name', f'Channel {i+1}')
                 for i in range(num_channels)
             ]
+
+            # if a channel was selected in a previous event, try to keep that channel selected if it still exists
             previous = self.piezo_combobox.get()
             self.piezo_combobox['values'] = channels
 
