@@ -141,7 +141,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.first_frame = '30'
         self.init_frame = '50'
         self.last_frame = '70'
-        self.piezo = 'Piezo7'
+        self.piezo = 'TrigLatch'
         self.ped_config_file_path_var = os.path.join(self.config_file_directory, self.dataset + '-ped_config.txt')
 
         # # try to load config file from self.dataset, then load user input self.raw_init_directory if no config file found
@@ -265,8 +265,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.add_display_var_combobox['values'] = values
         self.path_ped_config_directory.insert(0, self.config_file_directory)
         self.ped_config_file_path_combobox['values'] = self.get_configs()
-        self.piezo_combobox['values'] = [self.piezo]
-        self.piezo_combobox.current(0)
+        self.selected_piezos = [self.piezo]
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
         if os.path.isfile(self.ped_config_file_path_var):
