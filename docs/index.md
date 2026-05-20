@@ -16,4 +16,5 @@ getting_started
 event_viewer
 running_analysis
 data_format
+changelog
 ```
