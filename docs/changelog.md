@@ -1,5 +1,8 @@
 # Change Log
 
+## [LAr10Ana v0.1.2](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.1.2)
+- Bug fix in Event Dealer
+
 ## [LAr10Ana v0.1.1](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.1.1)
 - Added acoustic noise and scint T0 modules
 - A few event viewer updates, including bubble t0, bubblt position crosshair, multiple piezo display, 
