@@ -285,7 +285,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
     # reads config file and sets given values, otherwise sets default values
     def load_config_values(self, path):
-        values = [None] * 17
+        values = [None] * 18
 
         defaults = []
         defaults.insert(0, str(self.raw_init_directory))
@@ -305,6 +305,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         defaults.insert(14, '1000')
         defaults.insert(15, '500')
         defaults.insert(16, '')
+        defaults.insert(17, '')
 
         if os.path.isfile(path):
             f = open(path)
@@ -330,7 +331,8 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.dataset = os.path.basename(self.raw_init_directory).removesuffix('-daqdata').removesuffix('-data').removesuffix('-unpacked')
 
         # Relative directories
-        self.scan_directory = str(self._resolve_path(f"scan_output_{self.dataset}"))
+        self.scan_directory = (str(self._resolve_path(values[17])) if values[17]
+                               else str(self._resolve_path(f"scan_output_{self.dataset}")))
         self.npy_directory  = str(self._resolve_path(Path('npy') / self.dataset))
         self.log_directory  = str((Path(self.raw_init_directory) / 'logs').resolve())
         self.extraction_path = str((self._resolve_path(values[1]) / getpass.getuser()).resolve())
@@ -1025,8 +1027,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         return int(self.init_frame)
 
     def do_handscan(self):
-        if not os.path.exists(self.scan_directory):
-            os.mkdir(self.scan_directory)
+        os.makedirs(self.scan_directory, exist_ok=True)
 
         state = tk.NORMAL
         if self.do_handscan_checkbutton_var.get():
