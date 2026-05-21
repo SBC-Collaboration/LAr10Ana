@@ -32,3 +32,5 @@ Jar - Negative Z Height (mm):
 100
 Reco Directory:
 /exp/e961/data/SBC-25-recon
+Handscan Directory:
+/exp/e961/data/SBC-25-handscan
