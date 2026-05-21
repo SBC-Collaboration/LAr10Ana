@@ -3,6 +3,14 @@
 # Quit if error happens, but don't kill the entire terminal in jupyter.
 (
 set -e
+TAG=""
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --tag) TAG="${2:-}"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+
 DEST_DIR="/pnfs/coupp/scratch/users/${USER}"
 if [ "$USER" = "coupppro" ]; then
     DEST_DIR="/pnfs/coupp/scratch/coupppro"
@@ -10,12 +18,25 @@ fi
 # Directory where run data are copied to for the grid job
 TEMP_DIR="${DEST_DIR}/temp_data"
 # Directory where job output are saved to
-OUT_DIR="${DEST_DIR}/grid_output"
+OUT_SUFFIX=""
+SAFE_TAG=""
+if [ -n "$TAG" ]; then
+    SAFE_TAG="$(echo "$TAG" | tr '/ ' '_')"
+    OUT_SUFFIX="_${SAFE_TAG}"
+fi
+OUT_DIR="${DEST_DIR}/grid_output${OUT_SUFFIX}"
+
 # Directory where finished job outputs are copied to
 RECON_DIR="/exp/e961/data/SBC-25-recon/dev-output"
+if [ -n "$TAG" ]; then
+    RECON_DIR="/exp/e961/data/SBC-25-recon/${SAFE_TAG}"
+fi
 LOG_DIR="/exp/e961/data/SBC-25-recon/dev-logs"
 # File containing all submitted jobs
-JOBS_LIST="${HOME}/.cache/sbc_job_list.csv"
+JOBS_LIST="${HOME}/.cache/sbc/jobs_list.csv"
+if [ -n "$TAG" ]; then
+    JOBS_LIST="${HOME}/.cache/sbc/jobs_list_${SAFE_TAG}.csv"
+fi
 
 mkdir -p "$RECON_DIR"
 

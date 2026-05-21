@@ -7,13 +7,23 @@ set -e
 # Parse options
 PRODUCTION_MODE=false
 VERBOSE=false
+TAG=""
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --pro|--production|-p) PRODUCTION_MODE=true; shift ;;
         --verbose|-v) VERBOSE=true; shift ;;
+        --tag) 
+            TAG="${2:-}"
+            [ -n "$TAG" ] || { echo "Error: --tag requires a value (e.g. --tag v0.1.0)"; exit 2; }
+            shift 2 ;;
         *) RUN_ID=$1; shift ;;
     esac
 done
+
+if [ -z "${RUN_ID:-}" ]; then
+    echo "Usage: $0 [--tag vX.Y.Z] [--production] [--verbose] RUN_ID"
+    exit 2
+fi
 
 ROLE_ARG=""
 if [ "$PRODUCTION_MODE" = true ]; then
@@ -35,9 +45,19 @@ DATA_DIR="/exp/e961/data/SBC-25-daqdata"
 # Directory where run data will be copied to for this grid job
 TEMP_DIR="${DEST_DIR}/temp_data"
 # Directory where job output will be saved to
-OUT_DIR="${DEST_DIR}/grid_output"
+OUT_SUFFIX=""
+SAFE_TAG=""
+if [ -n "$TAG" ]; then
+    SAFE_TAG="$(echo "$TAG" | tr '/ ' '_')"
+    OUT_SUFFIX="_${SAFE_TAG}"
+fi
+OUT_DIR="${DEST_DIR}/grid_output${OUT_SUFFIX}"
 # DIR to save a list of jobs. Cannot be on PNFS because it doesn't support append
-LIST_DIR="${HOME}/.cache/sbc_job_list.csv"
+LIST_FILE="${HOME}/.cache/sbc/jobs_list.csv"
+if [ -n "$TAG" ]; then
+    LIST_FILE="${HOME}/.cache/sbc/jobs_list_${SAFE_TAG}.csv"
+fi
+mkdir -p "$(dirname "$LIST_FILE")"
 mkdir -p "$TEMP_DIR"
 mkdir -p "$OUT_DIR"
 if [ $VERBOSE = true ]; then
@@ -46,15 +66,44 @@ fi
 
 # Copy run tar file over
 rsync -azh --chmod=777 "${DATA_DIR}/${RUN_ID}.tar" "${TEMP_DIR}/"
-# Tar LAr10ana into a tarball
+# Tar LAr10ana into a tarball (at the requested tag)
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 LAR10ANA_DIR="${SCRIPT_DIR}/.."
-cd "${LAR10ANA_DIR}"
 VERSION_FILE="version.txt"
-git describe --tags --always >${VERSION_FILE}
 TARBALL="LAr10ana.tar"
-tar --mtime='1970-01-01 00:00:00' --sort=name -cf $TARBALL --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
-rm ${VERSION_FILE}
+
+cleanup() {
+    # Always clean tar/tbz
+    rm -f "${LAR10ANA_DIR}/${TARBALL}" "${LAR10ANA_DIR}/LAr10ana.tar" "${LAR10ANA_DIR}/LAr10ana.tar"*.tbz >/dev/null 2>&1 || true
+    # Clean worktree if it exists
+    if [ -n "${WT_DIR:-}" ]; then
+        git -C "${LAR10ANA_DIR}" worktree remove --force "${WT_DIR}" >/dev/null 2>&1 || true
+        rm -rf "${WT_DIR}" >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT
+
+if [ -n "$TAG" ]; then
+    # Update to latest tags
+    git -C "${LAR10ANA_DIR}" fetch --tags --quiet || true
+    # Create a temporary worktree folder
+    WT_DIR="$(mktemp -d -t lar10ana_wt_XXXXXX)"
+    # Add the worktree at the requested tag
+    git -C "${LAR10ANA_DIR}" worktree add --detach "${WT_DIR}" "refs/tags/${TAG}" >/dev/null
+    ( cd "${WT_DIR}"
+      # Inside the worktree, generate version file
+      git describe --tags --always > "${VERSION_FILE}"
+      # Tar the required files
+      tar --mtime='1970-01-01 00:00:00' --sort=name -cf "${LAR10ANA_DIR}/${TARBALL}" --exclude='*.pyc' *.py *.sh ana grid_jobs "${VERSION_FILE}"
+      rm -f "${VERSION_FILE}"
+    )
+else
+    cd "${LAR10ANA_DIR}"
+    # Generate version file and tar required files
+    git describe --tags --always >${VERSION_FILE}
+    tar --mtime='1970-01-01 00:00:00' --sort=name -cf $TARBALL --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
+    rm ${VERSION_FILE}
+fi
 if [ $VERBOSE = true ]; then
     echo "Data copied over. LAr10ana is tarred. Ready for job submission."
 fi
@@ -95,14 +144,6 @@ fi
 
 # Retrieve Job ID from output, and save to list
 JOB_ID=$(echo "$output" | grep -oP '\d+\.\d+@\S+\.fnal\.gov')
-echo "$(date '+%Y-%m-%d %H:%M:%S'), ${RUN_ID}, ${JOB_ID}" >> "${LIST_DIR}"
+echo "$(date '+%Y-%m-%d %H:%M:%S'), ${RUN_ID}, ${JOB_ID}" >> "${LIST_FILE}"
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Job ${JOB_ID} for run ${RUN_ID} ($TAR_SIZE_GB GB) successfully submitted."
-rm $TARBALL
-rm -f "LAr10ana.tar*.tbz"  # remove the tbz files
 )
-
-if [[ $? -ne 0 ]]; then
-  echo "An error occurred. Quitting."
-  rm -f "LAr10ana.tar"
-  rm -f "LAr10ana.tar*.tbz"
-fi

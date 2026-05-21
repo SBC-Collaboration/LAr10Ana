@@ -9,34 +9,52 @@ flock -n 200 || { echo "File is already locked at ${lock_file}."; exit 1; }
 
 # Directory where data are stored
 DATA_DIR="/exp/e961/data/SBC-25-daqdata"
-# Directory where finished job outputs are copied to
-RECON_DIR="/exp/e961/data/SBC-25-recon/dev-output"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-# File containing all submitted jobs
-JOBS_LIST="${HOME}/.cache/sbc_job_list.csv"
+LAR10ANA_DIR="${SCRIPT_DIR}/.."
 echo "Starting batch submission of grid jobs..."
 
 # Parse command line options
 FORCE_RERUN=false
 VERBOSE=false
 PRODUCTION_MODE=false
+TAG=""
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --force|--force-rerun|-f) FORCE_RERUN=true; shift ;;
         --pro|--production|-p) PRODUCTION_MODE=true; shift ;;
+        --tag|-t) TAG=${2:-}; shift 2 ;;
         --verbose|-v) VERBOSE=true; shift ;;
         *) RUN_ID=$1; shift ;;
     esac
 done
 
+SAFE_TAG=""
+# Directory where finished job outputs are copied to 
+RECON_DIR="/exp/e961/data/SBC-25-recon/dev-output"
+# List of a  submitted jobs
+JOBS_LIST="${HOME}/.cache/sbc/jobs_list.csv"
+if [ -n "$TAG" ]; then
+    # Change any '/' or ' ' characters to '_' so that the tag can be used in filenames
+    SAFE_TAG="$(echo "$TAG" | tr '/ ' '_')"
+    # Use the tag when requested
+    RECON_DIR="/exp/e961/data/SBC-25-recon/${SAFE_TAG}"
+    JOBS_LIST="${HOME}/.cache/sbc/jobs_list_${SAFE_TAG}.csv"
+fi
+
 if [ "$FORCE_RERUN" = true ]; then
     echo "Force rerun enabled: Skipping version checks."
 fi
 
-# Get current version
-CURRENT_VERSION=$(git describe --tags --always)
-CURRENT_TAG="${CURRENT_VERSION%%-*}"
-echo "Current version: ${CURRENT_VERSION} (tag: ${CURRENT_TAG})"
+# Get current version or the requested tag
+if [ -n "$TAG" ]; then
+    git -C "${LAR10ANA_DIR}" fetch --tags --quiet || true
+    REQUESTED_VERSION=$(git -C "${LAR10ANA_DIR}" describe --tags --always "refs/tags/${TAG}")
+    REQUESTED_TAG="$TAG"
+else
+    REQUESTED_VERSION=$(git -C "${LAR10ANA_DIR}" describe --tags --always)
+    REQUESTED_TAG="${REQUESTED_VERSION%%-*}"
+fi
+echo "Current version: ${REQUESTED_VERSION} (tag: ${REQUESTED_TAG})"
 
 # Count total tar files
 REGEX="${DATA_DIR}"/*.tar
@@ -74,9 +92,9 @@ for ((i=${total}-1; i>=0; i--)); do
             if [ -f "$version_file" ]; then
                 EXISTING_VERSION=$(cat "$version_file")
                 EXISTING_TAG="${EXISTING_VERSION%%-*}"
-                if [[ "$EXISTING_TAG" == "$CURRENT_TAG" ]]; then
+                if [[ "$EXISTING_TAG" == "$REQUESTED_TAG" ]]; then
                     CASE=2
-                elif [[ "$(printf '%s\n' "$CURRENT_TAG" "$EXISTING_TAG" | sort -V | head -n1)" == "$CURRENT_TAG" ]]; then
+                elif [[ "$(printf '%s\n' "$REQUESTED_TAG" "$EXISTING_TAG" | sort -V | head -n1)" == "$REQUESTED_TAG" ]]; then
                     CASE=3
                 else
                     CASE=4  # current version is newer
@@ -117,11 +135,11 @@ for ((i=${total}-1; i>=0; i--)); do
             ;;
         3) 
             if [ "$VERBOSE" = true ]; then
-                echo "Skipping ${run_id}: existing version (${EXISTING_TAG}) is newer than current (${CURRENT_TAG})"
+                echo "Skipping ${run_id}: existing version (${EXISTING_TAG}) is newer than current (${REQUESTED_TAG})"
             fi
             ;;
         4) 
-            echo "Proceeding: current version (${CURRENT_VERSION}) is newer than existing (${EXISTING_VERSION})"
+            echo "Proceeding: current version (${REQUESTED_VERSION}) is newer than existing (${EXISTING_VERSION})"
             ;;
         5) 
             echo "Proceeding: no version.txt found in existing output"
@@ -149,7 +167,9 @@ for ((i=${total}-1; i>=0; i--)); do
             ROLE_ARG=""
         fi
 
-        bash "${SCRIPT_DIR}/run_gridjob.sh" ${VERBOSE_ARG} ${ROLE_ARG} "$run_id"
+        TAG_ARG=$([ -n "$TAG" ] && echo "--tag ${TAG}" || echo "")
+        bash "${SCRIPT_DIR}/run_gridjob.sh" ${VERBOSE_ARG} ${ROLE_ARG} ${TAG_ARG} "$run_id"
+ 
     fi
 done
 
