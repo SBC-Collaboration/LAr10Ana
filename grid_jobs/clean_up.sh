@@ -6,7 +6,7 @@ set -e
 TAG=""
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --tag) TAG="${2:-}"; shift 2 ;;
+        --tag|-t) TAG="${2:-}"; shift 2 ;;
         *) shift ;;
     esac
 done

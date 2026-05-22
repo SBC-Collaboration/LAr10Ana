@@ -12,7 +12,7 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --pro|--production|-p) PRODUCTION_MODE=true; shift ;;
         --verbose|-v) VERBOSE=true; shift ;;
-        --tag) 
+        --tag|-t) 
             TAG="${2:-}"
             [ -n "$TAG" ] || { echo "Error: --tag requires a value (e.g. --tag v0.1.0)"; exit 2; }
             shift 2 ;;
@@ -74,7 +74,7 @@ TARBALL="LAr10ana.tar"
 
 cleanup() {
     # Always clean tar/tbz
-    rm -f "${LAR10ANA_DIR}/${TARBALL}" "${LAR10ANA_DIR}/LAr10ana.tar" "${LAR10ANA_DIR}/LAr10ana.tar"*.tbz >/dev/null 2>&1 || true
+    rm -f "${LAR10ANA_DIR}/${TARBALL}" "${LAR10ANA_DIR}/LAr10ana.tar" "${LAR10ANA_DIR}/LAr10ana.tar"*.tbz* >/dev/null 2>&1 || true
     # Clean worktree if it exists
     if [ -n "${WT_DIR:-}" ]; then
         git -C "${LAR10ANA_DIR}" worktree remove --force "${WT_DIR}" >/dev/null 2>&1 || true
