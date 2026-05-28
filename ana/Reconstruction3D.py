@@ -78,15 +78,11 @@ def bubble_mult(bubble_data, eventNum):
     # grab info
     frames = bubble_data["frame"]
     cams = bubble_data["cam"]
-    evs = bubble_data["ev"]
     # find first mutli cam frame
     firstFrame = -1
     idx = sorted(range(len(frames)), key=lambda i: frames[i])
     seen = set()
     for i in idx:
-        if evs[i] != eventNum:
-            seen.clear()
-            continue
         seen.add(cams[i])
         if len(seen) >= 2:
             firstFrame = frames[i]
@@ -94,7 +90,7 @@ def bubble_mult(bubble_data, eventNum):
 
     # get all camera frame pairs within a range of the first mutli cam event
     n = 5
-    seq = [(f, c) for f, c, e in zip(frames, cams, evs) if (e == int(eventNum)) and ( f >= firstFrame and f <= firstFrame + (10 + n)) ]
+    seq = [(f, c) for f, c  in zip(frames, cams) if ( f >= firstFrame and f <= firstFrame + (10 + n)) ]
     if not seq:
         return -1
 
@@ -191,6 +187,9 @@ def pull_bubble_coords(bubble_data):
 def reconstruct_2D_to_3D(data):
     if "bubble" in data["analysis"]:
         bubble_data = data["analysis"]["bubble"]
+        
+        if bubble_mult(bubble_data) != 1:
+            return {"coords_3D": np.full(3, np.nan)}
 
         # Pull 2D coordinate
         coords_2D = pull_bubble_coords(bubble_data)
