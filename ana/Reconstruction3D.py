@@ -1,4 +1,5 @@
 from sbcbinaryformat import Streamer, Writer
+from collections import Counter, defualtdict
 import numpy as np
 
 
@@ -64,6 +65,63 @@ def triangulate_multi_cam_LS(pixel_coords):
 
 
 
+'''
+Check how many bubbles the bubble finder detected in a given event, returns estimated count
+'''
+def bubble_mult(bubble_data, eventNum):
+    '''
+    bubble_data: bubble finder output dictionary
+
+    Returns:
+        int of estimated bubble multiplicity
+    '''
+    # grab info
+    frames = bubble_data["frame"]
+    cams = bubble_data["cam"]
+    evs = bubble_data["ev"]
+    # find first mutli cam frame
+    firstFrame = -1
+    idx = sorted(range(len(frames)), key=lambda i: frames[i])
+    seen = set()
+    for i in idx:
+        if evs[i] != eventNum:
+            seen.clear()
+            continue
+        seen.add(cams[i])
+        if len(seen) >= 2:
+            firstFrame = frames[i]
+            break
+
+    # get all camera frame pairs within a range of the first mutli cam event
+    n = 5
+    seq = [(f, c) for f, c, e in zip(frames, cams, evs) if (e == int(eventNum)) and ( f >= firstFrame and f <= firstFrame + (10 + n)) ]
+    if not seq:
+        return -1
+
+    mult = Counter(seq)  # {(frame, cam): multiplicity}
+    byCamDict = defaultdict(dict)
+    lastSeen = set()
+    for f, c in seq:
+        if (f,c) not in lastSeen:
+            byCamDict[c][f] = mult[(f,c)]
+            lastSeen.add((f,c)) 
+   
+    
+    sortedByMult = sorted(mult.keys(), key = lambda k: mult[k], reverse=True)
+    checked  = []
+    for f0, c0 in sortedByMult:
+        if ( (f0,c0) in checked):
+            continue
+        checked.append((f0,c0))
+        m0 = mult[(f0,c0)]
+        ok = True
+        for offset in range(n):    
+            if  mult[f0 + offset, c0] < mult[f0, c0]:
+                ok = False
+                break
+        if ok:
+            return m0
+    return 0
 
 
 
