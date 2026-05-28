@@ -1,5 +1,5 @@
 from sbcbinaryformat import Streamer, Writer
-from collections import Counter, defualtdict
+from collections import Counter, defaultdict
 import numpy as np
 
 
