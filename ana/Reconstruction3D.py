@@ -68,7 +68,7 @@ def triangulate_multi_cam_LS(pixel_coords):
 '''
 Check how many bubbles the bubble finder detected in a given event, returns estimated count
 '''
-def bubble_mult(bubble_data, eventNum):
+def bubble_mult(bubble_data):
     '''
     bubble_data: bubble finder output dictionary
 
