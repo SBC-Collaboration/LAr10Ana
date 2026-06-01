@@ -738,7 +738,8 @@ class LogViewer(tk.Frame):
 
     def create_logviewer_widgets(self):
         self.log_tab = tk.Frame(self.notebook)
-        self.notebook.add(self.log_tab, text='Log Viewer')
+        # Tab hidden from UI
+        # self.notebook.add(self.log_tab, text='Log Viewer')
 
         #######Log Viewer Tab#######
         # Graph
