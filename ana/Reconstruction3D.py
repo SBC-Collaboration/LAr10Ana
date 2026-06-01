@@ -76,8 +76,13 @@ def bubble_mult(bubble_data):
         int of estimated bubble multiplicity
     '''
     # grab info
-    frames = bubble_data["frame"]
-    cams = bubble_data["cam"]
+
+    def to_frame(x):
+        return int(x[0]) if isinstance(x, (list, tuple)) and len(x) > 0 else int(x)
+
+    frames = [to_frame(f) for f in bubble_data["frame"]]
+    cams   = [tuple(c) if isinstance(c, list) else c for c in bubble_data["cam"]]
+
     # find first mutli cam frame
     firstFrame = -1
     idx = sorted(range(len(frames)), key=lambda i: frames[i])
