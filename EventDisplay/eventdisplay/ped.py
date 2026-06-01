@@ -206,8 +206,8 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         LogViewer.__init__(self)
         Analysis.__init__(self)
         ThreeDBubble.__init__(self)
-        Configuration.__init__(self)
         Scintillation.__init__(self)
+        Configuration.__init__(self)
 
         # Initial Functions
         self.initialize_widget_values()
@@ -248,12 +248,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         except Exception as e:
             print(e, 'Line: ', sys.exc_info()[2].tb_lineno)
 
-        # Click on Log Viewer Tab
-        if tab_clicked == 3 or tab_clicked == 'Log Viewer':
-            self.bottom_bar.grid_remove()
-            self.bottom_frame_5.grid(row=1, column=0, sticky='NW')
-            self.fra2.pack(side='top')
-        elif tab_clicked == '':
+        if tab_clicked == '':
             return
         else:
             self.bottom_frame_5.grid_remove()
