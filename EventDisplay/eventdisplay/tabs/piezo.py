@@ -25,9 +25,18 @@ class Piezo(tk.Frame):
         self.piezo_cutoff_high = 10000
         self.piezo_beginning_time = -.1
         self.piezo_ending_time = 0.0
+        self.piezo_max_points = 4000
         self.incremented_piezo_event = False
-        self.piezo_timerange_checkbutton_var = tk.BooleanVar(value=False)
+        self.piezo_timerange_checkbutton_var = tk.BooleanVar(value=True)
         self.t0 = None
+
+        # selected_piezos persists channel-name selections across events/runs.
+        # Tries to match selections from the previous event, falls back to the
+        # first available channel to avoid an empty plot.
+        self.selected_piezos = None
+        self.piezo_channels = []
+        self.piezo_checkbox_vars = {}
+        self.piezo_checkbox_widgets = []
 
         # Initial Functions
         self.create_piezo_widgets()
@@ -78,27 +87,38 @@ class Piezo(tk.Frame):
                 acous_config.get(f'ch{i+1}', {}).get('name', f'Channel {i+1}')
                 for i in range(num_channels)
             ]
+            self.piezo_channels = channels
 
-            # if a channel was selected in a previous event, try to keep that channel selected if it still exists
-            previous = self.piezo_combobox.get()
-            self.piezo_combobox['values'] = channels
-
-            if channels:
-                if previous in channels:
-                    self.piezo_combobox.set(previous)
-                else:
-                    self.piezo_combobox.set(channels[0])
-                self.piezo_combobox.state(['!disabled', 'readonly'])
-            else:
-                self.piezo_combobox.set('')
-                self.piezo_combobox.state(['disabled'])
-
+            self._rebuild_piezo_checkboxes(channels)
             self.draw_fastDAQ_piezo()
         except Exception as e:
             self.piezo_error("EventDisplay error", e)
 
         # Garbage Collecting
         gc.collect()
+
+    def _rebuild_piezo_checkboxes(self, channels):
+        for w in self.piezo_checkbox_widgets:
+            w.destroy()
+        self.piezo_checkbox_widgets = []
+        self.piezo_checkbox_vars = {}
+
+        # Use previous selected channels if possible
+        remembered = set(self.selected_piezos or [])
+        for name in channels:
+            var = tk.BooleanVar(value=(name in remembered))
+            cb = tk.Checkbutton(
+                self.piezo_channel_frame,
+                text=name,
+                variable=var,
+                anchor='w')
+            cb.pack(anchor='w', fill='x')
+            self.piezo_checkbox_vars[name] = var
+            self.piezo_checkbox_widgets.append(cb)
+
+        # If nothing carried over default to the first channel.
+        if channels and not any(var.get() for var in self.piezo_checkbox_vars.values()):
+            self.piezo_checkbox_vars[channels[0]].set(True)
 
     def check_t0_exists(self):
         try:
@@ -116,7 +136,6 @@ class Piezo(tk.Frame):
             self.piezo_tab_right.grid(row=0, column=1, sticky='NW')
 
         self.check_t0_exists()
-        self.piezo = self.piezo_combobox.get()
         self.piezo_cutoff_low = int(self.piezo_cutoff_low_entry.get())
         if(self.piezo_cutoff_low < 1):
             self.piezo_cutoff_low = 1
@@ -125,14 +144,27 @@ class Piezo(tk.Frame):
         self.piezo_cutoff_high = int(self.piezo_cutoff_high_entry.get())
         self.piezo_beginning_time = float(self.piezo_beginning_time_entry.get())
         self.piezo_ending_time = float(self.piezo_ending_time_entry.get())
-        self.draw_filtered_piezo_trace(self.piezo)
+        try:
+            self.piezo_max_points = max(1, int(self.piezo_max_points_entry.get()))
+        except ValueError:
+            self.piezo_max_points = 4000
+        self.piezo_max_points_entry.delete(0, tk.END)
+        self.piezo_max_points_entry.insert(0, self.piezo_max_points)
+        # Snapshot the current selection by name. If the user unchecked the
+        # last one, snap back to channels[0]
+        selected = [name for name, var in self.piezo_checkbox_vars.items() if var.get()]
+        if not selected and self.piezo_channels:
+            first = self.piezo_channels[0]
+            self.piezo_checkbox_vars[first].set(True)
+            selected = [first]
+        self.selected_piezos = selected
 
-    def draw_filtered_piezo_trace(self, piezo):
+        self.draw_filtered_piezo_trace(selected)
+
+    def draw_filtered_piezo_trace(self, selected_names):
         try:
             acoustics = self.fastDAQ_event['acoustics']
-            channel = self.piezo_combobox.current()
             piezo_time = np.asarray(acoustics['time_s'])
-            piezo_v = np.asarray(acoustics['Waveforms_V'][0][channel])
 
             # Nyquist frequency
             # scipy.signal.butter requires 0 < Wn < 1 strictly.
@@ -156,16 +188,11 @@ class Piezo(tk.Frame):
                 self.piezo_cutoff_low_entry.delete(0, tk.END)
                 self.piezo_cutoff_low_entry.insert(0, self.piezo_cutoff_low)
 
-            b, a = scipy.signal.butter(3, high_wn)
-            filtered_piezo_v = scipy.signal.lfilter(b, a, piezo_v)
-            b, a = scipy.signal.butter(3, low_wn, 'high')
-            filtered_piezo_v = scipy.signal.lfilter(b, a, filtered_piezo_v)
-
             # Set Plot Labels
             self.piezo_ax.clear()
-            self.piezo_ax.set_title(piezo + " " + str(self.run) + " " + str(self.event))
+            self.piezo_ax.set_title(str(self.run) + " " + str(self.event))
             self.piezo_ax.set_xlabel('[s]')
-            self.piezo_ax.set_ylabel('[V]')
+            self.piezo_ax.set_yticks([])
 
             if not self.piezo_timerange_checkbutton_var.get():
                 self.piezo_ending_time_entry['state'] = tk.NORMAL
@@ -173,23 +200,54 @@ class Piezo(tk.Frame):
                 self.piezo_beginning_time_label['state'] = tk.NORMAL
                 self.piezo_ending_time_label['state'] = tk.NORMAL
                 window = (piezo_time > self.piezo_beginning_time) & (piezo_time < self.piezo_ending_time)
-                piezo_time = piezo_time[window]
-                filtered_piezo_v = filtered_piezo_v[window]
+                plot_time = piezo_time[window]
                 self.piezo_ax.set_xlim(self.piezo_beginning_time, self.piezo_ending_time)
             else:
                 self.piezo_ending_time_entry['state'] = tk.DISABLED
                 self.piezo_beginning_time_entry['state'] = tk.DISABLED
                 self.piezo_beginning_time_label['state'] = tk.DISABLED
                 self.piezo_ending_time_label['state'] = tk.DISABLED
+                window = None
+                plot_time = piezo_time
                 self.piezo_ax.set_xlim(piezo_time[0], piezo_time[-1])
 
-            self.piezo_ax.plot(piezo_time, filtered_piezo_v)
-            # Rescale Axis
+            plot_time_ds = self._decimate(plot_time,
+                                          max_points=self.piezo_max_points)
+
+            # Stack selected channels vertically in checkbox/channel order.
+            cmap = matplotlib.colormaps['tab10']
+            traces = []
+            for idx, name in enumerate(self.piezo_channels):
+                if name not in selected_names:
+                    continue
+
+                raw = np.asarray(acoustics['Waveforms_V'][0][idx])
+                filtered = self._bandpass_piezo(raw, low_wn, high_wn)
+
+                if window is not None:
+                    filtered = filtered[window]
+
+                v_ds = self._decimate(filtered, max_points=self.piezo_max_points)
+                if v_ds.size:
+                    traces.append((name, cmap(idx % cmap.N), v_ds - np.mean(v_ds)))
+
+            step = 1.2 * max((np.ptp(v) for _, _, v in traces), default=0.0)
+            
+            for i, (name, color, v) in enumerate(reversed(traces)):
+                offset = i * step
+                self.piezo_ax.plot(plot_time_ds, v + offset, color=color)
+                # Annotate axis instead of legend
+                self.piezo_ax.annotate(
+                    name, xy=(0, offset), xycoords=('axes fraction', 'data'),
+                    xytext=(-4, 0), textcoords='offset points',
+                    color=color, va='center', ha='right', fontsize=8,
+                    annotation_clip=False)
+
             self.piezo_ax.relim()
-            self.piezo_ax.autoscale_view()
+            self.piezo_ax.autoscale_view(scalex=False, scaley=True)
 
             # Add line at t0
-            #self.check_t0_exists()
+            # self.check_t0_exists()
             if self.piezo_plot_t0_checkbutton_var.get():
                 if self.reco_row and self.t0:
                     self.piezo_ax.axvline(x=self.t0, linestyle='dashed', color='r', label='t0')
@@ -225,6 +283,20 @@ class Piezo(tk.Frame):
             canvas.itemconfig(canvas.image, image=canvas.photo)
             canvas.grid(row=0, column=1, sticky='NW')
 
+    def _decimate(self, *arrays, max_points):
+        n = len(arrays[0])
+        stride = max(1, n // max_points)
+        if stride == 1:
+            return arrays if len(arrays) > 1 else arrays[0]
+        out = tuple(a[::stride] for a in arrays)
+        return out if len(out) > 1 else out[0]
+
+    def _bandpass_piezo(self, v, low_wn, high_wn):
+        b, a = scipy.signal.butter(3, high_wn)
+        v = scipy.signal.lfilter(b, a, v)
+        b, a = scipy.signal.butter(3, low_wn, 'high')
+        return scipy.signal.lfilter(b, a, v)
+
     def destroy_children(self, frame):
         try:
             for widget in frame.winfo_children():
@@ -256,64 +328,82 @@ class Piezo(tk.Frame):
             command=self.load_fastDAQ_piezo)
         self.load_fastDAQ_piezo_checkbutton.grid(row=0, column=0, columnspan=2, sticky='WE')
 
-        self.piezo_label = tk.Label(self.piezo_tab_left, text='Piezo:')
-        self.piezo_label.grid(row=1, column=0, sticky='WE')
+        ttk.Separator(self.piezo_tab_left, orient='horizontal').grid(row=1, column=0, columnspan=2, sticky='WE', pady=4)
 
-        self.piezo_combobox = ttk.Combobox(self.piezo_tab_left, width=12)
-        self.piezo_combobox.grid(row=1, column=1, sticky='WE')
+        self.piezo_label = tk.Label(self.piezo_tab_left, text='Piezos:')
+        self.piezo_label.grid(row=2, column=0, columnspan=2, sticky='W')
+
+        # Container for the per-channel checkbuttons. Populated by
+        # _rebuild_piezo_checkboxes each time an event loads.
+        self.piezo_channel_frame = tk.Frame(self.piezo_tab_left)
+        self.piezo_channel_frame.grid(row=3, column=0, columnspan=2, sticky='WE')
+
+        ttk.Separator(self.piezo_tab_left, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky='WE', pady=4)
 
         self.piezo_cutoff_low_label = tk.Label(self.piezo_tab_left, text='Freq cutoff low:')
-        self.piezo_cutoff_low_label.grid(row=2, column=0, sticky='WE')
+        self.piezo_cutoff_low_label.grid(row=5, column=0, sticky='WE')
 
         self.piezo_cutoff_low_entry = tk.Entry(self.piezo_tab_left, width=12)
         self.piezo_cutoff_low_entry.insert(0, self.piezo_cutoff_low)
-        self.piezo_cutoff_low_entry.grid(row=2, column=1, sticky='WE')
+        self.piezo_cutoff_low_entry.grid(row=5, column=1, sticky='WE')
 
         self.piezo_cutoff_high_label = tk.Label(self.piezo_tab_left, text='Freq cutoff high:')
-        self.piezo_cutoff_high_label.grid(row=3, column=0, sticky='WE')
+        self.piezo_cutoff_high_label.grid(row=6, column=0, sticky='WE')
 
         self.piezo_cutoff_high_entry = tk.Entry(self.piezo_tab_left, width=12)
         self.piezo_cutoff_high_entry.insert(0, self.piezo_cutoff_high)
-        self.piezo_cutoff_high_entry.grid(row=3, column=1, sticky='WE')
+        self.piezo_cutoff_high_entry.grid(row=6, column=1, sticky='WE')
+
+        ttk.Separator(self.piezo_tab_left, orient='horizontal').grid(row=7, column=0, columnspan=2, sticky='WE', pady=4)
+
+        self.piezo_max_points_label = tk.Label(self.piezo_tab_left, text='Plot samples:')
+        self.piezo_max_points_label.grid(row=8, column=0, sticky='WE')
+
+        self.piezo_max_points_entry = tk.Entry(self.piezo_tab_left, width=12)
+        self.piezo_max_points_entry.insert(0, self.piezo_max_points)
+        self.piezo_max_points_entry.grid(row=8, column=1, sticky='WE')
+
+        self.piezo_beginning_time_label = tk.Label(self.piezo_tab_left, text='Beginning Time:')
+        self.piezo_beginning_time_label.grid(row=9, column=0, sticky='WE')
+
+        self.piezo_beginning_time_entry = tk.Entry(self.piezo_tab_left, width=12)
+        self.piezo_beginning_time_entry.insert(0, self.piezo_beginning_time)
+        self.piezo_beginning_time_entry.grid(row=9, column=1, sticky='WE')
+
+        self.piezo_ending_time_label = tk.Label(self.piezo_tab_left, text='Ending Time:')
+        self.piezo_ending_time_label.grid(row=10, column=0, sticky='WE')
+
+        self.piezo_ending_time_entry = tk.Entry(self.piezo_tab_left, width=12)
+        self.piezo_ending_time_entry.insert(0, self.piezo_ending_time)
+        self.piezo_ending_time_entry.grid(row=10, column=1, sticky='WE')
 
         self.piezo_timerange_checkbutton = tk.Checkbutton(
             self.piezo_tab_left, text='Full time window',
             variable=self.piezo_timerange_checkbutton_var,
             command=self.draw_fastDAQ_piezo)
-        self.piezo_timerange_checkbutton.grid(row=6, column=0, columnspan=2, sticky='WE')
-
-        self.piezo_beginning_time_label = tk.Label(self.piezo_tab_left, text='Beginning Time:')
-        self.piezo_beginning_time_label.grid(row=4, column=0, sticky='WE')
-
-        self.piezo_beginning_time_entry = tk.Entry(self.piezo_tab_left, width=12)
-        self.piezo_beginning_time_entry.insert(0, self.piezo_beginning_time)
-        self.piezo_beginning_time_entry.grid(row=4, column=1, sticky='WE')
-
-        self.piezo_ending_time_label = tk.Label(self.piezo_tab_left, text='Ending Time:')
-        self.piezo_ending_time_label.grid(row=5, column=0, sticky='WE')
-
-        self.piezo_ending_time_entry = tk.Entry(self.piezo_tab_left, width=12)
-        self.piezo_ending_time_entry.insert(0, self.piezo_ending_time)
-        self.piezo_ending_time_entry.grid(row=5, column=1, sticky='WE')
+        self.piezo_timerange_checkbutton.grid(row=11, column=0, columnspan=2, sticky='WE')
 
         self.piezo_plot_t0_checkbutton = tk.Checkbutton(
             self.piezo_tab_left,
             text='Show t0',
             variable=self.piezo_plot_t0_checkbutton_var,
             command=self.draw_fastDAQ_piezo)
-        self.piezo_plot_t0_checkbutton.grid(row=7, column=0, columnspan=2, sticky='WE')
+        self.piezo_plot_t0_checkbutton.grid(row=12, column=0, columnspan=2, sticky='WE')
 
         self.reload_fastDAQ_piezo_button = tk.Button(self.piezo_tab_left, text='reload',
                                                      command=self.draw_fastDAQ_piezo)
-        self.reload_fastDAQ_piezo_button.grid(row=8, column=0, sticky='WE')
+        self.reload_fastDAQ_piezo_button.grid(row=13, column=0, columnspan=2, sticky='WE')
 
     def piezo_error(self, label, error=None):
         if error is not None:
             print(f"{label}: {error}")
 
         self.fastDAQ_event = None
-        self.piezo_combobox['values'] = []
-        self.piezo_combobox.set('')
+        for w in self.piezo_checkbox_widgets:
+            w.destroy()
+        self.piezo_checkbox_widgets = []
+        self.piezo_checkbox_vars = {}
+        self.piezo_channels = []
         self.piezo_ax.clear()
         self.piezo_ax.text(0.2, 0.5, f"{label} for {self.run} - {self.event}", transform=self.piezo_ax.transAxes, fontsize=15)
 
