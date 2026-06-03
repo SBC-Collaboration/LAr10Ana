@@ -107,7 +107,7 @@ This module (`Reconstruction3D.py`) pulls bubble pixel position data from the Bu
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
 ## Scintillation/Digiscope Time Correlation and ScintT0 (`scint_t0.sbc`)
-This module correlates scintillation triggers with digiscope entries, determining the trigger latch time relative to scintillation time. Then, largest scintillation pulses near pressureT0 and within random windows are found.
+This module (`ScintT0.py`) correlates scintillation triggers with digiscope entries, determining the trigger latch time relative to scintillation time. Then, largest scintillation pulses near pressureT0 and within random windows are found.
 - **Failed** (`int`): indicates whether the module completed in its entirety or failed. Integer values correspond to the following failure modes. 0: no failure, module finished (any np.nan values in the pulse entries below means no pulses were found within the window); 1: no latch found in digiscope; 2: no CAEN triggers found in digiscope; 3: no scintillation triggers found; 4: not enough points (<2) for RANSAC fit; 5: pt0 failed; 6: pt0 module did not run.
 - **latch_time_corrected** (`float`, ms): time of trigger latch (from digiscope) in scintillation time, where t=0 is the time of the first scintillation CAEN trigger
 - **pT0_in_scint_time** (`float`, ms): pressureT0 time, relative to the first scintillation trigger
@@ -123,7 +123,7 @@ This module correlates scintillation triggers with digiscope entries, determinin
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
 ## Acoustic Noise (`acoustic_noise.sbc`)
-This module checks for successful expansions and quiet mode, then calculates baselines and RMS noise for piezos 2-7.
+This module (`AcousticNoise.py`) checks for successful expansions and quiet mode, then calculates baselines and RMS noise for piezos 2-7.
 - **succ_expansion** (`bool`):  if the expansion is successful. i.e. pressure achieved at target pressure 1000 ms before the compression
 - **quiet_mode** (`bool`): if the cyromech is off during the event
 - **pset** (`float`, bara): pressure setpoint
