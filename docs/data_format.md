@@ -105,3 +105,35 @@ This module (`Reconstruction3D.py`) pulls bubble pixel position data from the Bu
 - **coords_3D**: Array of xyz coords, in inches. np.nan if no frame with at least two cameras defined. 
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
+
+## Scintillation/Digiscope Time Correlation and ScintT0 (`scint_t0.sbc`)
+This module correlates scintillation triggers with digiscope entries, determining the trigger latch time relative to scintillation time. Then, largest scintillation pulses near pressureT0 and within random windows are found.
+- **Failed** (`int`): indicates whether the module completed in its entirety or failed. Integer values correspond to the following failure modes. 0: no failure, module finished (any np.nan values in the pulse entries below means no pulses were found within the window); 1: no latch found in digiscope; 2: no CAEN triggers found in digiscope; 3: no scintillation triggers found; 4: not enough points (<2) for RANSAC fit; 5: pt0 failed; 6: pt0 module did not run.
+- **latch_time_corrected** (`float`, ms): time of trigger latch (from digiscope) in scintillation time, where t=0 is the time of the first scintillation CAEN trigger
+- **pT0_in_scint_time** (`float`, ms): pressureT0 time, relative to the first scintillation trigger
+- **biggest_pulse_pt0_20ms** (`float `, mV): the largest sum of the areas of all SiPM channels from Scintillation Analysis module (above) within +- 20ms of pressureT0
+- **idx_biggest_pulse_pt0_20ms** (`int`): index of the above pulse
+- **scint_time_biggest_pulse_pt0_20ms** (`float`, ms): time of the above pulse, relative to the first scintillation trigger
+- **biggest_pulse_random_20ms** (`float`, mV): the largest sum of the areas of all SiPM channels in a random 40ms window (before pT0 - 20ms, so no overlap between windows)
+- **biggest_pulse_pt0_40ms** (`float`, mV): the largest sum of the areas of all SiPM channels from Scintillation Analysis module (above) within +- 40ms of pressureT0
+- **idx_biggest_pulse_pt0_40ms** (`int`): index of the above pulse
+- **scint_time_biggest_pulse_pt0_40ms** (`float`, ms): time of the above pulse, relative to the first scintillation trigger
+- **biggest_pulse_random_40ms** (`float`, mV): the largest sum of the areas of all SiPM channels in a random 80ms window (before pT0 - 40ms)
+- **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
+- **ev** (`int`): Event ID of this row. (Added by EventDealer)
+
+## Acoustic Noise (`acoustic_noise.sbc`)
+This module checks for successful expansions and quiet mode, then calculates baselines and RMS noise for piezos 2-7.
+- **succ_expansion** (`bool`):  if the expansion is successful. i.e. pressure achieved at target pressure 1000 ms before the compression
+- **quiet_mode** (`bool`): if the cyromech is off during the event
+- **pset** (`float`, bara): pressure setpoint
+- **baselines** (`float`, V): average pre-trigger waveform values for piezos 2-7
+- **rms_noise_full** (`float`, V): pre-trigger RMS noise for each piezo, full frequency range
+- **rms_noise_0_5kHz** (`float`, V): pre-trigger RMS noise for each piezo in 0-5 kHz frequency band 
+- **rms_noise_10_20kHz** (`float`, V): same as previous, but 10-20 kHz
+- **rms_noise_20_50kHz** (`float`, V): same as previous, but 20-50 kHz
+- **rms_noise_50_200kHz** (`float`, V): same as previous, but 50-200 kHz
+- **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
+- **ev** (`int`): Event ID of this row. (Added by EventDealer)
+
+
