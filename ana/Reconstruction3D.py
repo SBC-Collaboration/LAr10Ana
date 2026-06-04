@@ -199,7 +199,7 @@ def pull_bubble_coords(bubble_data):
             elif cam_id == 3:
                 output[4:6] = [x, y]
 
-        coordsToReturn.append(outPut)
+        coordsToReturn.append(output)
     return coordsToReturn
 
 
