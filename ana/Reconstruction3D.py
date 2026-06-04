@@ -28,7 +28,6 @@ def triangulate_multi_cam_LS(pixel_coords):
     P_mats = [P1, P2, P3]
 
     pixel_coords = np.asarray(pixel_coords).reshape(3, 2)
-    print("testttt" + str(pixel_coords))
 
     A = []
     valid_cam_count = 0
@@ -224,22 +223,27 @@ def reconstruct_2D_to_3D(data):
             coordsToReturn = []
             for i in range(50):
                 coordsToReturn.append(np.full(3, -999))
-
+            print(len(coordsToReturn))
             return {"coords_3D": coordsToReturn}
         
-        frames = 
-        # Pull 2D coordinate
-        coords_2D = pull_bubble_coords(bubble_data)
+        coordsToReturn = []
+        for i in range(50):
+            # Pull 2D coordinate
+            coords_2D = pull_bubble_coords(bubble_data)
 
-        # Reconstruct
-        coords_3D = triangulate_multi_cam_LS(coords_2D)
+            # Reconstruct
+            coords_3D = triangulate_multi_cam_LS(coords_2D)
+            coordsToReturn.append(coords_3D)
 
-        return {"coords_3D": coords_3D}
+        print(len(coordsToReturn))
+        return {"coords_3D": coordsToReturn}
 
     else:
         coordsToReturn = []
         for i in range(50):
             coordsToReturn.append(np.full(3,np.nan))
+
+        print(len(coordsToReturn))
         return {"coords_3D": coordsToReturn}
 
 
