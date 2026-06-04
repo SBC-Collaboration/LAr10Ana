@@ -44,7 +44,7 @@ def triangulate_multi_cam_LS(pixel_coords):
         A.append(y * P[2] - P[1])
 
     if valid_cam_count < 2:
-        return np.array([-1,-1, -1])
+        return np.array([-999,-999, -999])
 
     A = np.array(A)
 
@@ -168,6 +168,7 @@ def pull_bubble_coords(bubble_data):
     frames = frames[frames_ordered]
     
     unique_frames = np.unique(frames)
+    coordsToReturn  = []
     for frame in unique_frames:
 
         pick_frame = (frames == frame)
@@ -198,7 +199,8 @@ def pull_bubble_coords(bubble_data):
             elif cam_id == 3:
                 output[4:6] = [x, y]
 
-        return output
+        coordsToReturn.append(outPut)
+    return coordsToReturn
 
 
 
@@ -227,12 +229,20 @@ def reconstruct_2D_to_3D(data):
             return {"coords_3D": coordsToReturn}
         
         coordsToReturn = []
-        for i in range(50):
-            # Pull 2D coordinate
-            coords_2D = pull_bubble_coords(bubble_data)
-
+        """
+        if frame not in bubble finder
+            add NaN
+            continue
+        grab 2d coords
+        get 3d coord
+        add to list
+        """
+        # Pull 2D coordinate
+        coords_2D = pull_bubble_coords(bubble_data)
+        print(coords_2D)    
+        for coord in coords_2d:
             # Reconstruct
-            coords_3D = triangulate_multi_cam_LS(coords_2D)
+            coords_3D = triangulate_multi_cam_LS(coord)
             coordsToReturn.append(coords_3D)
 
         print(len(coordsToReturn))
