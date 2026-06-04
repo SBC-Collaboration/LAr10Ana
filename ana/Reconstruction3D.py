@@ -240,7 +240,7 @@ def reconstruct_2D_to_3D(data):
         # Pull 2D coordinate
         coords_2D = pull_bubble_coords(bubble_data)
         print(coords_2D)    
-        for coord in coords_2d:
+        for coord in coords_2D:
             # Reconstruct
             coords_3D = triangulate_multi_cam_LS(coord)
             coordsToReturn.append(coords_3D)
