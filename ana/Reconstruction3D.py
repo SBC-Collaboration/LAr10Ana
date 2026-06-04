@@ -21,7 +21,6 @@ def triangulate_multi_cam_LS(pixel_coords):
     Projection matrices for the three cameras, generated using OpenCV calibration, with
     SiPMs and fiducial markings as training points
     '''
-
     P1 = getProjMat(1)
     P2 = getProjMat(2)
     P3 = getProjMat(3)
@@ -29,6 +28,7 @@ def triangulate_multi_cam_LS(pixel_coords):
     P_mats = [P1, P2, P3]
 
     pixel_coords = np.asarray(pixel_coords).reshape(3, 2)
+    print("testttt" + str(pixel_coords))
 
     A = []
     valid_cam_count = 0
@@ -223,10 +223,11 @@ def reconstruct_2D_to_3D(data):
         if bubble_mult(bubble_data) != 1:
             coordsToReturn = []
             for i in range(50):
-                coordsToReturn.append(np.full(3, -999)
+                coordsToReturn.append(np.full(3, -999))
 
-            return {"coords_3D": np.full(3, -2)}
-
+            return {"coords_3D": coordsToReturn}
+        
+        frames = 
         # Pull 2D coordinate
         coords_2D = pull_bubble_coords(bubble_data)
 
@@ -238,7 +239,7 @@ def reconstruct_2D_to_3D(data):
     else:
         coordsToReturn = []
         for i in range(50):
-            coordsToReturn.append(np.full(3,np.nan)
+            coordsToReturn.append(np.full(3,np.nan))
         return {"coords_3D": coordsToReturn}
 
 
