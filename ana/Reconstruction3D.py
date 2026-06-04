@@ -169,37 +169,43 @@ def pull_bubble_coords(bubble_data):
     
     unique_frames = np.unique(frames)
     coordsToReturn  = []
-    for frame in unique_frames:
+    for frame in range(50):
+        if frame in unique_frames:
 
-        pick_frame = (frames == frame)
+            pick_frame = (frames == frame)
 
-        cams_f = cams[pick_frame]
-        pos_f  = pos[pick_frame]
+            cams_f = cams[pick_frame]
+            pos_f  = pos[pick_frame]
 
-        # Need at least 2 cams
-        if len(np.unique(cams_f)) < 2:
-            continue
-        
-        output = np.full(6, np.nan)
-        used_cams = set()
-
-        # Fill available cameras
-        for cam_id, (x, y) in zip(cams_f, pos_f):
-
-            if cam_id in used_cams:
-                # multi-bubble?
+            # Need at least 2 cams
+            if len(np.unique(cams_f)) < 2:
+                output = np.full(6, np.nan)
+                for i in range(6):
+                    output[i] = -999
+                coordsToReturn.append(output)
                 continue
+        
+            output = np.full(6, np.nan)
+            used_cams = set()
+
+            #Fill available cameras
+            for cam_id, (x, y) in zip(cams_f, pos_f):
+                if cam_id in used_cams:
+                # multi-bubble?
+                    continue
 
             used_cams.add(cam_id)
 
             if cam_id == 1:
-                output[0:2] = [x, y]
+                    output[0:2] = [x, y]
             elif cam_id == 2:
                 output[2:4] = [x, y]
             elif cam_id == 3:
                 output[4:6] = [x, y]
 
-        coordsToReturn.append(output)
+            coordsToReturn.append(output)
+        else:
+            coordsToReturn.append(np.full(6,np.nan))
     return coordsToReturn
 
 
