@@ -4,6 +4,10 @@
 *.pyc
 .DS_Store
 version.txe
+.venv/
 
-#Scratch 
+# LAR10Ana-specific ignores 
 /EventDisplay/scratch
+ana/BubbleValidator/*.csv
+ana/BubbleValidator/dev-output/
+ana/debug
