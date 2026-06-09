@@ -3,6 +3,37 @@ import subprocess, os, platform
 import tkinter as tk
 from PIL import Image, ImageChops, ImageOps, ImageTk
 import cv2
+import numpy as np
+from skimage.draw import disk
+
+
+# don't recalculate the mask for ever frame in the camera
+_BUBBLE_MASK_CACHE = {}
+
+# direct copy of ana/BubbleFinder's masks
+def _bubble_region_mask(cam, shape):
+    key = (cam, shape)
+    mask = _BUBBLE_MASK_CACHE.get(key)
+    if mask is None:
+        imShape = shape
+        if cam == 1:
+            circy, circx = disk((375, 595), 300, shape=imShape)
+            coord_mask = 1.9 * circx - 1200 < circy
+            mask_circx = circx[coord_mask]
+            mask_circy = circy[coord_mask]
+        elif cam == 2:
+            mask_circy, mask_circx = disk((420, 670), 300, shape=imShape)
+        elif cam == 3:
+            mask_circy, mask_circx = disk((440, 690), 300, shape=imShape)
+        else:
+            mask = np.ones(imShape, dtype=bool)
+            _BUBBLE_MASK_CACHE[key] = mask
+            return mask
+        # paint the (mask_circy, mask_circx) indices into the boolean mask this returns
+        mask = np.zeros(imShape, dtype=bool)
+        mask[mask_circy, mask_circx] = True
+        _BUBBLE_MASK_CACHE[key] = mask
+    return mask
 
 
 class Camera(tk.Frame):
@@ -67,6 +98,44 @@ class Camera(tk.Frame):
 
         return ImageOps.autocontrast(diff), ref_frame
 
+    def _load_native_gray(self, cam, frame):
+        """Raw frame as a float32 grayscale array (channel mean), pre-rotation --
+        BubbleFinder's region masks are defined in this raw orientation."""
+        path = self.get_image_path(cam, frame)
+        src = self.zipped_event.open(path) if self.zip_flag else path
+        return np.asarray(Image.open(src).convert('RGB'), dtype=np.float32).mean(axis=2)
+
+    def _apply_display_geometry(self, image, canvas):
+        """The same rotate/resize/crop load_image applies, so a natively-computed
+        diff lines up with the displayed frame and the crosshairs."""
+        if self.image_orientation == '90':
+            image = image.transpose(Image.ROTATE_90)
+        elif self.image_orientation == '180':
+            image = image.transpose(Image.ROTATE_180)
+        elif self.image_orientation == '270':
+            image = image.transpose(Image.ROTATE_270)
+        image = image.resize((int(canvas.image_width), int(canvas.image_height)),
+                             self.antialias_checkbutton_var.get())
+        return image.crop((canvas.crop_left, canvas.crop_bottom, canvas.crop_right, canvas.crop_top))
+
+    def get_bubble_diff(self, canvas, fallback):
+        """Diff that mirrors what BubbleFinder's CHT votes on: previous-frame abs
+        diff, a noise_thresh floor, and the camera's hard bubble-region mask.
+        Recipe + masks mirror ana/BubbleFinder.py FindBubbles funciton"""
+        noise_thresh = self.diff_threshold_var.get()
+        cur = int(self.frame)
+        ref = cur - 1 if cur > int(self.first_frame) else int(self.first_frame)
+        try:
+            diff = np.abs(self._load_native_gray(canvas.cam, cur)
+                          - self._load_native_gray(canvas.cam, ref))
+        except (FileNotFoundError, KeyError, OSError):
+            self.logger.info('bubble diff: missing frame for cam {}'.format(canvas.cam))
+            return fallback, ref
+        diff[diff < noise_thresh] = 0
+        diff[~_bubble_region_mask(canvas.cam + 1, diff.shape)] = 0  # canvas.cam 0-idx; BF cam 1-idx
+        image = self._apply_display_geometry(Image.fromarray(diff.astype(np.uint8), mode='L'), canvas)
+        return ImageOps.autocontrast(image), ref
+
     def update_images(self):
         error = ' '
         for canvas in self.canvases:
@@ -74,9 +143,13 @@ class Camera(tk.Frame):
             image = self.load_image(path, canvas)
 
             zoom = '{:.1f}'.format(canvas.image_width / self.native_image_width)
-            if self.diff_mode_var.get() != 'off':
+            mode = self.diff_mode_var.get()
+            if mode == 'bubble':
+                image, ref_frame = self.get_bubble_diff(canvas, image)
+                template = 'frame: {} zoom: {}x (bub-diff wrt {})              {}/{}'
+                bottom_text = template.format(self.frame, zoom, ref_frame, self.run, self.event)
+            elif mode != 'off':
                 image, ref_frame = self.get_image_diff(image, canvas)
-
                 template = 'frame: {} zoom: {}x (diff wrt {})                  {}/{}'
                 bottom_text = template.format(self.frame, zoom, ref_frame, self.run, self.event)
             else:

@@ -938,48 +938,57 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.bubble_events = None
         self.bubble_t0 = {}
 
-        if not self.reco_directory or not self.run:
-            self.logger.error('reco directory not set in config, reco data will be disabled')
+        # This is a temporary hack for loading in custom reco files
+        # Eventdisplay will look in the custom path first
+        # If no reco.sbc is found there it will look in the default path.
+        custom = os.environ.get('CUSTOM_RECO_PATH')
+        roots = [r for r in (os.path.expanduser(custom) if custom else None, self.reco_directory) if r]
+
+        def find_recon(name):  # first <root>/dev-output/<run>/<name> that exists
+            for root in roots:
+                candidate = os.path.join(root, 'dev-output', self.run, name)
+                if os.path.isfile(candidate):
+                    return candidate
+            return None
+
+        if not roots or not self.run:
+            self.logger.error('no reco dir (config or CUSTOM_RECO_PATH), reco data will be disabled')
             self.reco_availability_label.config(text='Not Loaded')
             self.toggle_reco_widgets(state=tk.DISABLED)
             for _, text, _ in self.display_vars:
                 text.set('N/A')
             return
 
-        path = os.path.join(self.reco_directory, 'dev-output', self.run, 'reco.sbc')
-        if not os.path.isfile(path):
-            self.logger.error('cannot find {}, reco data will be disabled'.format(path))
-            self.reco_availability_label.config(text='Not Loaded')
-            self.toggle_reco_widgets(state=tk.DISABLED)
-            for _, text, _ in self.display_vars:
-                text.set('N/A')
-            return
-
-        self.logger.info('using reco data from {}'.format(path))
-
-        events = Streamer(path).data
+        # reco.sbc is optional and no longer gates the bubble overlay loaded below
+        path = find_recon('reco.sbc')
+        events = Streamer(path).data if path else []
         if len(events) == 0:
-            self.logger.error('no reco events found in {}'.format(path))
-            return
+            self.logger.error('no reco.sbc found under {}, reco data disabled'.format(roots))
+            self.reco_availability_label.config(text='Not Loaded')
+            self.toggle_reco_widgets(state=tk.DISABLED)
+            for _, text, _ in self.display_vars:
+                text.set('N/A')
+        else:
+            self.logger.info('using reco data from {}'.format(path))
+            # convert coords_3D array field into scalar X, Y, Z for widgets
+            new_dtype = np.dtype([('X', '<f8'), ('Y', '<f8'), ('Z', '<f8'), ('ev', '<i4')])
+            coordinates = np.zeros(len(events), dtype=new_dtype)
+            coordinates['X'] = events['coords_3D'][:, 0]
+            coordinates['Y'] = events['coords_3D'][:, 1]
+            coordinates['Z'] = events['coords_3D'][:, 2]
+            coordinates['ev'] = events['ev']
+            self.reco_events = coordinates
+            print('reco loaded: {} rows, fields: {}'.format(len(self.reco_events), self.reco_events.dtype.names))
+            self.add_display_var_combobox['values'] = sorted(self.reco_events.dtype.names)
 
-        # convert coords_3D array field into scalar X, Y, Z for widgets
-        new_dtype = np.dtype([('X', '<f8'), ('Y', '<f8'), ('Z', '<f8'), ('ev', '<i4')])
-        coordinates = np.zeros(len(events), dtype=new_dtype)
-        coordinates['X'] = events['coords_3D'][:, 0]
-        coordinates['Y'] = events['coords_3D'][:, 1]
-        coordinates['Z'] = events['coords_3D'][:, 2]
-        coordinates['ev'] = events['ev']
-        self.reco_events = coordinates
-        print('reco loaded: {} rows, fields: {}'.format(len(self.reco_events), self.reco_events.dtype.names))
-        self.add_display_var_combobox['values'] = sorted(self.reco_events.dtype.names)
-
-        bubble_path = os.path.join(self.reco_directory, 'dev-output', self.run, 'bubble.sbc')
-        if os.path.isfile(bubble_path):
+        # bubble.sbc loads independently of reco.sbc (overlay works with bubble alone)
+        bubble_path = find_recon('bubble.sbc')
+        if bubble_path is not None:
             self.bubble_events = Streamer(bubble_path).data
             print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
             self.compute_bubble_t0()
         else:
-            self.logger.error('cannot find {}'.format(bubble_path))
+            self.logger.error('no bubble.sbc found under {}'.format(roots))
 
     def compute_bubble_t0(self):
         # Bubble t0 per event is earliest bubble frame across cameras
@@ -1284,6 +1293,13 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             value='first',
             command=self.update_images)
         self.diff_first_radio.grid(row=1, column=2, sticky='W')
+
+        self.diff_bubble_radio = tk.Radiobutton(self.image_options_frame,
+            text='bubble diff',
+            variable=self.diff_mode_var,
+            value='bubble',
+            command=self.update_images)
+        self.diff_bubble_radio.grid(row=1, column=3, sticky='W')
 
         self.diff_threshold_label = tk.Label(self.image_options_frame, text='threshold:')
         self.diff_threshold_label.grid(row=2, column=0, sticky='W')
