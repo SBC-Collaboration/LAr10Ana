@@ -167,7 +167,7 @@ def pull_bubble_coords(bubble_data):
         for i in range(50):
             returnList.append(np.full(6, np.nan)) 
             # No found bubbles
-            return returnList
+        return returnList
 
     # In order of frames
     frames_ordered = np.argsort(frames)
