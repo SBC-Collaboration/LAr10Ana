@@ -244,7 +244,13 @@ def reconstruct_2D_to_3D(data):
         # for every frame there is a set of 2d coordinates, each one corresponding to a certian cameras bubble location
         for coord in coords_2D:
             # if the camera didnt have a bubble, we should just ignore this frame and more on
-            if coord[0] == -999 or np.isnan(coord).any():
+            
+            nancheck = 0
+            for i in coord:
+                if np.isnan(i):
+                    nancheck += 1
+
+            if coord[0] == -999 or nancheck >= 4:
                 coordsToReturn.append(np.full(3,np.nan))
                 continue
             # triangulate the bubble into 3d space, then add it to the list to return
