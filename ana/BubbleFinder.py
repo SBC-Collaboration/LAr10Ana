@@ -244,7 +244,7 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
                         if rad==rad_cands[0]:
                             past_accum = this_layer
                         else:
-                            past_accum = np.dstack((accum, this_layer))
+                            past_accum = np.dstack((past_accum, this_layer))
 
                     past_accum_shape = past_accum.shape
 
