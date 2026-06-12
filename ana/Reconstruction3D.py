@@ -209,9 +209,9 @@ def pull_bubble_coords(bubble_data):
                 elif cam_id == 3:
                     output[4:6] = [x, y]
 
-            coordsToReturn.append(output)
+            coordsToReturn.append((output, frame))
         else:
-            coordsToReturn.append(np.full(6,np.nan))
+            coordsToReturn.append((np.full(6,np.nan),frame))
     return coordsToReturn
 
 
@@ -232,39 +232,52 @@ def reconstruct_2D_to_3D(data):
         # if it ran and the estimated multiplicity isnt 1, this could be a multi bubble so we ignore it.
         if bubble_mult(bubble_data) != 1:
             coordsToReturn = []
+            frames = []
             for i in range(50):
-                coordsToReturn.append(np.full(3, np.NaN))
-            return {"coords_3D": coordsToReturn}
+                coordsToReturn.append(np.full(3, np.nan))
+                frames.append(i)
+            print("here")
+            print(len(frames))
+            print(len(coordsToReturn))
+            return {"coords_3D": [coordsToReturn], "frame": [frames]}
         
         # list of 3d coordinates to return to event dealer
         coordsToReturn = []
     
         # Pulls all 2D coordinates
         coords_2D = pull_bubble_coords(bubble_data)
+        frames = []
         # for every frame there is a set of 2d coordinates, each one corresponding to a certian cameras bubble location
         for coord in coords_2D:
             # if the camera didnt have a bubble, we should just ignore this frame and more on
-            
+            if len(coord) != 2:
+                coordsToReturn.append(np.full(3,np.nan))
+                frames.append(int(coord))
+                print("here2")
+                continue
+            frames.append(coord[1])
             nancheck = 0
-            for i in coord:
+            for i in coord[0]:
                 if np.isnan(i):
                     nancheck += 1
-
-            if coord[0] == -999 or nancheck >= 4:
+            if len(coord) != 2 or len(coord[0]) != 3 or  coord[0][0] == -999 or nancheck >= 4:
                 coordsToReturn.append(np.full(3,np.nan))
                 continue
             # triangulate the bubble into 3d space, then add it to the list to return
-            coords_3D = triangulate_multi_cam_LS(coord)
+            print("where")
+            coords_3D = triangulate_multi_cam_LS(coord[0])
             coordsToReturn.append(coords_3D)
-
-        return {"coords_3D": coordsToReturn}
+        print("here3")
+        return {"coords_3D": [coordsToReturn], "frame": [frames]}
 
     else:
         coordsToReturn = []
+        frames = []
         for i in range(50):
             coordsToReturn.append(np.full(3,np.nan))
-
-        return {"coords_3D": coordsToReturn}
+            frames.append(i)
+        print("here4")
+        return {"coords_3D": [coordsToReturn], "frame": [frames]}
 
 
 
