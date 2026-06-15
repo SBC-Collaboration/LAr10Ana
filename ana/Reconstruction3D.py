@@ -165,7 +165,7 @@ def pull_bubble_coords(bubble_data):
     if len(frames) == 0:
         returnList = []
         for i in range(50):
-            returnList.append(np.full(6, np.nan)) 
+            returnList.append(np.full(6, np.nan), i) 
             # No found bubbles
         return returnList
 
@@ -188,7 +188,7 @@ def pull_bubble_coords(bubble_data):
             # Need at least 2 cams
             if len(np.unique(cams_f)) < 2:
                 output = np.full(6, np.nan)
-                coordsToReturn.append(output)
+                coordsToReturn.append((output,frame))
                 continue
         
             output = np.full(6, np.nan)
@@ -234,26 +234,23 @@ def reconstruct_2D_to_3D(data):
             coordsToReturn = []
             frames = []
             for i in range(50):
-                coordsToReturn.append(np.full(3, np.nan))
+                coordsToReturn.append((np.full(3, np.nan)))
                 frames.append(i)
-            print("here")
-            print(len(frames))
-            print(len(coordsToReturn))
-            return {"coords_3D": [coordsToReturn], "frame": [frames]}
+            return {"coords_3D": coordsToReturn, "frame": frames}
         
         # list of 3d coordinates to return to event dealer
         coordsToReturn = []
     
         # Pulls all 2D coordinates
-        coords_2D = pull_bubble_coords(bubble_data)
+        coords_2D  = pull_bubble_coords(bubble_data)
         frames = []
         # for every frame there is a set of 2d coordinates, each one corresponding to a certian cameras bubble location
         for coord in coords_2D:
             # if the camera didnt have a bubble, we should just ignore this frame and more on
-            if len(coord) != 2:
+            if isinstance(coord, int) or len(coord) != 2:
                 coordsToReturn.append(np.full(3,np.nan))
-                frames.append(int(coord))
-                print("here2")
+                print("something went wrong")
+                frames.append(1)
                 continue
             frames.append(coord[1])
             nancheck = 0
@@ -264,11 +261,9 @@ def reconstruct_2D_to_3D(data):
                 coordsToReturn.append(np.full(3,np.nan))
                 continue
             # triangulate the bubble into 3d space, then add it to the list to return
-            print("where")
             coords_3D = triangulate_multi_cam_LS(coord[0])
             coordsToReturn.append(coords_3D)
-        print("here3")
-        return {"coords_3D": [coordsToReturn], "frame": [frames]}
+        return {"coords_3D": coordsToReturn, "frame": frames}
 
     else:
         coordsToReturn = []
@@ -276,8 +271,7 @@ def reconstruct_2D_to_3D(data):
         for i in range(50):
             coordsToReturn.append(np.full(3,np.nan))
             frames.append(i)
-        print("here4")
-        return {"coords_3D": [coordsToReturn], "frame": [frames]}
+        return {"coords_3D": coordsToReturn, "frame": frames}
 
 
 
