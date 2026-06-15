@@ -190,25 +190,23 @@ def pull_bubble_coords(bubble_data):
                 output = np.full(6, np.nan)
                 coordsToReturn.append((output,frame))
                 continue
-        
+       
             output = np.full(6, np.nan)
             used_cams = set()
 
             #Fill available cameras
             for cam_id, (x, y) in zip(cams_f, pos_f):
                 if cam_id in used_cams:
-                # multi-bubble?
+                    #multi-bubble?
                     continue
 
                 used_cams.add(cam_id)
-
                 if cam_id == 1:
                     output[0:2] = [x, y]
                 elif cam_id == 2:
                     output[2:4] = [x, y]
                 elif cam_id == 3:
                     output[4:6] = [x, y]
-
             coordsToReturn.append((output, frame))
         else:
             coordsToReturn.append((np.full(6,np.nan),frame))
@@ -217,14 +215,6 @@ def pull_bubble_coords(bubble_data):
 
 
 def reconstruct_2D_to_3D(data):
-
-    """
-    (not implemented while i fix things)
-    OUTPUT KEY:
-    -999, -999, -999: Only a single cam is defined
-    -1000,-1000,-1000: Possible multi bubble event
-    NaN, NaN, NaN: No bubble finder info for this frame/event
-    """
 
     # checking if the bubble finder ran
     if "bubble" in data["analysis"]:
@@ -249,7 +239,6 @@ def reconstruct_2D_to_3D(data):
             # if the camera didnt have a bubble, we should just ignore this frame and more on
             if isinstance(coord, int) or len(coord) != 2:
                 coordsToReturn.append(np.full(3,np.nan))
-                print("something went wrong")
                 frames.append(1)
                 continue
             frames.append(coord[1])
@@ -257,7 +246,7 @@ def reconstruct_2D_to_3D(data):
             for i in coord[0]:
                 if np.isnan(i):
                     nancheck += 1
-            if len(coord) != 2 or len(coord[0]) != 3 or  coord[0][0] == -999 or nancheck >= 4:
+            if len(coord) != 2 or len(coord[0]) != 6 or  coord[0][0] <= -999 or nancheck >= 4:
                 coordsToReturn.append(np.full(3,np.nan))
                 continue
             # triangulate the bubble into 3d space, then add it to the list to return
