@@ -4,6 +4,6 @@
 *.pyc
 .DS_Store
 version.txe
-
+Eventdealertest.py
 #Scratch 
 /EventDisplay/scratch

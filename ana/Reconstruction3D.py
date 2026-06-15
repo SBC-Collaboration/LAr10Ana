@@ -76,7 +76,8 @@ def triangulate_multi_cam_LS(pixel_coords):
     _, _, Vt = np.linalg.svd(A)
     X = Vt[-1]
     X = X / X[3]
-
+    for i in X[:3]:
+        i *=25.4
     return X[:3]
 
 
