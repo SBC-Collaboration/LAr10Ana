@@ -17,6 +17,8 @@ LOG_DIR="/exp/e961/data/SBC-25-recon/dev-logs"
 # File containing all submitted jobs
 JOBS_LIST="${HOME}/.cache/sbc_job_list.csv"
 
+mkdir -p "$RECON_DIR"
+
 # Process each run
 for folder in "$OUT_DIR"/20*_*-*_*; do
     [ -d "$folder" ] || continue

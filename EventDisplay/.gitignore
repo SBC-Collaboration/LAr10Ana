@@ -293,3 +293,6 @@ TSWLatexianTemp*
 
 # Local development files
 configs/SBC-25-ped_config.txt.local
+
+# don't include handscan outputs
+scan_output*

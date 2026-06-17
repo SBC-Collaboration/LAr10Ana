@@ -6,4 +6,10 @@
 .DS_Store
 version.txe
 #Scratch 
+.venv/
+
+# LAR10Ana-specific ignores 
 /EventDisplay/scratch
+ana/BubbleValidator/*.csv
+ana/BubbleValidator/dev-output/
+ana/debug

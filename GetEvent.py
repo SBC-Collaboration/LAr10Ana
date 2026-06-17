@@ -24,7 +24,7 @@ def GetScint(ev, start=None, end=None, length=None):
     out_ev = dict([(k, v.copy()) for (k, v) in ev.items()]) # copy input
 
     for key in ev["scintillation"].keys():
-        if key == "loaded" or key == "length" or key == "sample_rate" or key == "EventCounter": # skip helper keys
+        if key == "loaded" or key == "length" or key == "sample_rate" or key == "EventCounter" or key == 'TriggerTimeTag': # skip helper keys
             continue
 
         out_ev["scintillation"][key] = ev["scintillation"][key](start=start, end=end, length=length)
@@ -135,7 +135,10 @@ def GetEvent(rundirectory, ev, *loadlist, strictMode=True, lazy_load_scintillati
                 if lazy_load_scintillation:
                     scint = Streamer(scint_file, max_size=1000) if not is_tar else TarStreamer(rundirectory, scint_file, max_size=1000)
                     for c in scint.columns:
-                        event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
+                        if c == 'TriggerTimeTag':
+                            event["scintillation"][c] = scint.to_dict()[c]
+                        else:
+                            event["scintillation"][c] = lambda start=None, end=None, length=None: scint.to_dict(start=start, end=end, length=length)[c]
                     event["scintillation"]["length"] = scint.num_elems
                 else:
                     scint = Streamer(scint_file) if not is_tar else TarStreamer(rundirectory, scint_file)
