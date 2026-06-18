@@ -345,11 +345,11 @@ for i in range(num_groups):
     shadedInBars.append(bars)
 
 points = x
-plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red")
+plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
 
 # subtracted rates
-plt.errorbar(points, backBins,fmt='o',color="orange")
-plt.errorbar(points, backSubBins,fmt='o',color="purple")
+plt.errorbar(points, backBins,fmt='o',color="orange", label="Background Rate")
+plt.errorbar(points, backSubBins,fmt='o',color="purple", label="Background Subtracted Rate")
 
 
 plt.xticks(x,binLabels)
