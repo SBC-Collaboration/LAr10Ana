@@ -262,25 +262,32 @@ background3sEst = background3s * sourceTime/backgroundTime
 background4sEst = background4s * sourceTime/backgroundTime 
 background5sEst = background5s * sourceTime/backgroundTime 
 backBins = [backgroundSingleEst, background2sEst, background3sEst, background4sEst, background5sEst]
+backError = []
+for c in backBins:
+    backError.append(np.sqrt(c))
+
 backSubBins = []
-for i in range(len(binCounts)):
-    backSubBins.append(binCounts[i] - backBins[i])
-
-
+backSubError = []
 binCountError = []
-binCountError.append(np.sqrt(0))
+binCountError.append(0)
+for i in range(len(backBins)):
+    backSubBins.append(binCounts[i] - backBins[i])
+    if not i == 0:
+        binCountError.append(np.sqrt(binCounts[i]))    
+    backSubError.append(binCountError[i] + backError[i])
+
 ratios = [1]
 backSubRatios = [1]
 ratioError = []
 for c in binCounts[1:]:
     ratios.append(c/binCounts[0])
-    binCountError.append(np.sqrt(c))    
 for c in backSubBins[1:]:
     backSubRatios.append(c/backSubBins[0])
 
-
 for i in range(0,len(binLabels)):
     ratioError.append( np.sqrt(np.abs( (binCountError[i]/binCounts[0])**2 + (binCounts[i] * binCountError[0]/(binCounts[0]**2))**2   )))
+
+
 
 
 # thresholds in eV, case B from ryan
@@ -348,8 +355,8 @@ points = x
 plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
 
 # subtracted rates
-plt.errorbar(points, backBins,fmt='o',color="orange", label="Background Rate")
-plt.errorbar(points, backSubBins,fmt='o',color="purple", label="Background Subtracted Rate")
+plt.errorbar(points, backBins, yerr=backError, fmt='o',color="orange", label="Background Rate")
+plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
 
 
 plt.xticks(x,binLabels)
