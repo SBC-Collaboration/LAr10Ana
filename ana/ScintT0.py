@@ -57,21 +57,15 @@ def scint_t0(data):
     results = {}
 
     results['Failed'] = 0
-    results['latch_time_corrected'] = np.nan 
-    results['pT0_in_scint_time'] = np.nan 
-    results['biggest_pulse_pt0_20ms'] = np.nan 
-    results['idx_biggest_pulse_pt0_20ms'] = np.nan 
-    results['scint_time_biggest_pulse_pt0_20ms'] = np.nan 
-    results['biggest_pulse_random_20ms'] = np.nan 
-    results['idx_biggest_pulse_random_20ms'] = np.nan 
-    results['scint_time_biggest_pulse_random_20ms'] = np.nan 
-    results['biggest_pulse_pt0_40ms'] = np.nan 
-    results['idx_biggest_pulse_pt0_40ms'] = np.nan 
-    results['scint_time_biggest_pulse_pt0_40ms'] = np.nan 
-    results['biggest_pulse_random_40ms'] = np.nan 
-    results['idx_biggest_pulse_random_40ms'] = np.nan 
-    results['scint_time_biggest_pulse_random_40ms'] = np.nan 
+    results['latch_time_corrected'] = np.nan
+    results['pT0_in_scint_time'] = np.nan
 
+    results['first_pulse_pt0_20ms'] = [np.nan, np.nan]
+    results['last_pulse_pt0_20ms'] = [np.nan, np.nan]
+    results['first_pulse_pt0_40ms'] = [np.nan, np.nan]
+    results['last_pulse_pt0_40ms'] = [np.nan, np.nan]
+
+    results['first_scint_in_livetime'] = [np.nan, np.nan]
     
     ### Digiscope
     

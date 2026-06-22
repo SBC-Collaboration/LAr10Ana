@@ -1,5 +1,8 @@
 # Change Log
 
+## [LAr10Ana v0.1.4](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.1.4)
+- Bugfix in scint t0 module
+
 ## [LAr10Ana v0.1.3](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.1.3)
 - Improved handscanning, output to dedicated directory
 - Improved bubble finder
