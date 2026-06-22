@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
+from scipy import interpolate
 import numpy as np
 import sys, csv, glob, os
 from sbcbinaryformat import Streamer, Writer
+import SeitzModel as sm
 
 # background rate caluclation for subtraction
 backgroundRunsWarm = [
@@ -213,7 +215,8 @@ for run in neutronRunsHot:
 def process_dir(dirpath):
     checkedRuns = []
     bubbleCount = []
-    sourceTime = 0
+    ptemps = []
+    sourceTimes = []
     for path in glob.glob(os.path.join(dirpath, "*.txt")):
         with open(path, 'r', encoding='utf-8') as f:
             for raw in f:
@@ -237,59 +240,28 @@ def process_dir(dirpath):
                 expData = Streamer('/exp/e961/data/SBC-25-recon/dev-output/' + run + '/exposure.sbc').to_dict()
                 for i in range(len(expData["ev"])):
                     if int(expData["ev"][i]) == int(ev):
-                        sourceTime += float(expData['PT2121_livetime'][i])
+                        sourceTimes.append(float(expData['PT2121_livetime'][i]))
                         break
-    return bubbleCount, sourceTime
+                evData = Streamer('/exp/e961/data/SBC-25-recon/dev-output/' + run + '/event.sbc').to_dict()
+                for i in range(len(evData["ev"])):
+                    if int(evData["ev"][i]) == int(ev):
+                        if run in neutronRunsHot:
+                            ptemps.append( (evData["pset_lo"][i], evData["pset_hi"][i], 119))
+                        else:
+                            ptemps.append( (evData["pset_lo"][i], evData["pset_hi"][i], 116))
+                        break
+    return bubbleCount, sourceTimes, ptemps
 
-bubbleCount, sourceTime = process_dir(path)
+bubbleCount, sourceTimes, psetsTemps  = process_dir(path)
+pToUse = []
+for psets in psetsTemps:
+    if float(psets[0]) == float(psets[1]):
+        if (float(psets[0]),float(psets[2])) not in pToUse:
+            pToUse.append((float(psets[0]),float(psets[2])))
+pToUse.sort()
+seitzVals = []
 
-# bin data and calc ratios 
-binLabels = ["1", "2", "3", "4", "5+"]
-binCounts = [0]*(len(binLabels))
-# idk if we need this but could help
-excludedRegions = []
-for n in bubbleCount:
-    if n[1] in excludedRegions:
-        continue
-    if n[0] >= 5:
-            binCounts[4] += 1
-    else:
-        binCounts[n[0]-1] += 1
-# background rate subtraction
-backgroundSingleEst = backgroundSingles * sourceTime/backgroundTime 
-background2sEst = background2s * sourceTime/backgroundTime 
-background3sEst = background3s * sourceTime/backgroundTime 
-background4sEst = background4s * sourceTime/backgroundTime 
-background5sEst = background5s * sourceTime/backgroundTime 
-backBins = [backgroundSingleEst, background2sEst, background3sEst, background4sEst, background5sEst]
-backError = []
-for c in backBins:
-    backError.append(np.sqrt(c))
-
-backSubBins = []
-backSubError = []
-binCountError = []
-binCountError.append(0)
-for i in range(len(backBins)):
-    backSubBins.append(binCounts[i] - backBins[i])
-    if not i == 0:
-        binCountError.append(np.sqrt(binCounts[i]))    
-    backSubError.append(binCountError[i] + backError[i])
-
-ratios = [1]
-backSubRatios = [1]
-ratioError = []
-for c in binCounts[1:]:
-    ratios.append(c/binCounts[0])
-for c in backSubBins[1:]:
-    backSubRatios.append(c/backSubBins[0])
-
-for i in range(0,len(binLabels)):
-    ratioError.append( np.sqrt(np.abs( (binCountError[i]/binCounts[0])**2 + (binCounts[i] * binCountError[0]/(binCounts[0]**2))**2   )))
-
-
-
-
+# this is probably not the best way to do this but it works for now
 # thresholds in eV, case B from ryan
 thresholds = [0.0, 5000.0, 10000.0, 15000.0, 20000.0, 25000.0]
 ratiosSim = []
@@ -305,67 +277,170 @@ simError.append([0.00549518, 0.00539489, 0.00464159, 0.00432533, 0.00378953, 0.0
 ratiosSim.append([0.03417694, 0.01363073, 0.01183152, 0.00800400, 0.00636605, 0.00657174])
 simError.append([0.00322163, 0.00264983, 0.00262369, 0.00218002, 0.00198435, 0.00205089])
 
-simCountMin = []
-simCountMax = []
-for i in range(0,len(thresholds)-1):
-    simCountMin.append([])
-    simCountMax.append([])
-    for j in range(0,len(ratiosSim[i])-1):
-        simCountMin[i].append(np.abs(binCounts[0]* (ratiosSim[j][i] - simError[j][i])))
-        simCountMax[i].append(np.abs(binCounts[0] * (ratiosSim[j][i] + simError[j][i])))
+seitzRatios = []
+seitzThresholds =  [0.526909797423797, 0.5985370523824889, 1.3448015203144668, 1.468053352541133, 0.6851980039055187, 1.7682026967519062, 0.7912523924096592, 2.164316091009131, 2.699825488759606, 1.088038322980897, 3.4446953964301947, 1.5747574169275487]
+seitzRatios.append([1,1,1,1,1,1,1,1,1,1,1,1])
+seitzRatios.append([0.26732673, 0.27181208, 0.27526132, 0.27526132, 0.27272727, 0.27719298, 0.27027027, 0.27915194, 0.28113879, 0.27054795, 0.28214286, 0.27622378])
+seitzRatios.append([0.15841584, 0.16107383, 0.16724739, 0.16724739, 0.16161616, 0.16842105, 0.16216216, 0.16961131, 0.17081851, 0.16438356, 0.17142857, 0.16783217])
+seitzRatios.append([0.04290429, 0.04362416, 0.04529617, 0.04529617, 0.04377104, 0.04912281, 0.04391892, 0.05300353, 0.05338078, 0.04452055, 0.05, 0.04545455])
+seitzRatios.append([0.04290429, 0.04362416, 0.04529617, 0.04529617, 0.04377104, 0.04210526, 0.04391892, 0.03886926, 0.03914591, 0.04452055, 0.03928571, 0.04545455])
 
 
 
 
+for p,T in pToUse:
+    # bin data and calc ratios 
+    binLabels = ["1", "2", "3", "4", "5+"]
+    binCounts = [0]*(len(binLabels))
+    #idk if we need this but could help
+    excludedRegions = []
+    sourceTime = 0
+    for i in range(len(bubbleCount)):
+        n = bubbleCount[i]
+        if n[1] in excludedRegions or psetsTemps[i][0] != p or psetsTemps[i][2] != T:
+            continue
+        sourceTime += sourceTimes[i]
+        if n[0] >= 5:
+            binCounts[4] += 1
+        else:
+            binCounts[n[0]-1] += 1
+    # background rate subtraction
+    backgroundSingleEst = backgroundSingles * sourceTime/backgroundTime 
+    background2sEst = background2s * sourceTime/backgroundTime 
+    background3sEst = background3s * sourceTime/backgroundTime 
+    background4sEst = background4s * sourceTime/backgroundTime 
+    background5sEst = background5s * sourceTime/backgroundTime 
+    backBins = [backgroundSingleEst, background2sEst, background3sEst, background4sEst, background5sEst]
+    backError = []
+    for c in backBins:
+        backError.append(np.sqrt(c))
+
+    backSubBins = []
+    backSubError = []
+    binCountError = []
+    binCountError.append(0)
+    for i in range(len(backBins)):
+        backSubBins.append(binCounts[i] - backBins[i])
+        if not i == 0:
+            binCountError.append(np.sqrt(binCounts[i]))    
+        backSubError.append(binCountError[i] + backError[i])
+
+    ratios = [1]
+    backSubRatios = [1]
+    ratioError = []
+    for c in binCounts[1:]:
+        ratios.append(c/binCounts[0])
+    for c in backSubBins[1:]:
+        backSubRatios.append(c/backSubBins[0])
+
+    for i in range(0,len(binLabels)):
+        ratioError.append( np.sqrt(np.abs( (binCountError[i]/binCounts[0])**2 + (binCounts[i] * binCountError[0]/(binCounts[0]**2))**2   )))
 
 
-# graphing
-x = np.arange(len(binLabels))
+    simCountMin = []
+    simCountMax = []
 
-plt.figure(figsize=(16,9))
-barsList = []
-width = 0.9/(len(thresholds)-1)
-colors = ["blue","red","green","orange", "teal","black"]
-num_groups = len(thresholds) - 1
 
-for i in range(num_groups):
-    offset = (i - (num_groups - 1) / 2) * width
-    xPos = x + offset
-    bars = plt.bar(xPos, simCountMax[i], width=width, color=colors[i % len(colors)],
+    for i in range(0,len(thresholds)-1):
+        simCountMin.append([])
+        simCountMax.append([])
+        for j in range(0,len(ratiosSim[i])-1):
+            simCountMin[i].append(np.abs(backSubBins[0]* (ratiosSim[j][i] - simError[j][i])))
+            simCountMax[i].append(np.abs(backSubBins[0] * (ratiosSim[j][i] + simError[j][i])))
+
+    # new graphing
+    plt.figure(figsize=(16,9))
+    x = np.arange(len(binLabels))
+    points = x
+
+    # source on
+    plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
+
+    # source off
+    plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label="Background Rate")
+    # on - off
+    plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
+    
+    # 0KeV threshold
+    edges = np.concatenate(([points[0] - 0.5], (points[:-1] + points[1:])/2, [points[-1] + 0.5]))
+    plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0KeV Threshold")
+    # seitz threshold
+    seitz = sm.SeitzModel(p * 14.5038, -273.15 + T, 'argon').Q
+    seitzCount= []
+    seitzIndex = -1
+    if seitz in seitzThresholds:
+            i= seitzThresholds.index(seitz)
+            for j in range(0,len(seitzRatios)):
+                seitzCount.append(backSubBins[0] * seitzRatios[j][i])
+    else:
+        # linear interpolate for now
+        for i in range(1,len(thresholds)):
+            if seitz <= thresholds[i] and seitz>=thresholds[i-1]:
+                t = (seitz - thresholds[i-1])/(thresholds[i] - thresholds[i-1])
+                for j in range(0,len(ratiosSim)-1):
+                    estRatio = ratiosSim[j][i-1] + (ratiosSim[j][i] - ratiosSim[j][i-1]) * t
+                    seitzCount.append(backSubBins[0]* estRatio )
+                break
+
+    plt.stairs(seitzCount, edges, color="green", linewidth=4, label=f"Seitz Threshold ({seitz:0.2f} KeV )")
+    
+
+    plt.xticks(x,binLabels)
+    plt.xlabel("Bubble Multiplicity",fontsize=20)
+    plt.ylabel("Count",fontsize=20)
+    plt.title("Multiplicites Comparison for P="+ str(p) +'bara and T=' + str(T) +'K',fontsize=16)
+    plt.legend(fontsize=20)
+    plt.savefig("linhist" + str(p) + ".png")
+    plt.show()
+    plt.close()
+
+    # old graphing
+    x = np.arange(len(binLabels))
+
+    plt.figure(figsize=(16,9))
+    barsList = []
+    width = 0.9/(len(thresholds)-1)
+    colors = ["blue","red","green","orange", "teal","black"]
+    num_groups = len(thresholds) - 1
+
+    for i in range(num_groups):
+        offset = (i - (num_groups - 1) / 2) * width
+        xPos = x + offset
+        bars = plt.bar(xPos, simCountMax[i], width=width, color=colors[i % len(colors)],
                    edgecolor="black", alpha=0.18,zorder=0)
-    barsList.append(bars)
+        barsList.append(bars)
 
 
-for i in range(num_groups):
-    for j, bar in enumerate(barsList[i]):
-        r = ratiosSim[j][i]    # note swapped indices
-        cx = bar.get_x() + bar.get_width()/2
-        cy = bar.get_height()
-        plt.text(cx, cy + 0.01*max(binCounts), f"{r:0.3f}", ha='center', va='bottom', fontsize=12)
+    for i in range(num_groups):
+        for j, bar in enumerate(barsList[i]):
+            r = ratiosSim[j][i]    # note swapped indices
+            cx = bar.get_x() + bar.get_width()/2
+            cy = bar.get_height()
+            plt.text(cx, cy + 0.01*max(binCounts), f"{r:0.3f}", ha='center', va='bottom', fontsize=12)
 
-shadedInBars = []
-for i in range(num_groups):
-    offset = (i - (num_groups - 1) / 2) * width
-    xPos = x + offset
-    bars = plt.bar(xPos, simCountMin[i], width=width, color=colors[i % len(colors)],
+    shadedInBars = []
+    for i in range(num_groups):
+        offset = (i - (num_groups - 1) / 2) * width
+        xPos = x + offset
+        bars = plt.bar(xPos, simCountMin[i], width=width, color=colors[i % len(colors)],
                    edgecolor="black", label=f"{thresholds[i]/1000}KeV",zorder=2)
-    shadedInBars.append(bars)
+        shadedInBars.append(bars)
 
-points = x
-plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
+    points = x
+    plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
 
-# subtracted rates
-plt.errorbar(points, backBins, yerr=backError, fmt='o',color="orange", label="Background Rate")
-plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
+    # subtracted rates
+    plt.errorbar(points, backBins, yerr=backError, fmt='o',color="orange", label="Background Rate")
+    plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
 
 
-plt.xticks(x,binLabels)
-plt.xlabel("Bubble Multiplicity",fontsize=16)
-plt.ylabel("Count",fontsize=16)
-plt.title("Handscan Bubble Multiplicites and Simulation Comparison",fontsize=16)
-plt.legend(title="Thresholds",fontsize=16)
-plt.savefig("multhist.png")
-plt.show()
-
+    plt.xticks(x,binLabels)
+    plt.xlabel("Bubble Multiplicity",fontsize=16)
+    plt.ylabel("Count",fontsize=16)
+    plt.title("Multiplicites Comparison for P="+ str(p) +'bara and T=' + str(T) +'K',fontsize=16)
+    plt.legend(title="Thresholds",fontsize=16)
+    plt.savefig("multhist" + str(p) + ".png")
+    #plt.show()
+    plt.close()
 
 
