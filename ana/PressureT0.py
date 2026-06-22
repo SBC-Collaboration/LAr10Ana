@@ -160,7 +160,7 @@ if __name__ =="__main__":
     from scipy.optimize import least_squares
     import importlib
 
-    data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251113_9/", 3,strictMode=False) # success event
-    # data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251112_18/", 33, strictMode=False)  # failure event
+    # data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251113_9/", 3,strictMode=False) # success event
+    data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251112_18/", 33, strictMode=False)  # failure event
     result  = PressureT0Finding(data)
     print(result)
