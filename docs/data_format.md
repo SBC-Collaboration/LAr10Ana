@@ -101,8 +101,9 @@ Notice:
 In the fitting, the pressure change is fit to flat constant 0 + linear increasing function described by the t0: the junction point and a, the linear slope. The t0 here is in the timescale of acoustic channel
 
 ## 3D Position Reconstruction (`reco.sbc`)
-This module (`Reconstruction3D.py`) pulls bubble pixel position data from the Bubble Finder module and triangulates to output the 3D coordinate of the bubble within the chamber. Uses the first frame where at least two cameras have defined pixel coordinates. Currently only supports single bubble events (multi-bubble support in progress). 
-- **coords_3D**: Array of xyz coords, in inches. np.nan if no frame with at least two cameras defined. 
+This module (`Reconstruction3D.py`) pulls bubble pixel position data from the Bubble Finder module and triangulates to output the 3D coordinate of the bubble within the chamber. Outputs for all frames (assumed to be 50), with error values as defined below.  Intended to support only single bubble events (multi-bubble support in progress).
+- **coords_3D**(`3D array`, mm): Array of xyz coords, in milimeters. If a frame has no bubble finder information or otherwise had an error, all values are NaN. If a frame has only one camera defined, all values are -999. If a frame has multiple bubbles, or this is thought to be a multi bubble event, all values are -1000.
+- **frame**(`int`): frame of a given output coordinate
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
