@@ -50,6 +50,10 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         time_list_ms = [i / 1e3 for i in range(0, total_time, 1)]
         time_list_ms = np.array(time_list_ms[:n_chunked])
 
+        # max time to be fit
+        time_max_raw = max(time_list_ms)
+
+
         piezo0 = piezo0.reshape(-1, average_window).mean(axis=1)
         time_list_ms = time_list_ms.reshape(-1, average_window).mean(axis=1)
 
@@ -78,7 +82,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
             if piezoslope0[i] > 2 * hardcut_threshold:
                 ending_indx = i
                 fitting_ending_indx = i - int(100000)  # modify this
-                fitting_ending_indx = int(min(i - int(10000 / average_window), 800000 / average_window))
+                fitting_ending_indx = int(min(i - int(10000 / average_window), int(time_max_raw*1000 / average_window)))
                 break
         # print("index", ending_indx, time_list_ms[ending_indx])
         pressure_before_fit = piezo0_filtered[starting_indx:ending_indx]
@@ -109,7 +113,8 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         # print(time_fitting_range)
         # initial guesses:
         a0 = 8e-6
-        t0 = 600  # t0 initial guess around 100ms
+        t0 = time_max_raw-200  # t0 initial guess around 600 ms
+
         # c0 = np.mean(pressure_before_fit[:100]) # first 100 data average
         p0 = [a0, t0]
 
@@ -155,7 +160,7 @@ if __name__ =="__main__":
     from scipy.optimize import least_squares
     import importlib
 
-    # data = GetEvent("/exp/e961/app/users/runze/data/20251120_12/", 3,strictMode=False) # success event
-    data = GetEvent("/exp/e961/app/users/runze/data/20260205_6/", 33, strictMode=False)  # failure event
+    # data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251113_9/", 3,strictMode=False) # success event
+    data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251112_18/", 33, strictMode=False)  # failure event
     result  = PressureT0Finding(data)
     print(result)
