@@ -50,6 +50,10 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         time_list_ms = [i / 1e3 for i in range(0, total_time, 1)]
         time_list_ms = np.array(time_list_ms[:n_chunked])
 
+        # max time to be fit
+        time_max_raw = max(time_list_ms)
+
+
         piezo0 = piezo0.reshape(-1, average_window).mean(axis=1)
         time_list_ms = time_list_ms.reshape(-1, average_window).mean(axis=1)
 
@@ -78,7 +82,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
             if piezoslope0[i] > 2 * hardcut_threshold:
                 ending_indx = i
                 fitting_ending_indx = i - int(100000)  # modify this
-                fitting_ending_indx = int(min(i - int(10000 / average_window), 800000 / average_window))
+                fitting_ending_indx = int(min(i - int(10000 / average_window), int(time_max_raw*1000 / average_window)))
                 break
         # print("index", ending_indx, time_list_ms[ending_indx])
         pressure_before_fit = piezo0_filtered[starting_indx:ending_indx]
