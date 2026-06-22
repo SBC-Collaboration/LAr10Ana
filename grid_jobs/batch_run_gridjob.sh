@@ -2,11 +2,6 @@
 (
 set -e
 
-# Acquire a lock file
-lock_file="/tmp/sbc_batch_gridjobs.lock"
-exec 200>$lock_file
-flock -n 200 || { echo "File is already locked at ${lock_file}."; exit 1; }
-
 # Directory where data are stored
 DATA_DIR="/exp/e961/data/SBC-25-daqdata"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -40,6 +35,11 @@ if [ -n "$TAG" ]; then
     RECON_DIR="/exp/e961/data/SBC-25-recon/${SAFE_TAG}"
     JOBS_LIST="${HOME}/.cache/sbc/jobs_list_${SAFE_TAG}.csv"
 fi
+
+# Acquire a lock file, lock only specific tag if in tag mode
+lock_file="/tmp/sbc_batch_gridjobs${SAFE_TAG:+_${SAFE_TAG}}.lock"
+exec 200>$lock_file
+flock -n 200 || { echo "File is already locked at ${lock_file}."; exit 1; }
 
 if [ "$FORCE_RERUN" = true ]; then
     echo "Force rerun enabled: Skipping version checks."
