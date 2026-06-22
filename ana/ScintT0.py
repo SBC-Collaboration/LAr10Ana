@@ -252,158 +252,54 @@ def scint_t0(data):
 
 
 
-    ### Scint hits
+    ### Scint hits in pT0 window
+
+
+    pt0_center = pressureT0_in_corrected_time / 1000.0
+
+    for width_ms in [20, 40]:
     
-    if "scintillation" in data["analysis"]:
-        scintillation_hits = data["analysis"]["scintillation"]
+        half_width = width_ms / 1000.0
+    
+        window_mask = np.abs(scint_tsec - pt0_center) <= half_width
+        window_indices = np.where(window_mask)[0]
+        
+        if width_ms == 20 and len(window_indices) == 0: # no pulses found in smaller window
+            continue
+        
+        elif width_ms == 40 and len(window_indices) == 0: # no pulses found in larger window
+            results['Failed'] = 7
+            return results
+    
+        else:
+    
+            first_idx = window_indices[0]
+            last_idx = window_indices[-1]
+    
+            first_pulse = np.array([int(first_idx),float(scint_tsec[first_idx] * 1000.0)])
+    
+            last_pulse = np.array([int(last_idx),float(scint_tsec[last_idx] * 1000.0)])
+    
+        results[f'first_pulse_pt0_{width_ms}ms'] = first_pulse
+        results[f'last_pulse_pt0_{width_ms}ms'] = last_pulse
+
+
+    ### First scint hit in livetime (post-expansion)
+    
+    if "exposure" in data["analysis"]:
+        exposure_results = data["analysis"]["exposure"]
+
+        livetime = exposure_results['PT2121_livetime'] # sec
+
+        scint_time_start_exposure = (latch_time_corrected/1000) - livetime
+
+        first_idx_exposure = np.searchsorted(scint_tsec, scint_time_start_exposure, side='right')
+
+        results['first_scint_in_livetime'] = np.array([int(first_idx_exposure),float(scint_tsec[first_idx_exposure]*1000.0)])
 
     else:
-        results['Failed'] = 7
-        return results
+        results['Failed'] = 8
 
-
-    hit_area = np.asarray(scintillation_hits['hit_area'], dtype=float)
-    hit_sums = np.nansum(hit_area, axis=1)
-
-
-
-
-
-    # Biggest pulse within 20ms of pT0
-
-    pt0_window = 0.020  # seconds
-    
-    window_mask = np.abs(scint_tsec - (pressureT0_in_corrected_time/1000)) <= pt0_window
-    
-    window_indices = np.where(window_mask)[0]
-    
-    if len(window_indices) == 0:
-        biggest_pulse_within_20ms_pt0 = np.nan
-        index_biggest_pulse_within_20ms_pt0 = np.nan
-        scint_time_biggest_pulse_within_20ms_pt0 = np.nan
-    else:
-        window_values = hit_sums[window_indices]
-    
-        local_max_idx = np.nanargmax(window_values)
-        index_biggest_pulse_within_20ms_pt0 = window_indices[local_max_idx]
-    
-        biggest_pulse_within_20ms_pt0 = window_values[local_max_idx]
-
-        scint_time_biggest_pulse_within_20ms_pt0 = scint_tsec[index_biggest_pulse_within_20ms_pt0]
-    
-
-    results['biggest_pulse_pt0_20ms'] = biggest_pulse_within_20ms_pt0
-    results['idx_biggest_pulse_pt0_20ms'] = index_biggest_pulse_within_20ms_pt0
-    results['scint_time_biggest_pulse_pt0_20ms'] = scint_time_biggest_pulse_within_20ms_pt0 * 1000
-
-
-
-
-
-    # Biggest pulse within random +-20ms window (excluding pT0 window)
-
-    pt0_center = pressureT0_in_corrected_time / 1000
-    
-    # Random window only before pT0 - 20ms
-    random_center_min = pt0_window
-    random_center_max = pt0_center - (2* pt0_window)
-    
-    biggest_pulse_random_20ms = np.nan
-    index_biggest_pulse_random_20ms = np.nan
-    scint_time_biggest_pulse_random_20ms = np.nan
-    
-    if random_center_max > random_center_min: # failed pT0 gives pT0 = 0
-    
-        random_center = np.random.uniform(random_center_min,random_center_max)
-        random_window_mask = np.abs(scint_tsec - random_center) <= pt0_window
-        random_window_indices = np.where(random_window_mask)[0]
-
-    
-        if len(random_window_indices) > 0:
-    
-            random_window_values = hit_sums[random_window_indices]
-    
-            local_max_idx = np.nanargmax(random_window_values)
-            index_biggest_pulse_random_20ms = random_window_indices[local_max_idx]
-    
-            biggest_pulse_random_20ms = random_window_values[local_max_idx]
-    
-            scint_time_biggest_pulse_random_20ms = scint_tsec[index_biggest_pulse_random_20ms]
-    
-    
-    results['biggest_pulse_random_20ms'] = biggest_pulse_random_20ms
-    results['idx_biggest_pulse_random_20ms'] = index_biggest_pulse_random_20ms
-    results['scint_time_biggest_pulse_random_20ms'] = scint_time_biggest_pulse_random_20ms * 1000
-
-
-
-
-
-    # Biggest pulse within 40ms of pT0
-
-    pt0_window = 0.040
-    
-    window_mask = np.abs(scint_tsec - (pressureT0_in_corrected_time/1000)) <= pt0_window
-    
-    window_indices = np.where(window_mask)[0]
-    
-    if len(window_indices) == 0:
-        biggest_pulse_within_40ms_pt0 = np.nan
-        index_biggest_pulse_within_40ms_pt0 = np.nan
-        scint_time_biggest_pulse_within_40ms_pt0 = np.nan
-    else:
-        window_values = hit_sums[window_indices]
-    
-        local_max_idx = np.nanargmax(window_values)
-        index_biggest_pulse_within_40ms_pt0 = window_indices[local_max_idx]
-    
-        biggest_pulse_within_40ms_pt0 = window_values[local_max_idx]
-
-        scint_time_biggest_pulse_within_40ms_pt0 = scint_tsec[index_biggest_pulse_within_40ms_pt0]
-    
-
-    results['biggest_pulse_pt0_40ms'] = biggest_pulse_within_40ms_pt0
-    results['idx_biggest_pulse_pt0_40ms'] = index_biggest_pulse_within_40ms_pt0
-    results['scint_time_biggest_pulse_pt0_40ms'] = scint_time_biggest_pulse_within_40ms_pt0 * 1000
-
-
-
-
-
-    # Biggest pulse within random +-40ms window (excluding pT0 window)
-
-    pt0_center = pressureT0_in_corrected_time / 1000
-    
-    # Random window only before pT0 - 40ms
-    random_center_min = pt0_window
-    random_center_max = pt0_center - (2* pt0_window)
-    
-    biggest_pulse_random_40ms = np.nan
-    index_biggest_pulse_random_40ms = np.nan
-    scint_time_biggest_pulse_random_40ms = np.nan
-    
-    if random_center_max > random_center_min: # failed pT0 gives pT0 = 0
-    
-        random_center = np.random.uniform(random_center_min,random_center_max)
-        random_window_mask = np.abs(scint_tsec - random_center) <= pt0_window
-        random_window_indices = np.where(random_window_mask)[0]
-    
-    
-        if len(random_window_indices) > 0:
-    
-            random_window_values = hit_sums[random_window_indices]
-    
-            local_max_idx = np.nanargmax(random_window_values)
-            index_biggest_pulse_random_40ms = random_window_indices[local_max_idx]
-    
-            biggest_pulse_random_40ms = random_window_values[local_max_idx]
-    
-            scint_time_biggest_pulse_random_40ms = scint_tsec[index_biggest_pulse_random_40ms]
-    
-    
-    results['biggest_pulse_random_40ms'] = biggest_pulse_random_40ms
-    results['idx_biggest_pulse_random_40ms'] = index_biggest_pulse_random_40ms
-    results['scint_time_biggest_pulse_random_40ms'] = scint_time_biggest_pulse_random_40ms * 1000
     
     
     
