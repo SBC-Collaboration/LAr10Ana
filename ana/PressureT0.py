@@ -160,6 +160,6 @@ if __name__ =="__main__":
     import importlib
 
     # data = GetEvent("/exp/e961/app/users/runze/data/20251120_12/", 3,strictMode=False) # success event
-    data = GetEvent("/exp/e961/app/users/runze/data/20260205_6/", 33, strictMode=False)  # failure event
+    data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251112_18/", 33, strictMode=False)  # failure event
     result  = PressureT0Finding(data)
     print(result)
