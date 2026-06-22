@@ -1,5 +1,9 @@
 # Change Log
 
+## [LAr10Ana v0.1.5](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.1.5)
+- Bugfix in pressure t0 module
+- Update docs on deploying new version
+
 ## [LAr10Ana v0.1.4](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.1.4)
 - Bugfix in scint t0 module
 
