@@ -61,3 +61,29 @@ This script is the one that actually runs on the grid node. It configures conda 
 
 ### 4. `cleanup.sh`
 This is another piece of script that needs to be run explicitly. Since all data and output files are in the scratch part of PNFS, they are not persistent. For each run in the `grid_output` folder, it checks the exit code of the log file. If the code is not zero, then the output folder is deleted. If it's zero, meaning success, it will then compare the version of the output to the run existing in the destination (`/exp/e961/data/SBC-25-recon/dev-output` in most cases). If the version is the same or newer, then the output in the destination will be overwritten by the new output. If not, the new output will be discarded. Then, it removes the run from `~/.cache/sbc_job_list.csv`. The raw data tarball is left in temp_data folder, to avoid repeated file operations. 
+
+## Deploying a new version
+Here's the recommended steps when running a new version on the grid.
+1. Merge all changes that should be included in the new version into the main branch. 
+2. Test the code works, and can produce the expected recon output files. On the GPVM or EAF, pull the latest version of main branch, then edit the last section of the `grid_jobs/EventDealer.py` to a run that has all data streams to be tested, the output path to a personal temp folder, and the updated module list. Then run
+    ```
+    source setup.py  # set up conda environment
+    python grid_jobs/EventDealer.py
+    ```
+    and check that the analysis modules finish for this run, and the output files are as expected.
+3. Once you are happy with the code, bump the version number in `docs/conf.py` (for the Sphinx documentation), and update change log at `docs/changelog.md`. Push the commit.
+4. Tag this commit with the new version number. To do it locally, run
+    ```
+    git tag "vx.y.z"
+    git push --tags
+    ```
+    or do it on GitHub by creating a new release. 
+5. Update the `LAr10Ana` repository on coupppro@couppsbcgpvm01.fnal.gov to pull the new tag and commit. 
+6. It is ready to be deployed. Either wait for the cron job to run, or manually start by running 
+    ```
+    grid_jobs/batch_run_grid_jobs.sh
+    ```
+    To run the specific version, run 
+    ```
+    grid_jobs/batch_run_grid_jobs.sh -t vx.y.z
+    ```
