@@ -1,5 +1,10 @@
 # Change Log
 
+## [LAr10Ana v0.1.3](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.1.3)
+- Improved handscanning, output to dedicated directory
+- Improved bubble finder
+- Improved scintillation t0, saves first/last pulse instead of largest pulse
+
 ## [LAr10Ana v0.1.2](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.1.2)
 - Bug fix in Event Dealer
 

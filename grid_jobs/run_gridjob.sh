@@ -70,9 +70,9 @@ DISK_GB=$((DISK_GB > 500 ? 500 : DISK_GB))
 RAM_GB=$((TAR_SIZE_GB * 2 + 2))
 RAM_GB=$((RAM_GB < 2 ? 2 : RAM_GB))
 RAM_GB=$((RAM_GB > 16 ? 16 : RAM_GB))
-# Run time: 1h/5GB x size + 2h, minimum 2h, maximum 24h
-RUN_TIME=$((TAR_SIZE_GB / 5 + 2))
-RUN_TIME=$((RUN_TIME < 2 ? 2 : RUN_TIME))
+# Run time: 1h/5GB x size + 3h, minimum 3h, maximum 24h
+RUN_TIME=$((TAR_SIZE_GB / 5 + 3))
+RUN_TIME=$((RUN_TIME < 3 ? 3 : RUN_TIME))
 RUN_TIME=$((RUN_TIME > 24 ? 24 : RUN_TIME))
 if [ $VERBOSE = true ]; then
     echo "Tar size: ${TAR_SIZE_GB}GB, requesting Disk: ${DISK_GB}GB, RAM: ${RAM_GB}GB, Run Time ${RUN_TIME}h"
