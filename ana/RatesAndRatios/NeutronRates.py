@@ -391,7 +391,7 @@ for p,T in pToUse:
     plt.title("Multiplicites Comparison for P="+ str(p) +'bara and T=' + str(T) +'K',fontsize=16)
     plt.legend(fontsize=20)
     plt.savefig("linhist" + str(p) + ".png")
-    plt.show()
+    #plt.show()
     plt.close()
 
     # old graphing
@@ -443,4 +443,109 @@ for p,T in pToUse:
     #plt.show()
     plt.close()
 
+# averaged out one
+ # bin data and calc ratios 
+binLabels = ["1", "2", "3", "4", "5+"]
+binCounts = [0]*(len(binLabels))
+#idk if we need this but could help
+excludedRegions = []
+sourceTime = 0
+for i in range(len(bubbleCount)):
+    n = bubbleCount[i]
+    if n[1] in excludedRegions:
+        continue
+    sourceTime += sourceTimes[i]
+    if n[0] >= 5:
+        binCounts[4] += 1
+    else:
+        binCounts[n[0]-1] += 1
+# background rate subtraction
+backgroundSingleEst = backgroundSingles * sourceTime/backgroundTime
+background2sEst = background2s * sourceTime/backgroundTime
+background3sEst = background3s * sourceTime/backgroundTime
+background4sEst = background4s * sourceTime/backgroundTime
+background5sEst = background5s * sourceTime/backgroundTime
+backBins = [backgroundSingleEst, background2sEst, background3sEst, background4sEst, background5sEst]
+backError = []
+for c in backBins:
+    backError.append(np.sqrt(c))
+
+backSubBins = []
+backSubError = []
+binCountError = []
+binCountError.append(0)
+for i in range(len(backBins)):
+    backSubBins.append(binCounts[i] - backBins[i])
+    if not i == 0:
+        binCountError.append(np.sqrt(binCounts[i]))
+    backSubError.append(binCountError[i] + backError[i])
+
+ratios = [1]
+backSubRatios = [1]
+ratioError = []
+for c in binCounts[1:]:
+    ratios.append(c/binCounts[0])
+for c in backSubBins[1:]:
+    backSubRatios.append(c/backSubBins[0])
+
+for i in range(0,len(binLabels)):
+    ratioError.append( np.sqrt(np.abs( (binCountError[i]/binCounts[0])**2 + (binCounts[i] * binCountError[0]/(binCounts[0]**2))**2   )))
+
+
+simCountMin = []
+simCountMax = []
+
+
+for i in range(0,len(thresholds)-1):
+    simCountMin.append([])
+    simCountMax.append([])
+    for j in range(0,len(ratiosSim[i])-1):
+        simCountMin[i].append(np.abs(backSubBins[0]* (ratiosSim[j][i] - simError[j][i])))
+        simCountMax[i].append(np.abs(backSubBins[0] * (ratiosSim[j][i] + simError[j][i])))
+x = np.arange(len(binLabels))
+
+plt.figure(figsize=(16,9))
+barsList = []
+width = 0.9/(len(thresholds)-1)
+colors = ["blue","red","green","orange", "teal","black"]
+num_groups = len(thresholds) - 1
+
+for i in range(num_groups):
+    offset = (i - (num_groups - 1) / 2) * width
+    xPos = x + offset
+    bars = plt.bar(xPos, simCountMax[i], width=width, color=colors[i % len(colors)],
+                edgecolor="black", alpha=0.18,zorder=0)
+    barsList.append(bars)
+
+
+for i in range(num_groups):
+    for j, bar in enumerate(barsList[i]):
+        r = ratiosSim[j][i]    # note swapped indices
+        cx = bar.get_x() + bar.get_width()/2
+        cy = bar.get_height()
+        plt.text(cx, cy + 0.01*max(binCounts), f"{r:0.3f}", ha='center', va='bottom', fontsize=12)
+
+shadedInBars = []
+for i in range(num_groups):
+    offset = (i - (num_groups - 1) / 2) * width
+    xPos = x + offset
+    bars = plt.bar(xPos, simCountMin[i], width=width, color=colors[i % len(colors)],
+                edgecolor="black", label=f"{thresholds[i]/1000}KeV",zorder=2)
+    shadedInBars.append(bars)
+points = x
+plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
+
+# subtracted rates
+plt.errorbar(points, backBins, yerr=backError, fmt='o',color="orange", label="Background Rate")
+plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
+
+
+plt.xticks(x,binLabels)
+plt.xlabel("Bubble Multiplicity",fontsize=16)
+plt.ylabel("Count",fontsize=16)
+plt.title("Multiplicites Comparison for all P and T",fontsize=16)
+plt.legend(title="Thresholds",fontsize=16)
+plt.savefig("multhistavg.png")
+plt.show()
+plt.close()
 
