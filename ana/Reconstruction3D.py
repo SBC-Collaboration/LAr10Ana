@@ -34,7 +34,6 @@ def getProjMat(camNum):
      [np.nan,np.nan,np.nan,np.nan]])
 
 
-
 '''
 Least squares triangulation, 2D to 3D points. Needs 2+ cams
 '''
@@ -76,11 +75,7 @@ def triangulate_multi_cam_LS(pixel_coords):
     _, _, Vt = np.linalg.svd(A)
     X = Vt[-1]
     X = X / X[3]
-    for i in X[:3]:
-        i *=25.4
-    return X[:3]
-
-
+    return X[:3] * 25.4
 
 
 '''
@@ -141,7 +136,6 @@ def bubble_mult(bubble_data):
         if ok:
             return m0
     return 0
-
 
 
 '''
@@ -214,7 +208,6 @@ def pull_bubble_coords(bubble_data):
     return coordsToReturn
 
 
-
 def reconstruct_2D_to_3D(data):
 
     # checking if the bubble finder ran
@@ -262,6 +255,3 @@ def reconstruct_2D_to_3D(data):
             coordsToReturn.append(np.full(3,np.nan))
             frames.append(i)
         return {"coords_3D": coordsToReturn, "frame": frames}
-
-
-
