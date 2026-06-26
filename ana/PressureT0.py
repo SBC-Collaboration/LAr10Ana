@@ -82,7 +82,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
             if piezoslope0[i] > 2 * hardcut_threshold:
                 ending_indx = i
                 fitting_ending_indx = i - int(100000)  # modify this
-                fitting_ending_indx = int(min(i - int(10000 / average_window), int(800*1000 / average_window)))
+                fitting_ending_indx = int(min(i - int(10000 / average_window), int(time_max_raw*1000 / average_window)))
                 break
         # print("index", ending_indx, time_list_ms[ending_indx])
         pressure_before_fit = piezo0_filtered[starting_indx:ending_indx]
@@ -108,6 +108,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         # fit with function
         # f =c when x<t0,
         # f=a(x-t0)**2+c when x>t0
+        print("node1",starting_indx,fitting_ending_indx)
         slope_before_fit = slope0_filtered[starting_indx:fitting_ending_indx]
         time_fitting_range = time_list_ms[starting_indx:fitting_ending_indx]
         # print(time_fitting_range)
