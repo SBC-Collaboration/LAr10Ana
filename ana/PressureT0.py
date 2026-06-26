@@ -74,6 +74,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         # print(piezoslope0[starting_indx])
         p_rate_range = abs(max(piezoslope0[starting_indx:int(40 * starting_indx)]) - min(
             piezoslope0[starting_indx:int(40 * starting_indx)]))
+        print(p_rate_range, piezoslope0[0])
 
         ending_indx = 0
         fitting_ending_indx = 0
