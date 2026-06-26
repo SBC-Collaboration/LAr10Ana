@@ -114,7 +114,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
 
         slope_before_fit = slope0_filtered[starting_indx:fitting_ending_indx]
         time_fitting_range = time_list_ms[starting_indx:fitting_ending_indx]
-
+        print("node0")
         # initial guesses:
         a0 = 8e-6
         t0 = time_list_ms[fitting_ending_indx]-100  # t0 initial guess around 600 ms
