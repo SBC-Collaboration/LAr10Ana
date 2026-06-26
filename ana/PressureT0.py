@@ -109,12 +109,11 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         # f =c when x<t0,
         # f=a(x-t0)**2+c when x>t0
         print("node1",starting_indx,fitting_ending_indx,len(slope0_filtered),len(time_list_ms))
-        try:
-            slope_before_fit = slope0_filtered[starting_indx:fitting_ending_indx]
-            time_fitting_range = time_list_ms[starting_indx:fitting_ending_indx]
-        except Exception as e:
-            print(e)
-        # print(time_fitting_range)
+
+        slope_before_fit = slope0_filtered[starting_indx:fitting_ending_indx]
+        time_fitting_range = time_list_ms[starting_indx:fitting_ending_indx]
+
+        print(time_fitting_range)
         # initial guesses:
         print("T0",time_fitting_range[fitting_ending_indx]-100)
         print("max(time_fitting_range)",max(time_fitting_range))
