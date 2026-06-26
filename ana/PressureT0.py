@@ -87,7 +87,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         # print("index", ending_indx, time_list_ms[ending_indx])
         pressure_before_fit = piezo0_filtered[starting_indx:ending_indx]
         time_range = time_list_ms[starting_indx:ending_indx]
-        # print("fitting indx", starting_indx, fitting_ending_indx)
+        print("fitting indx", starting_indx, fitting_ending_indx)
 
         # add low pass filter
         # assuming 1 microsecond time resolution 1e6Hz
@@ -113,7 +113,6 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         time_fitting_range = time_list_ms[starting_indx:fitting_ending_indx]
 
         # initial guesses:
-        print("node1",time_list_ms[fitting_ending_indx]-100,time_fitting_range)
         a0 = 8e-6
         t0 = time_list_ms[fitting_ending_indx]-100  # t0 initial guess around 600 ms
 
