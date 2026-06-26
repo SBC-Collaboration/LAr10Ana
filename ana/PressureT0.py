@@ -177,6 +177,8 @@ if __name__ =="__main__":
             if not any(result):
                 print("bad path", path)
                 bad_list.append(path)
+            else:
+                print(result[0])
         except Exception as e:
             print("error",e)
             continue
