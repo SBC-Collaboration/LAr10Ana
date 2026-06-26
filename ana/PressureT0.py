@@ -39,7 +39,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         ylimit = [-20, -18]
         # first check if the expansion success
         average_window_expansion = 100
-
+        print("node-1")
 
         average_window = 50  # every 50 data, do the average
         n_chunked = (len(piezo0) // average_window) * average_window  # chunk data
