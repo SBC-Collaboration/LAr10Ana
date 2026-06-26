@@ -82,6 +82,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         for i in range(starting_indx, len(piezoslope0), 1):
             if piezoslope0[i] > 2 * hardcut_threshold:
                 ending_indx = i
+                print("i",i)
                 fitting_ending_indx = i - int(100000)  # modify this
                 fitting_ending_indx = int(min(i - int(10000 / average_window), int(time_max_raw*1000 / average_window)))
                 break
