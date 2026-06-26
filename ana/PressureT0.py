@@ -115,10 +115,10 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
 
         print(time_fitting_range)
         # initial guesses:
-        print("T0",time_fitting_range[fitting_ending_indx]-100)
+        print("T0",time_list_ms[fitting_ending_indx]-100)
         print("max(time_fitting_range)",max(time_fitting_range))
         a0 = 8e-6
-        t0 = time_fitting_range[fitting_ending_indx]-100  # t0 initial guess around 600 ms
+        t0 = time_list_ms[fitting_ending_indx]-100  # t0 initial guess around 600 ms
 
         # c0 = np.mean(pressure_before_fit[:100]) # first 100 data average
         p0 = [a0, t0]
