@@ -108,11 +108,12 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         # fit with function
         # f =c when x<t0,
         # f=a(x-t0)**2+c when x>t0
-        print("node 1")
         slope_before_fit = slope0_filtered[starting_indx:fitting_ending_indx]
         time_fitting_range = time_list_ms[starting_indx:fitting_ending_indx]
         # print(time_fitting_range)
         # initial guesses:
+        print("T0",time_fitting_range[fitting_ending_indx]-100)
+        print("max(time_fitting_range)",max(time_fitting_range))
         a0 = 8e-6
         t0 = time_fitting_range[fitting_ending_indx]-100  # t0 initial guess around 600 ms
 
