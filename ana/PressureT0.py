@@ -39,7 +39,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
         ylimit = [-20, -18]
         # first check if the expansion success
         average_window_expansion = 100
-        print("node-1")
+
 
         average_window = 50  # every 50 data, do the average
         n_chunked = (len(piezo0) // average_window) * average_window  # chunk data
@@ -114,7 +114,7 @@ def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0
 
         slope_before_fit = slope0_filtered[starting_indx:fitting_ending_indx]
         time_fitting_range = time_list_ms[starting_indx:fitting_ending_indx]
-        print("node0")
+        # print("node0")
         # initial guesses:
         a0 = 8e-6
         t0 = time_list_ms[fitting_ending_indx]-100  # t0 initial guess around 600 ms
@@ -166,7 +166,7 @@ if __name__ =="__main__":
 
     # data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251113_9/", 3,strictMode=False) # success event
     # # data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251112_18/", 33, strictMode=False)  # failure event
-    data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251108_1/", 1, strictMode=False)
+    data = GetEvent("/exp/e961/data/SBC-25-unpacked/20251114_0/", 1, strictMode=False)
 
     result  = PressureT0Finding(data)
     print(result)
