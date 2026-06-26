@@ -174,6 +174,7 @@ if __name__ =="__main__":
         data = GetEvent(read_path, 1, strictMode=False)
         result = PressureT0Finding(data)
         if not any(result):
+            print("bad path",path)
             bad_list.append(path)
 
     print(bad_list)
