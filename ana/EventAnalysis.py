@@ -11,10 +11,16 @@ def EventAnalysis(ev):
     if ("pset_lo" not in event_info or "pset_hi" not in event_info) and "pset" in event_info:
         event_info["pset_lo"] = event_info["pset"]
         event_info["pset_hi"] = event_info["pset"]
-    
+
     for k in keys:
         value = event_info.get(k)
-        out[k] = np.asarray(value) if value is not None else np.array([])
+        if value is None:
+            out[k] = np.array([])
+        else:
+            # Fix edge case handling when event 0 has shape of 2 (bug?) and not 1
+            arr = np.asarray(value).reshape(-1)
+            out[k] = arr[0] if arr.size > 0 else np.array([])
+        
     return out
 
 if __name__ == "__main__":
