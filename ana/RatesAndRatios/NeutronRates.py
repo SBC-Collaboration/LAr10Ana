@@ -382,15 +382,15 @@ for p,T in pToUse:
                     seitzCount.append(backSubBins[0]* estRatio )
                 break
 
-    plt.stairs(seitzCount, edges, color="green", linewidth=4, label=f"Seitz Threshold ({seitz:0.2f} KeV )")
+    plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold ({seitz:0.2f} KeV )")
     
 
     plt.xticks(x,binLabels)
     plt.xlabel("Bubble Multiplicity",fontsize=20)
     plt.ylabel("Count",fontsize=20)
-    plt.title("Multiplicites Comparison for P="+ str(p) +'bara and T=' + str(T) +'K',fontsize=16)
+    plt.title("Multiplicites Comparison for P="+ str(p) +'bara and T=' + str(T) +'K',fontsize=20)
     plt.legend(fontsize=20)
-    plt.savefig("linhist" + str(p) + ".png")
+    plt.savefig("linhist" + str(p) + str(T)+".png")
     #plt.show()
     plt.close()
 
@@ -435,11 +435,11 @@ for p,T in pToUse:
 
 
     plt.xticks(x,binLabels)
-    plt.xlabel("Bubble Multiplicity",fontsize=16)
-    plt.ylabel("Count",fontsize=16)
-    plt.title("Multiplicites Comparison for P="+ str(p) +'bara and T=' + str(T) +'K',fontsize=16)
-    plt.legend(title="Thresholds",fontsize=16)
-    plt.savefig("multhist" + str(p) + ".png")
+    plt.xlabel("Bubble Multiplicity",fontsize=20)
+    plt.ylabel("Count",fontsize=20)
+    plt.title("Multiplicites Comparison for P="+ str(p) +'bara and T=' + str(T) +'K',fontsize=20)
+    plt.legend(title="Thresholds",fontsize=20)
+    plt.savefig("multhist" + str(p) + str(T)+".png")
     #plt.show()
     plt.close()
 
@@ -541,11 +541,11 @@ plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", labe
 
 
 plt.xticks(x,binLabels)
-plt.xlabel("Bubble Multiplicity",fontsize=16)
-plt.ylabel("Count",fontsize=16)
-plt.title("Multiplicites Comparison for all P and T",fontsize=16)
-plt.legend(title="Thresholds",fontsize=16)
+plt.xlabel("Bubble Multiplicity",fontsize=20)
+plt.ylabel("Count",fontsize=20)
+plt.title("Multiplicites Comparison for all P and T",fontsize=20)
+plt.legend(title="Thresholds",fontsize=20)
 plt.savefig("multhistavg.png")
-plt.show()
+#plt.show()
 plt.close()
 
