@@ -10,15 +10,12 @@ if [ "$USER" = "coupppro" ]; then
     OUTPUT_DIR="/pnfs/coupp/scratch/coupppro"
 fi
 
+echo -e "\nStarting batch clean up of grid job outputs in $OUTPUT_DIR"
+
 # Find all grid_output folders
 for FOLDER in "$OUTPUT_DIR"/grid_output*; do
     [ -d "$FOLDER" ] || continue
-
     folder_name=$(basename "$FOLDER")
-
-    # Delete files directly under the grid_output folder
-    echo -e "\n========== Cleaning stray files in $folder_name =========="
-    find "$FOLDER" -maxdepth 1 -type f -print -delete
 
     # Extract tag from folder name (grid_output or grid_output_<tag>)
     tag="${folder_name#grid_output_}"
@@ -26,7 +23,11 @@ for FOLDER in "$OUTPUT_DIR"/grid_output*; do
         tag=""
     fi
 
-    # Always run with -t flag
-    echo -e "\n>>> Running clean_up.sh -t '$tag'"
+    echo -e "\nCleaning outputs files for tag '$tag'"
+
+    # Delete files directly under the grid_output folder (corrupted folders)
+    find "$FOLDER" -maxdepth 1 -type f -print -delete
+
+    # Clean up
     bash "$CLEAN_UP_SCRIPT" -t "$tag"
 done

@@ -120,14 +120,16 @@ fi
 # Calculate disk and memory usage by tar file size
 TAR_SIZE_BYTES=$(stat -f%z "${DATA_DIR}/${RUN_ID}.tar" 2>/dev/null || stat -c%s "${DATA_DIR}/${RUN_ID}.tar")
 TAR_SIZE_GB=$((TAR_SIZE_BYTES / 1024 / 1024 / 1024))
+LARGEST_FILE_BYTES=$(tar -tvf "${DATA_DIR}/${RUN_ID}.tar" 2>/dev/null | sort -k3 -rn | head -1 | awk '{print $3}')
+LARGEST_FILE_GB=$((LARGEST_FILE_BYTES / 1024 / 1024 / 1024))
 # Disk: 3x size + 5GB, min 5GB, max 500GB
 DISK_GB=$((TAR_SIZE_GB * 3 + 5))
 DISK_GB=$((DISK_GB < 5 ? 5 : DISK_GB))
 DISK_GB=$((DISK_GB > 500 ? 500 : DISK_GB))
 # RAM: 2x size + 2GB, minimum 2GB, max 16GB
-RAM_GB=$((TAR_SIZE_GB * 2 + 2))
+RAM_GB=$((LARGEST_FILE_GB * 2 + 2))
 RAM_GB=$((RAM_GB < 2 ? 2 : RAM_GB))
-RAM_GB=$((RAM_GB > 16 ? 16 : RAM_GB))
+RAM_GB=$((RAM_GB > 64 ? 64 : RAM_GB))
 # Run time: 1h/2GB x (size + 1) + 2h, minimum 2h, maximum 24h
 RUN_TIME=$(( (TAR_SIZE_GB + 1) / 2 + 2))
 RUN_TIME=$((RUN_TIME < 2 ? 2 : RUN_TIME))
@@ -154,5 +156,5 @@ fi
 # Retrieve Job ID from output, and save to list
 JOB_ID=$(echo "$output" | grep -oP '\d+\.\d+@\S+\.fnal\.gov')
 echo "$(date '+%Y-%m-%d %H:%M:%S'), ${RUN_ID}, ${JOB_ID}" >> "${LIST_FILE}"
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Job ${JOB_ID} for run ${RUN_ID} ($new_version, $TAR_SIZE_GB GB) successfully submitted."
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Job ${JOB_ID} for run ${RUN_ID} ($SAFE_TAG, $TAR_SIZE_GB GB) successfully submitted."
 )

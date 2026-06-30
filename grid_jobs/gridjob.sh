@@ -42,7 +42,7 @@ echo "EVENT DELAER COMPLETED WITH EXIT CODE $?" >>${LOG} 2>&1
 
 echo "Copy data back to OUTDIR"
 OUTDIR_FULL="${OUTDIR}/${LOCAL_RUNDIR}-${CLUSTER}_${PROCESS}"
-ifdh mkdir ${OUTDIR_FULL}
+ifdh mkdir -p ${OUTDIR_FULL}
 echo "OUTDIR created at ${OUTDIR_FULL}"
 VERSION_FILE="${INPUT_TAR_DIR_LOCAL}/version.txt"
 ifdh cp -r ${VERSION_FILE} ${LOG} ${OUT}/* ${OUTDIR_FULL} >>${LOG} 2>&1 
