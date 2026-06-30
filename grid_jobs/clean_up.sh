@@ -70,7 +70,7 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
                     echo "Skipped $folder_name (no version info)"
                 elif [ "$new_version" = "$old_version" ]; then
                     should_move=true
-                    echo "Moving $folder_name (same version)"
+                    echo "Moving $folder_name (same version: $new_version)"
                 else
                     # Compare versions using sort -V
                     latest=$(printf "%s\n%s" "$old_version" "$new_version" | sort -V | tail -n1)
@@ -105,7 +105,8 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
             echo "Deleted $folder_name (non-zero exit code)"
         fi
     else
-        echo "Warning: Log file not found for $folder_name"
+        echo "Log file not found for $folder_name. Deleting..."
+        rm -rf "$folder"
     fi
 
     # Remove job from CSV list
