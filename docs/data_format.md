@@ -107,19 +107,16 @@ This module (`Reconstruction3D.py`) pulls bubble pixel position data from the Bu
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
-## Scintillation/Digiscope Time Correlation and ScintT0 (`scint_t0.sbc`)
-This module (`ScintT0.py`) correlates scintillation triggers with digiscope entries, determining the trigger latch time relative to scintillation time. Then, largest scintillation pulses near pressureT0 and within random windows are found.
-- **Failed** (`int`): indicates whether the module completed in its entirety or failed. Integer values correspond to the following failure modes. 0: no failure, module finished (any np.nan values in the pulse entries below means no pulses were found within the window); 1: no latch found in digiscope; 2: no CAEN triggers found in digiscope; 3: no scintillation triggers found; 4: not enough points (<2) for RANSAC fit; 5: pt0 failed; 6: pt0 module did not run.
-- **latch_time_corrected** (`float`, ms): time of trigger latch (from digiscope) in scintillation time, where t=0 is the time of the first scintillation CAEN trigger
-- **pT0_in_scint_time** (`float`, ms): pressureT0 time, relative to the first scintillation trigger
-- **biggest_pulse_pt0_20ms** (`float `, mV): the largest sum of the areas of all SiPM channels from Scintillation Analysis module (above) within +- 20ms of pressureT0
-- **idx_biggest_pulse_pt0_20ms** (`int`): index of the above pulse
-- **scint_time_biggest_pulse_pt0_20ms** (`float`, ms): time of the above pulse, relative to the first scintillation trigger
-- **biggest_pulse_random_20ms** (`float`, mV): the largest sum of the areas of all SiPM channels in a random 40ms window (before pT0 - 20ms, so no overlap between windows)
-- **biggest_pulse_pt0_40ms** (`float`, mV): the largest sum of the areas of all SiPM channels from Scintillation Analysis module (above) within +- 40ms of pressureT0
-- **idx_biggest_pulse_pt0_40ms** (`int`): index of the above pulse
-- **scint_time_biggest_pulse_pt0_40ms** (`float`, ms): time of the above pulse, relative to the first scintillation trigger
-- **biggest_pulse_random_40ms** (`float`, mV): the largest sum of the areas of all SiPM channels in a random 80ms window (before pT0 - 40ms)
+## Scintillation/Digiscope Time Correlation (`scint_t0.sbc`)
+This module (`ScintT0.py`) correlates scintillation triggers with digiscope entries, determining relevant triggers/times relative to scintillation time, including the trigger latch, the first and last scintillation triggers in two pT0 windows (±20, ±40), and the first scintillation trigger in post-expanded livetime (from PT2121_livetime in Exposure Analysis module). All times are relative to the first scintillation trigger.
+- **Failed** (`int`): indicates whether the module completed in its entirety or failed. Integer values correspond to the following failure modes. 0: no failure, module finished (any np.nan values in the pulse entries below means no pulses were found within the window); 1: no latch found in digiscope; 2: no CAEN triggers found in digiscope; 3: no scintillation triggers found; 4: not enough points (<2) for RANSAC fit; 5: pt0 failed; 6: pt0 module did not run; 7: no pulses found in 80ms pT0 window; 8: no exposure analysis found.
+- **latch_time_corrected** (`float`, ms): time of trigger latch (from digiscope)
+- **pT0_in_scint_time** (`float`, ms): pressureT0 time
+- **first_pulse_pt0_20ms** (array(`int`,`float`),(index,ms)): first pulse within ±20ms of pressureT0. First entry is scintillation trigger index. Second entry is time relative to the first scintillation trigger
+- **last_pulse_pt0_20ms** (array(`int`,`float`),(index,ms)): last pulse in 40ms pT0 window
+- **first_pulse_pt0_40ms** (array(`int`,`float`),(index,ms)): first pulse within ±40ms of pressureT0
+- **last_pulse_pt0_40ms** (array(`int`,`float`),(index,ms)): last pulse in 80ms pT0 window
+- **first_scint_in_livetime** (array(`int`,`float`),(index,ms)): first scintillation trigger during post-expanded livetime
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
