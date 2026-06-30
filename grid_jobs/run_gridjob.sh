@@ -79,11 +79,11 @@ rsync -azh --chmod=777 "${SRC}" "${DST}"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 LAR10ANA_DIR="${SCRIPT_DIR}/.."
 VERSION_FILE="version.txt"
-TARBALL="LAr10ana.tar"
+TARBALL="LAr10ana${SAFE_TAG:+_${SAFE_TAG}}.tar"
 
 cleanup() {
     # Always clean tar/tbz
-    rm -f "${LAR10ANA_DIR}/${TARBALL}" "${LAR10ANA_DIR}/LAr10ana.tar" "${LAR10ANA_DIR}/LAr10ana.tar"*.tbz* >/dev/null 2>&1 || true
+    rm -f "${LAR10ANA_DIR}/${TARBALL}" "${LAR10ANA_DIR}/${TARBALL}"*.tbz* >/dev/null 2>&1 || true
     # Clean worktree if it exists
     if [ -n "${WT_DIR:-}" ]; then
         git -C "${LAR10ANA_DIR}" worktree remove --force "${WT_DIR}" >/dev/null 2>&1 || true
