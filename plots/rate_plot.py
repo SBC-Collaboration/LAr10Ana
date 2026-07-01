@@ -1,20 +1,17 @@
 #!/usr/bin/env python
 """Averaged background bubble-rate plot vs. Seitz threshold.
 
-Adapted from APSExposurePlot.ipynb. Reads the refactor exposure tables written by
-run_exposures.py (``<stem>_exposures_mix.txt`` in ``exposures-refactor``), converts
-each fitted nucleation lifetime tau into a rate (bubbles/hour = 3600/tau), and
-combines runs taken at the same operating temperature via an inverse-variance
-weighted mean per pressure setpoint. Points are plotted against the Seitz
-threshold [keV] (read straight from the file), one series per temperature.
+Reads the refactor exposure tables written by run_exposures.py
+(``<stem>_exposures_mix.txt`` in ``exposures-refactor``), converts each fitted
+nucleation lifetime tau into a rate, and combines runs taken at the same
+operating temperature. Points are plotted against the Seitz threshold [keV]
+(read straight from the file), one series per temperature.
 
 Only the four SeitzModel columns in the input encode temperature; the temperature
 value itself is re-derived from each config's run dates via temperature_K() (the
 same date-cut rule used by run_exposures.py).
 
 Usage:
-    source setup.sh
-    cd ana
     python rate_plot.py                 # background configs -> plots_07_01_26
     python rate_plot.py --no-plots      # just print the averaged-rate table
     python rate_plot.py --prefix "Cold Cs" --name cold_cs_rate
@@ -30,7 +27,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from configs import CONFIGS, sanitize
-from run_exposures import temperature_K   # DRY: reuse date -> temperature rule
 
 # ----------------------------------------------------------------------------- #
 # Defaults / constants
@@ -43,7 +39,7 @@ DEFAULT_NAME = "background_rate"
 COLORS = ["black", "lightslategray"]
 SEC_PER_HOUR = 3600.0
 
-# Quality cuts (from APSExposurePlot.ipynb): drop degenerate low-statistics fits
+# Quality cuts: drop degenerate low-statistics fits
 # (tau rails to a tiny boundary value) and points with implausible fit precision.
 DEFAULT_MIN_TAU = 10.0        # s
 DEFAULT_MIN_FRACERR = 0.05    # tau_err / tau
@@ -55,6 +51,19 @@ C_TAU = 1
 C_TAU_ERR = 2
 C_SEITZ = 8
 
+def temperature_K(runs):
+    """Operating temperature (K) for a configuration from its run dates."""
+    dates = [int(r.split("_")[0]) for r in runs]
+    before = [d < TEMP_DATE_CUT for d in dates]
+    if all(before):
+        return TEMP_BEFORE_K
+    if not any(before):
+        return TEMP_AFTER_K
+    # Configurations are date-contiguous and never straddle the cut, but guard
+    # anyway: use the value for the earliest run and warn.
+    print("  WARNING: config straddles temperature cut %d; using earliest-run value"
+          % TEMP_DATE_CUT)
+    return TEMP_BEFORE_K if min(dates) < TEMP_DATE_CUT else TEMP_AFTER_K
 
 # ----------------------------------------------------------------------------- #
 # Data loading / rate computation
