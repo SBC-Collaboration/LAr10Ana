@@ -360,16 +360,24 @@ class Camera(tk.Frame):
             frame = int(self.last_frame)
         self.frame = str(frame)
 
-        path = self.get_image_path(0, self.frame)
-        if self.zip_flag:
-            try:
-                self.zipped_event.open(path)
-            except:
-                self.frame = self.init_frame
-        elif not os.path.isfile(path):
+        # Only reset the frame to the init frame if the current frame does not exist in ANY camera
+        if not self.frame_exists(self.frame):
             self.frame = self.init_frame
 
         self.update_images()
+
+    def frame_exists(self, frame):
+        for cam in range(0, self.num_cams):
+            path = self.get_image_path(cam, frame)
+            if self.zip_flag:
+                try:
+                    self.zipped_event.open(path)
+                    return True
+                except Exception:
+                    continue
+            elif os.path.isfile(path):
+                return True
+        return False
 
     def on_canvas_leave(self, event):
         event.widget.itemconfig(event.widget.top_text, text='x: -- y: --')
