@@ -191,26 +191,47 @@ backgroundMultis = background2s + background3s + background4s + background5s
 # path to csv output from handscanning in LAr10Ana
 path = "/exp/e961/data/SBC-25-handscan/"
 
+
+
+# config A
 ## warm annular
-neutronRunsWarm = ["20260107_3", "20260107_4", "20260107_5", "20260107_6", "20260107_7", "20260108_0", "20260108_1", "20260108_2", "20260108_3", "20260108_4", "20260108_5", "20260108_6", "20260108_7", "20260108_8", "20260109_0"]
+neutronRunsWarm = ["20260107_3", "20260107_4", "20260107_5", "20260107_6", "20260107_7", "20260108_0", "20260108_1", "20260108_2", "20260108_3"]
 ## cold annular
-neutronRunsCold = ["20260122_3","20260122_4","20260122_5","20260122_6","20260123_0","20260123_1","20260123_2","20260123_3","20260123_4","20260123_8","20260123_9","20260123_10","20260124_0","20260124_1","20260124_3","20260124_4","20260124_5","20260125_0","20260125_1","20260125_2","20260125_3","20260125_4","20260125_5","20260125_6","20260125_7","20260125_8"]
+neutronRunsCold = []
 
 ## 119K
-neutronRunsHot = ["20260205_12","20260205_13","20260205_14","20260205_15","20260205_16","20260205_17","20260205_18","20260206_0","20260206_1","20260206_2","20260206_3","20260206_4","20260206_5","20260206_6","20260206_7","20260213_1","20260213_2","20260213_3","20260213_4","20260213_5","20260213_6","20260213_7","20260213_8","20260213_9","20260214_0","20260214_1","20260214_2","20260214_3","20260214_4","20260214_5","20260214_6","20260214_7","20260214_8","20260214_9","20260214_10","20260214_11","20260214_12","20260214_13","20260214_14","20260215_0","20260215_1","20260215_2","20260215_3","20260215_4","20260215_5","20260215_6","20260215_7","20260215_8","20260215_9","20260215_10","20260215_11","20260215_12","20260215_13","20260215_14","20260216_0","20260216_1","20260216_2","20260216_3","20260216_4","20260216_5","20260216_6","20260216_7","20260216_8","20260216_9","20260216_10","20260216_11","20260216_12","20260216_13","20260217_0","20260217_1","20260217_2","20260217_3","20260217_4","20260217_5","20260217_6"]
+neutronRunsHot = []
+
+# config B
+## warm annular
+neutronRunsWarmB = ["20260108_4", "20260108_5", "20260108_6", "20260108_7", "20260108_8", "20260109_0"]
+
+## cold annular 
+neutronRunsColdB = ["20260122_3","20260122_4","20260122_5","20260122_6","20260123_0","20260123_1","20260123_2","20260123_3","20260123_4","20260123_8","20260123_9","20260123_10","20260124_0","20260124_1","20260124_3","20260124_4","20260124_5","20260125_0","20260125_1","20260125_2","20260125_3","20260125_4","20260125_5","20260125_6","20260125_7","20260125_8"]
+
+## 119K
+neutronRunsHotB = ["20260205_12","20260205_13","20260205_14","20260205_15","20260205_16","20260205_17","20260205_18","20260206_0","20260206_1","20260206_2","20260206_3","20260206_4","20260206_5","20260206_6","20260206_7","20260213_1","20260213_2","20260213_3","20260213_4","20260213_5","20260213_6","20260213_7","20260213_8","20260213_9","20260214_0","20260214_1","20260214_2","20260214_3","20260214_4","20260214_5","20260214_6","20260214_7","20260214_8","20260214_9","20260214_10","20260214_11","20260214_12","20260214_13","20260214_14","20260215_0","20260215_1","20260215_2","20260215_3","20260215_4","20260215_5","20260215_6","20260215_7","20260215_8","20260215_9","20260215_10","20260215_11","20260215_12","20260215_13","20260215_14","20260216_0","20260216_1","20260216_2","20260216_3","20260216_4","20260216_5","20260216_6","20260216_7","20260216_8","20260216_9","20260216_10","20260216_11","20260216_12","20260216_13","20260217_0","20260217_1","20260217_2","20260217_3","20260217_4","20260217_5","20260217_6"]
 
 
 ## ones that are used for this graph
 neutronRuns = []
-for run in neutronRunsWarm:
-    neutronRuns.append(run)
-for run in neutronRunsCold:
-    neutronRuns.append(run)
-for run in neutronRunsHot:
-    neutronRuns.append(run)
+# config A
+if not True:
+    for run in neutronRunsWarm:
+        neutronRuns.append(run)
+    for run in neutronRunsCold:
+        neutronRuns.append(run)
+    for run in neutronRunsHot:
+        neutronRuns.append(run)
 
-#neutronRuns.append("20260330_5")
-## purley for the sake of me testing
+# config B
+if True: 
+    for run in neutronRunsWarmB:
+        neutronRuns.append(run)
+    for run in neutronRunsColdB:
+        neutronRuns.append(run)
+    for run in neutronRunsHotB:
+        neutronRuns.append(run)
 
 def process_dir(dirpath):
     checkedRuns = []
@@ -278,16 +299,22 @@ ratiosSim.append([0.03417694, 0.01363073, 0.01183152, 0.00800400, 0.00636605, 0.
 simError.append([0.00322163, 0.00264983, 0.00262369, 0.00218002, 0.00198435, 0.00205089])
 
 seitzRatios = []
-seitzThresholds =  [0.526909797423797, 0.5985370523824889, 1.3448015203144668, 1.468053352541133, 0.6851980039055187, 1.7682026967519062, 0.7912523924096592, 2.164316091009131, 2.699825488759606, 1.088038322980897, 3.4446953964301947, 1.5747574169275487]
+
+seitzThresholds = [1.0530287933286058, 1.235873456434369, 1.468053352541133, 1.7682026967519062, 2.699825488759606, 4.516768136484239, 2.123625320716643]
+
+#seitzThresholds =  [0.526909797423797, 0.5985370523824889, 1.3448015203144668, 1.468053352541133, 0.6851980039055187, 1.7682026967519062, 0.7912523924096592, 2.164316091009131, 2.699825488759606, 1.088038322980897, 3.4446953964301947, 1.5747574169275487]
 seitzRatios.append([1,1,1,1,1,1,1,1,1,1,1,1])
-seitzRatios.append([0.26732673, 0.27181208, 0.27526132, 0.27526132, 0.27272727, 0.27719298, 0.27027027, 0.27915194, 0.28113879, 0.27054795, 0.28214286, 0.27622378])
-seitzRatios.append([0.15841584, 0.16107383, 0.16724739, 0.16724739, 0.16161616, 0.16842105, 0.16216216, 0.16961131, 0.17081851, 0.16438356, 0.17142857, 0.16783217])
-seitzRatios.append([0.04290429, 0.04362416, 0.04529617, 0.04529617, 0.04377104, 0.04912281, 0.04391892, 0.05300353, 0.05338078, 0.04452055, 0.05, 0.04545455])
-seitzRatios.append([0.04290429, 0.04362416, 0.04529617, 0.04529617, 0.04377104, 0.04210526, 0.04391892, 0.03886926, 0.03914591, 0.04452055, 0.03928571, 0.04545455])
-
-
-
-
+#seitzRatios.append([0.40310078, 0.4025974, 0.41315789, 0.41052632, 0.4025974, 0.40789474, 0.40469974, 0.40419948, 0.4047619, 0.41145833, 0.40909091, 0.41052632])
+#seitzRatios.append([0.15762274, 0.16103896, 0.15, 0.15, 0.16103896, 0.15, 0.1618799, 0.1496063, 0.15079365, 0.1484375, 0.15240642, 0.15])
+#seitzRatios.append([0.0878553, 0.08571429, 0.08684211, 0.08684211, 0.08571429, 0.08684211, 0.08616188, 0.08661417, 0.08994709, 0.0859375, 0.09090909, 0.08684211, 0.08684211])
+#seitzRatios.append([0.02842377, 0.02857143, 0.02631579, 0.02631579, 0.02597403, 0.02631579, 0.02610966, 0.02624672, 0.02380952, 0.02604167, 0.02406417, 0.02631579])
+seitzRatios.append([0.4151436, 0.41469816, 0.41052632, 0.40789474, 0.4047619, 0.41734417, 0.40419948])
+seitzRatios.append([0.14882507, 0.1496063, 0.15, 0.15, 0.15079365, 0.14905149, 0.1496063 ])
+seitzRatios.append([0.08616188, 0.08661417, 0.08684211, 0.08684211, 0.08994709, 0.09214092, 0.08661417])
+seitzRatios.append([0.02610966, 0.02624672, 0.02631579, 0.02631579, 0.02380952, 0.02439024, 0.02624672])
+usedSeitz = []
+mostCommon = None
+mostCommonCount = 0
 for p,T in pToUse:
     # bin data and calc ratios 
     binLabels = ["1", "2", "3", "4", "5+"]
@@ -295,15 +322,20 @@ for p,T in pToUse:
     #idk if we need this but could help
     excludedRegions = []
     sourceTime = 0
+    curCount = 0
     for i in range(len(bubbleCount)):
         n = bubbleCount[i]
         if n[1] in excludedRegions or psetsTemps[i][0] != p or psetsTemps[i][2] != T:
             continue
         sourceTime += sourceTimes[i]
+        curCount += 1
         if n[0] >= 5:
             binCounts[4] += 1
         else:
             binCounts[n[0]-1] += 1
+    if curCount > mostCommonCount:
+        mostCommonCount = curCount
+        mostCommon = (p,T)
     # background rate subtraction
     backgroundSingleEst = backgroundSingles * sourceTime/backgroundTime 
     background2sEst = background2s * sourceTime/backgroundTime 
@@ -349,7 +381,7 @@ for p,T in pToUse:
             simCountMax[i].append(np.abs(backSubBins[0] * (ratiosSim[j][i] + simError[j][i])))
 
     # new graphing
-    plt.figure(figsize=(16,9))
+    plt.figure(figsize=(10,10))
     x = np.arange(len(binLabels))
     points = x
 
@@ -357,7 +389,7 @@ for p,T in pToUse:
     plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
 
     # source off
-    plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label="Background Rate")
+    plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label=f"Background Rate\n(Livetime Norm. to Source")
     # on - off
     plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
     
@@ -366,6 +398,7 @@ for p,T in pToUse:
     plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0KeV Threshold")
     # seitz threshold
     seitz = sm.SeitzModel(p * 14.5038, -273.15 + T, 'argon').Q
+    usedSeitz.append(seitz)
     seitzCount= []
     seitzIndex = -1
     if seitz in seitzThresholds:
@@ -373,23 +406,23 @@ for p,T in pToUse:
             for j in range(0,len(seitzRatios)):
                 seitzCount.append(backSubBins[0] * seitzRatios[j][i])
     else:
+        print("Couldnt find exact value, using lerp")
         # linear interpolate for now
         for i in range(1,len(thresholds)):
             if seitz <= thresholds[i] and seitz>=thresholds[i-1]:
                 t = (seitz - thresholds[i-1])/(thresholds[i] - thresholds[i-1])
-                for j in range(0,len(ratiosSim)-1):
+                for j in range(0,len(ratiosSim)):
                     estRatio = ratiosSim[j][i-1] + (ratiosSim[j][i] - ratiosSim[j][i-1]) * t
                     seitzCount.append(backSubBins[0]* estRatio )
                 break
 
-    plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold ({seitz:0.2f} KeV )")
-    
-
-    plt.xticks(x,binLabels)
+    plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold\n({seitz:0.2f} KeV )")
+    plt.xticks(x,binLabels, fontsize=20)
+    plt.yticks(fontsize=20)
     plt.xlabel("Bubble Multiplicity",fontsize=20)
     plt.ylabel("Count",fontsize=20)
-    plt.title("Multiplicites Comparison for P="+ str(p) +'bara and T=' + str(T) +'K',fontsize=20)
     plt.legend(fontsize=20)
+    plt.tight_layout()
     plt.savefig("linhist" + str(p) + str(T)+".png")
     #plt.show()
     plt.close()
@@ -443,8 +476,8 @@ for p,T in pToUse:
     #plt.show()
     plt.close()
 
-# averaged out one
- # bin data and calc ratios 
+# averaged out stats
+# bin data and calc ratios 
 binLabels = ["1", "2", "3", "4", "5+"]
 binCounts = [0]*(len(binLabels))
 #idk if we need this but could help
@@ -549,3 +582,56 @@ plt.savefig("multhistavg.png")
 #plt.show()
 plt.close()
 
+
+
+
+# averaged seitz threshold
+avg = np.mean(usedSeitz)
+ratios = None
+if avg == 2.123625320716643:
+    print("avg is correct")
+    ratios = [1, 0.40419948, 0.1496063, 0.08661417,  0.02624672]
+else:
+    print("go get the new avg threshold it's value is:" + str(avg))
+    exit()
+
+
+plt.figure(figsize=(10,10))
+x = np.arange(len(binLabels))
+points = x
+
+# source on
+plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
+
+# source off
+plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label="Background Rate (Livetime Norm. to Source)")
+# on - off
+plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
+
+# 0KeV threshold
+edges = np.concatenate(([points[0] - 0.5], (points[:-1] + points[1:])/2, [points[-1] + 0.5]))
+plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0KeV Threshold")
+# seitz threshold
+seitz = avg
+
+seitzCount= []
+seitzIndex = -1
+for i in range(0,len(ratios)):
+    seitzCount.append(backSubBins[0] * ratios[i])
+
+plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold ({seitz:0.2f} KeV)")
+
+
+plt.xticks(x,binLabels, fontsize=20)
+plt.yticks(fontsize=20)
+plt.xlabel("Bubble Multiplicity",fontsize=20)
+plt.ylabel("Count",fontsize=20)
+plt.legend(fontsize=20)
+plt.tight_layout()
+plt.savefig("avgseitz.png", dpi=500)
+plt.show()
+plt.close()
+
+print(mostCommon)
+print(usedSeitz)
+print(np.mean(usedSeitz))
