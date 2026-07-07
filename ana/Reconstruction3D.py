@@ -172,7 +172,15 @@ def pull_bubble_coords(bubble_data):
     
     unique_frames = np.unique(frames)
     coordsToReturn  = []
-    for frame in range(50):
+
+    maxFrame = 1
+    with open('/exp/e961/data/SBC-25-unpacked/' + run + '/' + str(ev) + '/cam2.log') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            maxFrame += 1
+    
+    for frame in range(maxFrame):
         if frame in unique_frames:
 
             pick_frame = (frames == frame)
