@@ -1,7 +1,7 @@
 from sbcbinaryformat import Streamer, Writer
 from collections import Counter, defaultdict
 import numpy as np
-
+import os
 
 '''
 Projection matricies for each camera, generated using OpenCV calibration, with SiPMs and fiducial markings as training points
@@ -81,7 +81,7 @@ def triangulate_multi_cam_LS(pixel_coords):
 '''
 Check how many bubbles the bubble finder detected in a given event, returns estimated count. 0 if no bubbles found
 '''
-def bubble_mult(bubble_data):
+def bubble_mult(bubble_data, frameCount):
     '''
     bubble_data: bubble finder output dictionary
 
@@ -89,13 +89,11 @@ def bubble_mult(bubble_data):
         int of estimated bubble multiplicity
     '''
     # grab info
-
-    def to_frame(x):
-        return int(x[0]) if isinstance(x, (list, tuple)) and len(x) > 0 else int(x)
-
-    frames = [to_frame(f) for f in bubble_data["frame"]]
-    cams   = [tuple(c) if isinstance(c, list) else c for c in bubble_data["cam"]]
-
+    
+    frames = [int(f[0]) for f in bubble_data["frame"]]
+    cams   = [int(c[0]) if isinstance(c, list) else c for c in bubble_data["cam"]]
+    sigs   = [float(s[0]) for s in bubble_data["significance"]]
+    
     # find first mutli cam frame
     firstFrame = -1
     idx = sorted(range(len(frames)), key=lambda i: frames[i])
@@ -108,9 +106,9 @@ def bubble_mult(bubble_data):
 
     # get all camera frame pairs within a range of the first mutli cam event
     n = 5
-    seq = [(f, c) for f, c  in zip(frames, cams) if ( f >= firstFrame and f <= firstFrame + (10 + n)) ]
+    seq = [(f, c) for f, c, s  in zip(frames, cams, sigs) if ( f >= firstFrame and f <= firstFrame + (10 + n) and s >= 0.75) ]
     if not seq:
-        return 0
+        return -1
 
     mult = Counter(seq)  # {(frame, cam): multiplicity}
     byCamDict = defaultdict(dict)
@@ -130,12 +128,14 @@ def bubble_mult(bubble_data):
         m0 = mult[(f0,c0)]
         ok = True
         for offset in range(n):    
-            if  mult[f0 + offset, c0] < mult[f0, c0]:
+            if f0 + offset > frameCount:
+                break
+            if  mult[f0 + offset, 1] < m0 or mult[f0 + offset, 2] < m0 or mult[f0 + offset, 3] < m0:
                 ok = False
                 break
         if ok:
             return m0
-    return 0
+    return -2
 
 
 '''
@@ -144,7 +144,7 @@ least two cameras are defined. Undefined camera stored as np.nan. Does NOT work
 correctly for multi-bubble events yet
 '''
 
-def pull_bubble_coords(bubble_data):
+def pull_bubble_coords(bubble_data, frameCount):
     '''
     bubble_data: bubble finder output dictionary
 
@@ -172,14 +172,7 @@ def pull_bubble_coords(bubble_data):
     
     unique_frames = np.unique(frames)
     coordsToReturn  = []
-
-    maxFrame = 1
-    with open('/exp/e961/data/SBC-25-unpacked/' + run + '/' + str(ev) + '/cam2.log') as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        for row in reader:
-            maxFrame += 1
-    
+    maxFrame = frameCount
     for frame in range(maxFrame):
         if frame in unique_frames:
 
@@ -217,31 +210,35 @@ def pull_bubble_coords(bubble_data):
 
 
 def reconstruct_2D_to_3D(data):
-
+    frameCount = -2
+    for maybekey in (data["cam"]["c1"].keys()):
+        if "frame" in maybekey:
+            frameCount += 1
     # checking if the bubble finder ran
     if "bubble" in data["analysis"]:
         bubble_data = data["analysis"]["bubble"]
         # if it ran and the estimated multiplicity isnt 1, this could be a multi bubble so we ignore it.
-        if bubble_mult(bubble_data) != 1:
+        if bubble_mult(bubble_data, frameCount) > 1:
             coordsToReturn = []
             frames = []
-            for i in range(50):
-                coordsToReturn.append((np.full(3, np.nan)))
+            for i in range(0,frameCount):
+                coordsToReturn.append((-1000,-1000,-1000))
                 frames.append(i)
             return {"coords_3D": coordsToReturn, "frame": frames}
-        
+        print(bubble_mult(bubble_data, frameCount))
         # list of 3d coordinates to return to event dealer
         coordsToReturn = []
     
         # Pulls all 2D coordinates
-        coords_2D  = pull_bubble_coords(bubble_data)
+        print(frameCount)
+        coords_2D  = pull_bubble_coords(bubble_data, frameCount)
         frames = []
         # for every frame there is a set of 2d coordinates, each one corresponding to a certian cameras bubble location
         for coord in coords_2D:
             # if the camera didnt have a bubble, we should just ignore this frame and more on
             if isinstance(coord, int) or len(coord) != 2:
                 coordsToReturn.append(np.full(3,np.nan))
-                frames.append(1)
+                frames.append(len(frames))
                 continue
             frames.append(coord[1])
             nancheck = 0
@@ -249,7 +246,7 @@ def reconstruct_2D_to_3D(data):
                 if np.isnan(i):
                     nancheck += 1
             if len(coord) != 2 or len(coord[0]) != 6 or  coord[0][0] <= -999 or nancheck >= 4:
-                coordsToReturn.append(np.full(3,np.nan))
+                coordsToReturn.append((-999,-999,-999))
                 continue
             # triangulate the bubble into 3d space, then add it to the list to return
             coords_3D = triangulate_multi_cam_LS(coord[0])
@@ -259,7 +256,7 @@ def reconstruct_2D_to_3D(data):
     else:
         coordsToReturn = []
         frames = []
-        for i in range(50):
+        for i in range(0,frameCount):
             coordsToReturn.append(np.full(3,np.nan))
             frames.append(i)
         return {"coords_3D": coordsToReturn, "frame": frames}
