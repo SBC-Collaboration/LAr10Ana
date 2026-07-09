@@ -35,7 +35,7 @@ python LAr10Ana/grid_jobs/EventDealer.py /exp/e961/data/SBC-25-daqdata/20260221_
 The `LAr10Ana/grid_jobs/` directory also contains a few bash scripts to help with submitting and running jobs on the Fermi grid. The jobs need to be submitted from `couppsbcgpvm01.fnal.gov`. For production mode and automated submission, use `coupppro` user, which is set up with managed kerberos ticket.
 
 ### 1. `batch_run_gridjob.sh`
-This is the script to run to submit multiple jobs. It checks the folder of both the raw data tarball and the analysis outputs. For each run, it checks if the recon output doesn't exist, or current repository tag (like `v0.0.7`) is newer than the existing output for this run. If either is true, it will proceed to submitting a job for this run. It keeps track of the run ID and job ID of submitted jobs at `~/.cache/sbc_job_list.csv`, and also uses a lockfile to prevent multiple instances running at the same time.  
+This is the script to run to submit multiple jobs. It checks the folder of both the raw data tarball and the analysis outputs. For each run, it checks if the recon output doesn't exist, or current repository tag (like `v0.0.7`) is newer than the existing output for this run. If either is true, it will proceed to submitting a job for this run. It keeps track of the run ID and job ID of submitted jobs at `~/.cache/sbc/job_list.csv`, and also uses a lockfile to prevent multiple instances running at the same time.  
 
 Three tags are available for this script.  
 - `--verbose` or `-v`: Verbose mode, more detailed logging. Passed to `run_gridjob.sh`.
@@ -59,8 +59,15 @@ Two tags are available:
 ### 3. `gridjob.sh`
 This script is the one that actually runs on the grid node. It configures conda environment, copies the data from PNFS to the internal storage of the node, untars it, and runs `EventDealer.py`. After `EventDealer.py` is finished, is copies the output folder from the node back to the PNFS.
 
-### 4. `cleanup.sh`
-This is another piece of script that needs to be run explicitly. Since all data and output files are in the scratch part of PNFS, they are not persistent. For each run in the `grid_output` folder, it checks the exit code of the log file. If the code is not zero, then the output folder is deleted. If it's zero, meaning success, it will then compare the version of the output to the run existing in the destination (`/exp/e961/data/SBC-25-recon/dev-output` in most cases). If the version is the same or newer, then the output in the destination will be overwritten by the new output. If not, the new output will be discarded. Then, it removes the run from `~/.cache/sbc_job_list.csv`. The raw data tarball is left in temp_data folder, to avoid repeated file operations. 
+### 4. `clean_up.sh`
+This is another piece of script that needs to be run explicitly. Since all data and output files are in the scratch part of PNFS, they are not persistent. For each run in the `grid_output` folder, it checks the exit code of the log file. If the code is not zero, then the output folder is deleted. If it's zero, meaning success, it will then compare the version of the output to the run existing in the destination (`/exp/e961/data/SBC-25-recon/dev-output` in most cases). If the version is the same or newer, then the output in the destination will be overwritten by the new output. If not, the new output will be discarded. Then, it removes the run from `~/.cache/sbc/job_list.csv`. The raw data tarball is left in temp_data folder, to avoid repeated file operations. 
+It has a tag `--tag` or `-t`. If a version (`v0.1.0` for example) is passed with the tag, then it will look instead at the `grid_output_v0.1.0` folder, and move all finished data back to `/exp/e961/data/SBC-25-recon/v0.1.0`.
+
+### 5. `batch_clean_up.sh`
+This is basically a wrapper script that detects all the versions available in the `/pnfs/coupp/scratch/coupppro` folder, and runs `clean_up.sh` on each of those versions, including the main one without a version. Then it cleans up any empty folders in the temp folder.
+
+### Cron jobs
+The analysis is run on any new data, and on all data when a new version is added to `~/LAr10Ana` in the `coupppro` user home directory. This is done by cron jobs. Every six hours, it runs `batch_run_gridjob.sh` to submit new jobs. Every hour, it runs `batch_clean_up.sh` to move any completed analysis to the destination. The log file of each of the scrips are saved to `~/.cache/sbc/`. To see the current cron job of a user, run `crontab -l`. To edit, run `crontab -e`.
 
 ## Deploying a new version
 Here's the recommended steps when running a new version on the grid.
@@ -87,3 +94,50 @@ Here's the recommended steps when running a new version on the grid.
     ```
     grid_jobs/batch_run_grid_jobs.sh -t vx.y.z
     ```
+
+## Adding a new module
+To add a new module to run by EventDealer on the grid, following these steps.
+1. Create a feature branch based on the latest main branch. Ideally give it a descriptive name.
+2. If you are working on this branch for more than a couple days, consider:
+    - Commit any work along the way. Push your changes to github, the new branch should show up.
+    - Rebase onto the main branch periodically when new commits are available in the main branch. This means syncing the new commits from the main branch before the first unique branch in the feature branch.
+3. Add the new module as a separate python file inthe `ana/` directory. See existing modules for guideline of structure. Mainly, each module should have a main function that takes the output of `GetEvent` as an argument, and returns a dictionary of pre-defined keys and values. Every value should be a list / array in the dictionary should have the same size, but that size can be different for each event. This dictionary does not need to include the run and event ID, as that will be added by the Event Dealer.
+4. Edit `ana/EventDealer.py` to add the following lines. For example, this uses the `BubbleFinder` module.
+    - At the top, import the main function from the module
+    ```
+    from ana.BubbleFinder import BubbleFinder as bf
+    ```
+    - Include the module in the list os analyses to run
+    ```
+        ANALYSES = {
+        ...
+        "bubble": bf,
+        ...
+    }
+    ```
+    - Add to the list of checks the condition to skip this analysis module. I.e. if an event does not have camera images, don't run the bubble finder module
+    ```
+    ...
+    elif p == "bubble" and not data["cam"]["loaded"]:
+    print(f"Skipping {p} analysis -- camera data not loaded.")
+    continue
+    ...
+    ```
+    - Add the module into the list of analyses to run in the main function
+    ```
+    if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        ProcessSingleRun(
+            rundir=sys.argv[1],
+            recondir=sys.argv[2],
+            process_list = [..., "bubble", ...])
+    else:
+        ProcessSingleRun(
+            rundir="/exp/e961/data/SBC-25-daqdata/20260212_1.tar",
+            recondir="/PATH/TO/TEST/OUTPUT/DIRECTORY/"
+            process_list = [..., "bubble", ...])
+    ```
+    - Then test run the new version of Event Dealer on GPVM, to make sure it can handle the output format of the new module without throwing any errors.
+    - Add documentation of the data output to `docs/data_format.md`. 
+    - Commit and push changes to the feature branch, open a pull request to main branch.
+    - When ready, create a new version (instruction above), and start running on the grid~
