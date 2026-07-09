@@ -10,7 +10,8 @@ if [ "$USER" = "coupppro" ]; then
     OUTPUT_DIR="/pnfs/coupp/scratch/coupppro"
 fi
 
-echo -e "\nStarting batch clean up of grid job outputs in $OUTPUT_DIR"
+echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
+echo -e "Starting batch clean up of grid job outputs in $OUTPUT_DIR"
 
 # Find all grid_output folders
 for FOLDER in "$OUTPUT_DIR"/grid_output*; do
@@ -23,11 +24,15 @@ for FOLDER in "$OUTPUT_DIR"/grid_output*; do
         tag=""
     fi
 
+    echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
     echo -e "\nCleaning outputs files for tag '$tag'"
 
     # Delete files directly under the grid_output folder (corrupted folders)
-    find "$FOLDER" -maxdepth 1 -type f -print -delete
+    find "$FOLDER" -maxdepth 1 -type f -printf "Deleting %f\n" -delete
 
     # Clean up
     bash "$CLEAN_UP_SCRIPT" -t "$tag"
 done
+
+echo "Batch clean up completed."
+echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') ==========\n"

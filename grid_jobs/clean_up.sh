@@ -38,6 +38,8 @@ if [ -n "$TAG" ]; then
     JOBS_LIST="${HOME}/.cache/sbc/jobs_list_${SAFE_TAG}.csv"
 fi
 
+echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
+echo "Starting clean up of grid job outputs in $OUT_DIR"
 mkdir -p "$RECON_DIR"
 
 # Process each run
@@ -115,5 +117,8 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
         echo "Removed ${run_num} from job list"
     fi
 done
+
+# Remove any empty directories in OUT_DIR
+find "$OUT_DIR" -type d -empty -print -delete || true
 
 )

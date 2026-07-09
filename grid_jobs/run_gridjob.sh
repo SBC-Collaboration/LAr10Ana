@@ -99,9 +99,10 @@ if [ -n "$TAG" ]; then
     WT_DIR="$(mktemp -d -t lar10ana_wt_XXXXXX)"
     # Add the worktree at the requested tag
     git -C "${LAR10ANA_DIR}" worktree add --detach "${WT_DIR}" "refs/tags/${TAG}" >/dev/null
+    VERSION="$(git -C "${WT_DIR}" describe --tags --always)"
     ( cd "${WT_DIR}"
       # Inside the worktree, generate version file
-      git describe --tags --always > "${VERSION_FILE}"
+      printf '%s' "$VERSION" > "${VERSION_FILE}"
       # Tar the required files
       tar --mtime='1970-01-01 00:00:00' --sort=name -cf "${LAR10ANA_DIR}/${TARBALL}" --exclude='*.pyc' *.py *.sh ana grid_jobs "${VERSION_FILE}"
       rm -f "${VERSION_FILE}"
@@ -109,7 +110,8 @@ if [ -n "$TAG" ]; then
 else
     cd "${LAR10ANA_DIR}"
     # Generate version file and tar required files
-    git describe --tags --always >${VERSION_FILE}
+    VERSION="$(git describe --tags --always)"
+    printf '%s' "$VERSION" > "${VERSION_FILE}"
     tar --mtime='1970-01-01 00:00:00' --sort=name -cf $TARBALL --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
     rm ${VERSION_FILE}
 fi
@@ -156,5 +158,5 @@ fi
 # Retrieve Job ID from output, and save to list
 JOB_ID=$(echo "$output" | grep -oP '\d+\.\d+@\S+\.fnal\.gov')
 echo "$(date '+%Y-%m-%d %H:%M:%S'), ${RUN_ID}, ${JOB_ID}" >> "${LIST_FILE}"
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Job ${JOB_ID} for run ${RUN_ID} ($SAFE_TAG, $TAR_SIZE_GB GB) successfully submitted."
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Job ${JOB_ID} for run ${RUN_ID} ($VERSION, $TAR_SIZE_GB GB) successfully submitted."
 )
