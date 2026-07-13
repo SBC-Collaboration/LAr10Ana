@@ -150,8 +150,9 @@ def pull_bubble_coords(bubble_data, frameCount):
     '''
     run_bubbles = bubble_data
 
-    cams = np.array([c[0] for c in run_bubbles['cam']])
-    frames = np.array([f[0] for f in run_bubbles['frame']])
+    cams = np.array([int(c[0]) for c in run_bubbles['cam']])
+    frames = np.array([int(f[0]) for f in run_bubbles['frame']])
+    sigs = np.array([float(s[0]) for s in run_bubbles['significance']])
     pos = np.array(run_bubbles['pos'])
 
     if len(frames) == 0:
@@ -165,6 +166,7 @@ def pull_bubble_coords(bubble_data, frameCount):
     frames_ordered = np.argsort(frames)
     cams = cams[frames_ordered]
     pos = pos[frames_ordered]
+    sigs = sigs[frames_ordered]
     frames = frames[frames_ordered]
     
     unique_frames = np.unique(frames)
@@ -177,23 +179,27 @@ def pull_bubble_coords(bubble_data, frameCount):
 
             cams_f = cams[pick_frame]
             pos_f  = pos[pick_frame]
-
+            sig = sigs[pick_frame]
             # Need at least 2 cams
             if len(np.unique(cams_f)) < 2:
                 output = np.full(6, np.nan)
                 coordsToReturn.append((output,frame))
                 continue
-       
+            
+
             output = np.full(6, np.nan)
             used_cams = set()
-
+            used_sigs = []
+            
             #Fill available cameras
-            for cam_id, (x, y) in zip(cams_f, pos_f):
+            for cam_id, (x, y), s in zip(cams_f, pos_f, sigs):
                 if cam_id in used_cams:
                     #multi-bubble?
-                    continue
-
+                    if not s > used_sigs[-1]:
+                        continue
+            
                 used_cams.add(cam_id)
+                used_sigs.append(s)
                 if cam_id == 1:
                     output[0:2] = [x, y]
                 elif cam_id == 2:
