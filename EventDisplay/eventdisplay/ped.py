@@ -31,6 +31,7 @@ from PIL import PngImagePlugin
 import tarfile
 import zipfile
 import sys
+import operator as _op
 from tabs.camera import Camera
 from tabs.piezo import Piezo
 from tabs.slow_daq import SlowDAQ
@@ -52,6 +53,9 @@ PngImagePlugin.MAX_TEXT_CHUNK = 2000
 # verbosity = logging.DEBUG
 verbosity = logging.INFO
 tar_postfixes = ['.tar', '.tar.gz', '.tgz']
+
+# Comparison operators available in the cut UI
+_CUT_OPS = {'>': _op.gt, '>=': _op.ge, '==': _op.eq, '<=': _op.le, '<': _op.lt, '!=': _op.ne}
 
 # Defines message box for errors
 class PopUpHandler(logging.Handler):
@@ -191,7 +195,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.row_index = -1
         self.cuts = []
         self.selected_events = None
-        self.selected_reco_indices = None
         self.reco_events = None
         self.reco_row = None
         self.bubble_events = None
@@ -381,63 +384,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             # this error should be handled when it crops up in the code
             raise FileNotFoundError
 
-    def convert_reco_from_merged_all(self):
-        user_date = '{}_{}'.format(getpass.getuser(), time.strftime('%a_%b_%d_%H_%M_%S_%Y'))
-        merged_all = filedialog.askopenfilename(
-            initialdir=self.npy_directory,
-            title="Select a merged_all File",
-            filetypes=(("Text files", "*.txt*"), ("all files", "*.*")))
-        if len(merged_all) > 0:
-            os.system("python \"{}\" \"{}\" \"{}\" \"{}\" \"{}\"".format(
-                os.path.join(self.ped_directory, "convert_reco_to_npy_and_reindex_raw_npy.py"),
-                self.npy_directory,
-                self.npy_directory,
-                merged_all,
-                user_date))
-        else:
-            return
-
-        self.reco_filename = 'reco_events_{}.npy'.format(user_date)
-
-        self.get_raw_events()
-        self.update_num_cams()
-        self.load_reco()
-        self.reset_event()
-        self.set_init_dataset()
-        self.reset_images()
-        self.reset_cuts()
-        self.load_3d_bubble_data()
-
-    def select_reco_file(self):
-        if platform.system() == 'Darwin':       # macOS
-            reco_filename = filedialog.askopenfilename(initialdir=self.npy_directory, title="Select a reco_events File")
-        else:        
-            reco_filename = filedialog.askopenfilename(initialdir=self.npy_directory, title="Select a reco_events File", filetypes=(("NPY Files", "*.npy*"), ("all files", "*.*")))
-
-        if os.path.isfile(reco_filename):
-            reco_directory = os.path.split(reco_filename)[0]
-            if os.path.normpath(reco_directory) == os.path.normpath(self.npy_directory):
-                self.reco_filename = os.path.split(reco_filename)[1]
-            else:
-                directory_response = messagebox.askyesno('Selected File Not in NPY Directory', 'Current Dataset is: {}. \nSelected reco file is not in the NPY Directory for the current dataset. \nWould you still like to use the selected reco_events file?'.format(self.dataset))
-                if directory_response == 1:
-                    self.reco_filename = os.path.split(reco_filename)[1]
-                else:
-                    return
-        else:
-            return
-        # self.ped_directory = os.path.split(os.path.split(os.path.abspath(__file__))[0])[0]
-
-        self.show_var.set(False)
-
-        self.get_raw_events()
-        self.load_reco()
-        self.reset_event()
-        self.set_init_dataset()
-        self.reset_images()
-        self.reset_cuts()
-        self.load_3d_bubble_data()
-
     def load_event_sbc(self):
         selected = ["event_info"]
         self.path = os.path.join(self.raw_directory, self.run)
@@ -518,7 +464,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             except IndexError:
                 self.logger.error('disabling cuts: requested run does not satisfy them')
                 self.selected_events = None
-                self.selected_reco_indices = None
                 self.row_index = self.get_row(self.raw_events)
         self.load_reco_row()
 
@@ -560,7 +505,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                 except IndexError:
                     self.logger.error('disabling cuts: requested run does not satisfy them')
                     self.selected_events = None
-                    self.selected_reco_indices = None
                     self.row_index = self.get_row(self.raw_events)
             self.update_run_entry()
             self.load_reco_row()
@@ -575,33 +519,56 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.logger.error('requested variable not in reco data: ' + var)
             return
 
-        if var in [label['text'] for label, text, value in self.display_vars]:
+        if var in [entry['name'] for entry in self.display_vars]:
             return
 
-        label = tk.Label(self.bottom_frame_2, text=var)
-        label.grid(row=len(self.display_vars) + 2, column=0)
+        # each var gets its own row in the container frame: [ name | value | x ]
+        row = tk.Frame(self.display_vars_frame)
+        row.pack(anchor='w', fill='x')
+        tk.Label(row, text=var + ':', width=16, anchor='w').pack(side='left')
 
         text = tk.StringVar(value=self.reco_row[var]) if self.reco_row else tk.StringVar(value='N/A')
+        tk.Label(row, textvariable=text, width=16, anchor='w').pack(side='left')
 
-        value = tk.Label(self.bottom_frame_2, textvariable=text, width=8)
-        value.grid(row=len(self.display_vars) + 2, column=1, sticky='W')
+        entry = {'frame': row, 'name': var, 'text': text}
+        tk.Button(row, text='x', width=2,
+                  command=lambda: self.remove_display_var(entry)).pack(side='left')
 
-        self.display_vars.append((label, text, value))
+        self.display_vars.append(entry)
+
+    def remove_display_var(self, entry):
+        if entry not in self.display_vars:
+            return
+        entry['frame'].destroy()
+        self.display_vars.remove(entry)
 
     def add_cut(self):
         field = ttk.Combobox(self.bottom_frame_1, width=3, values=sorted(self.reco_events.dtype.names))
-        field.insert(0, 'nbub')
+        field.insert(0, 'pset_lo')
         field.grid(row=8 + len(self.cuts), column=0, columnspan=2, sticky='WE')
 
         operator = ttk.Combobox(self.bottom_frame_1, width=3, values=('>', '>=', '==', '<=', '<', '!='))
         operator.insert(0, '>=')
         operator.grid(row=8 + len(self.cuts), column=2, sticky='WE')
 
-        value = tk.Entry(self.bottom_frame_1, width=5)
+        value = ttk.Combobox(self.bottom_frame_1, width=5)
         value.insert(0, '0')
         value.grid(row=8 + len(self.cuts), column=3, sticky='WE')
 
+        field.bind('<<ComboboxSelected>>',
+                   lambda e, f=field, v=value: self.update_cut_value_options(f, v))
+
         self.cuts.append((field, operator, value))
+
+    def update_cut_value_options(self, field_widget, value_widget):
+        # when the cut field is a string column, offer its values as a
+        # dropdown on the value widget; otherwise leave it as free text
+        field = field_widget.get()
+        if (self.reco_events is not None and field in self.reco_events.dtype.names
+                and self.reco_events[field].dtype.kind in ('U', 'S')):
+            value_widget['values'] = sorted(set(self.reco_events[field].tolist()))
+        else:
+            value_widget['values'] = ()
 
     def remove_cut(self):
         if not self.cuts:
@@ -636,67 +603,71 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         if self.selected_events == None:
             self.reload_run()
 
+    def _select_and_goto(self, selected):
+        # dedup to one row per (run, ev), then navigate to the first passing event at or
+        # after the current position in raw_events
+        _, unique_rows = np.unique(selected[['run', 'ev']], return_index=True)
+        self.selected_events = selected[unique_rows]
+
+        row = self.get_row(self.raw_events)
+        prevrun = self.run
+        try:
+            events_left = self.raw_events[['run', 'ev']][row:]
+            run, event = np.intersect1d(self.selected_events[['run', 'ev']], events_left)[0]
+        except IndexError:
+            self.logger.error('reached final event: starting over')
+            run, event = self.selected_events[['run', 'ev']][0]
+        self.run = run
+        if self.run != prevrun:
+            self.handle_run_folder_format()
+            self.load_reco()
+        self.event = event
+        self.reco_row = None
+        self.row_index = self.get_row(self.selected_events) - 1
+        self.increment_event(1)
+
     def apply_cuts(self):
         self.selected_events = None
-        self.selected_reco_indices = None
 
         if self.reco_events is None:
             self.logger.error('cannot apply cuts, reco data not found')
             return
 
-        selection = []
-        for field, operator, value in self.cuts:
-            if field.get() == '' and operator.get() == '' and value.get() == '':
+        mask = np.ones(len(self.reco_events), dtype=bool)
+        n_active = 0
+        for field, oper, value in self.cuts:
+            f, o, v = field.get(), oper.get(), value.get()
+            if f == '' and o == '' and v == '':
                 continue
-            if field.get() not in self.reco_events.dtype.names:
+            if f not in self.reco_events.dtype.names:
                 self.logger.error('requested variable not in reco data')
                 field.delete(0, tk.END)
                 return
-            dtype = self.reco_events[field.get()].dtype.str
-            selection.append('(self.reco_events["{}"] {} {})'.format(
-                field.get(),
-                operator.get(),
-                repr(value.get()) if 'U' in dtype else value.get()))  # add quotes if field datatype is string
-
-        if len(selection) > 0:
-            selection = eval(' & '.join(selection))
-            selected_event_indices = np.where(selection)
-            if len(selected_event_indices) > 0:
-                selected_event_indices = selected_event_indices[0]
-                self.selected_events = self.reco_events[selected_event_indices]
-            else:
-                self.logger.error('no events pass cuts')
-                self.reset_cuts()
+            if o not in _CUT_OPS:
+                self.logger.error('invalid operator: {}'.format(o))
                 return
-
-            # exec('self.selected_events = self.reco_events[{}]'.format(' & '.join(selection)))
-            _, unique_rows = np.unique(self.selected_events[['run', 'ev']], return_index=True)
-            self.selected_events = self.selected_events[unique_rows]  # get rid of multiple nbub entries
-            self.selected_reco_indices = selected_event_indices[unique_rows]
-            # print('unique rows:', unique_rows)
-            # print('reco indices for unique rows:', self.selected_reco_indices)
-
-            row = self.get_row(self.raw_events)
-            prevrun = self.run
+            col = self.reco_events[f]
             try:
-                events_left = self.raw_events[['run', 'ev']][row:]
-                run, event = np.intersect1d(self.selected_events[['run', 'ev']], events_left)[0]
-            except IndexError:
-                self.logger.error('reached final event: starting over1')
-                run, event = self.selected_events[['run', 'ev']][0]
-            self.run = run
-            if self.run != prevrun:
-                self.handle_run_folder_format()
-                self.load_reco()
-            self.event = event
-            self.reco_row = None
-            self.row_index = self.get_row(self.selected_events) - 1
-            self.increment_event(1)
-        else:
+                target = v if col.dtype.kind in ('U', 'S') else float(v)
+            except ValueError:
+                self.logger.error('invalid cut value for {}: {}'.format(f, v))
+                return
+            mask &= _CUT_OPS[o](col, target)
+            n_active += 1
+
+        if n_active == 0:
             self.selected_events = None
-            self.selected_reco_indices = None
-            # self.row_index = self.get_row(self.raw_events)
             self.row_index = 0
+            return
+
+        selected = self.reco_events[mask]
+        if len(selected) == 0:
+            # keep the user's cuts intact, just fall back to the unfiltered run view.
+            self.logger.error('no events pass cuts')
+            self.reload_run()
+            return
+
+        self._select_and_goto(selected)
 
     def add_file_cut(self):
         self.cut_file_label = tk.Label(self.bottom_frame_1, text='Select .txt file from npy directory')
@@ -721,13 +692,10 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
     def apply_file_cuts(self):
         self.selected_events = None
-        self.selected_reco_indices = None
 
         if self.reco_events is None:
             self.logger.error('cannot apply cuts, reco data not found')
             return
-
-        selection = []
 
         self.cut_file = os.path.join(self.npy_directory, self.cut_file_combobox.get())
 
@@ -737,48 +705,23 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.logger.error('Too many fields, no cuts applied')
             return
 
-        for cut in cuts:
-            selection.append('((self.reco_events["{}"] {} "{}") & (self.reco_events["{}"] {} {}))'.format('run', '==', cut[0], 'ev', '==', cut[1]))
-
-        if len(selection) > 0:
-            selection = eval(' | '.join(selection))
-            selected_event_indices = np.where(selection)
-            if len(selected_event_indices) > 0:
-                selected_event_indices = selected_event_indices[0]
-                self.selected_events = self.reco_events[selected_event_indices]
-            else:
-                self.logger.error('no events pass cuts')
-                self.reset_cuts()
-                return
-
-            # exec('self.selected_events = self.reco_events[{}]'.format(' & '.join(selection)))
-            _, unique_rows = np.unique(self.selected_events[['run', 'ev']], return_index=True)
-            self.selected_events = self.selected_events[unique_rows]  # get rid of multiple nbub entries
-            self.selected_reco_indices = selected_event_indices[unique_rows]
-            # print('unique rows:', unique_rows)
-            # print('reco indices for unique rows:', self.selected_reco_indices)
-
-            row = self.get_row(self.raw_events)
-            prevrun = self.run
-            try:
-                events_left = self.raw_events[['run', 'ev']][row:]
-                run, event = np.intersect1d(self.selected_events[['run', 'ev']], events_left)[0]
-            except IndexError:
-                self.logger.error('reached final event: starting over2')
-                run, event = self.selected_events[['run', 'ev']][0]
-            self.run = run
-            if self.run != prevrun:
-                self.handle_run_folder_format()
-                self.load_reco()
-            self.event = event
-            self.reco_row = None
-            self.row_index = self.get_row(self.selected_events) - 1
-            self.increment_event(1)
-        else:
+        if len(cuts) == 0:
             self.selected_events = None
-            self.selected_reco_indices = None
-            # self.row_index = self.get_row(self.raw_events)
             self.row_index = 0
+            return
+
+        # select reco rows whose (run, ev) match any (run, ev) line in the cut file
+        wanted = set((str(c[0]), int(c[1])) for c in cuts)
+        mask = np.array([(r, int(e)) in wanted
+                         for r, e in zip(self.reco_events['run'], self.reco_events['ev'])])
+        selected = self.reco_events[mask]
+        if len(selected) == 0:
+            # a cut file that matches nothing shouldn't clear the manual cuts
+            self.logger.error('no events pass cuts')
+            self.reload_run()
+            return
+
+        self._select_and_goto(selected)
 
     def get_row(self, events):
         rows = np.argwhere((events['run'] == self.run) & (events['ev'] == self.event)).ravel()
@@ -793,23 +736,20 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         # print('self.run: ' + self.run)
         # print('self.ev: ' + str(self.event))
         # print('row_index: ', str(self.row_index))
-        if self.reco_events is not None:
-            self.reco_availability_label.config(text='Loaded')
-        else:
-            self.reco_availability_label.config(text='Not Loaded')
+        if self.reco_events is None:
             return
 
         if self.selected_events is not None:
             # here the row index is the index relative to the selected event list
             self.reco_row = self.selected_events[self.row_index]
         else:
-            rows = np.argwhere(self.reco_events['ev'] == self.event).ravel()
-            print('load_reco_row: ev={}, rows found={}'.format(self.event, rows))
+            rows = np.argwhere((self.reco_events['run'] == self.run)
+                               & (self.reco_events['ev'] == self.event)).ravel()
             if len(rows) == 0:
                 self.reco_row = None
                 self.toggle_reco_widgets(state=tk.DISABLED)
-                for _, text, _ in self.display_vars:
-                    text.set('N/A')
+                for entry in self.display_vars:
+                    entry['text'].set('N/A')
                 return
 
             reco_index = rows[0]
@@ -820,8 +760,9 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             self.reco_row = self.reco_events[reco_index]
 
         self.toggle_reco_widgets(state=tk.NORMAL)
-        for label, text, _ in self.display_vars:
-            var = label['text']
+        for entry in self.display_vars:
+            var = entry['name']
+            text = entry['text']
             try:
                 dtype = self.reco_row[var].dtype.str
                 text.set('{:.4f}'.format(self.reco_row[var]) if 'f' in dtype else self.reco_row[var])
@@ -932,15 +873,45 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                 self.dataset_select.current(counter)
             counter += 1
 
-    def load_reco(self):
-        self.reco_row = None
+    def load_reco_events(self):
+        # Loads the global (run, ev)-keyed reco table used for cuts and display vars
         self.reco_events = None
+
+        path = os.path.join(self.npy_directory, self.reco_filename)
+        if not os.path.isfile(path):
+            self.logger.error('no reco_events npy in {}, cuts disabled'.format(self.npy_directory))
+            self.display_reco_label.config(text='Reco Variables: Not Loaded')
+            self.toggle_reco_widgets(state=tk.DISABLED)
+            return
+
+        reco = np.load(path)
+
+        # cull to (run, ev) pairs present in raw_events
+        if self.raw_events is not None and len(reco) > 0:
+            raw_pairs = set(zip(self.raw_events['run'].tolist(),
+                                self.raw_events['ev'].tolist()))
+            mask = np.array([(r, e) in raw_pairs
+                             for r, e in zip(reco['run'].tolist(), reco['ev'].tolist())])
+            reco = reco[mask]
+
+        self.reco_events = reco
+        self.logger.info('reco loaded from {}: {} rows, fields: {}'.format(
+            path, len(reco), reco.dtype.names))
+        self.add_display_var_combobox['values'] = sorted(reco.dtype.names)
+        self.display_reco_label.config(text='Reco Variables: Loaded')
+
+    def load_reco(self):
+        # The global reco table (cuts / display vars) is loaded by load_reco_events();
+        # here we only (re)load the per-run bubble overlay used by the camera and 3D
+        # views. Called on every run change.
+        self.reco_row = None
         self.bubble_events = None
         self.bubble_t0 = {}
 
-        # This is a temporary hack for loading in custom reco files
-        # Eventdisplay will look in the custom path first
-        # If no reco.sbc is found there it will look in the default path.
+        # refresh the global reco table (handles dataset / reco-file changes)
+        self.load_reco_events()
+
+        # Eventdisplay looks in CUSTOM_RECO_PATH first, then the configured reco dir.
         custom = os.environ.get('CUSTOM_RECO_PATH')
         roots = [r for r in (os.path.expanduser(custom) if custom else None, self.reco_directory) if r]
 
@@ -952,36 +923,9 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             return None
 
         if not roots or not self.run:
-            self.logger.error('no reco dir (config or CUSTOM_RECO_PATH), reco data will be disabled')
-            self.reco_availability_label.config(text='Not Loaded')
-            self.toggle_reco_widgets(state=tk.DISABLED)
-            for _, text, _ in self.display_vars:
-                text.set('N/A')
             return
 
-        # reco.sbc is optional and no longer gates the bubble overlay loaded below
-        path = find_recon('reco.sbc')
-        events = Streamer(path).data if path else []
-        if len(events) == 0:
-            self.logger.error('no reco.sbc found under {}, reco data disabled'.format(roots))
-            self.reco_availability_label.config(text='Not Loaded')
-            self.toggle_reco_widgets(state=tk.DISABLED)
-            for _, text, _ in self.display_vars:
-                text.set('N/A')
-        else:
-            self.logger.info('using reco data from {}'.format(path))
-            # convert coords_3D array field into scalar X, Y, Z for widgets
-            new_dtype = np.dtype([('X', '<f8'), ('Y', '<f8'), ('Z', '<f8'), ('ev', '<i4')])
-            coordinates = np.zeros(len(events), dtype=new_dtype)
-            coordinates['X'] = events['coords_3D'][:, 0]
-            coordinates['Y'] = events['coords_3D'][:, 1]
-            coordinates['Z'] = events['coords_3D'][:, 2]
-            coordinates['ev'] = events['ev']
-            self.reco_events = coordinates
-            print('reco loaded: {} rows, fields: {}'.format(len(self.reco_events), self.reco_events.dtype.names))
-            self.add_display_var_combobox['values'] = sorted(self.reco_events.dtype.names)
-
-        # bubble.sbc loads independently of reco.sbc (overlay works with bubble alone)
+        # bubble.sbc drives the per-run overlay (independent of the global reco table)
         bubble_path = find_recon('bubble.sbc')
         if bubble_path is not None:
             self.bubble_events = Streamer(bubble_path).data
@@ -1187,8 +1131,8 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             command=self.use_cut_file)
         self.use_cut_file_checkbutton.grid(row=7, column=4, sticky='WE')
 
-        self.display_reco_label = tk.Label(self.bottom_frame_2, text='Variables from merged_all')
-        self.display_reco_label.grid(row=0, column=0, sticky='WE')
+        self.display_reco_label = tk.Label(self.bottom_frame_2, text='Reco Variables: Not Loaded')
+        self.display_reco_label.grid(row=0, column=0, columnspan=2, sticky='W')
 
         self.add_display_var_combobox = ttk.Combobox(self.bottom_frame_2)
         self.add_display_var_combobox.grid(row=1, column=0, sticky='WE')
@@ -1199,23 +1143,13 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             command=lambda: self.add_display_var(self.add_display_var_combobox.get()))
         self.add_display_var_button.grid(row=1, column=1, sticky='WE')
 
+        self.display_vars_frame = tk.Frame(self.bottom_frame_2)
+        self.display_vars_frame.grid(row=2, column=0, columnspan=2, sticky='w')
+
         self.display_vars = []
-        self.add_display_var('nbub')
-        #     self.add_display_var('getBub_success')
-        self.add_display_var('fastDAQ_t0')
-        self.add_display_var('te')
-
-        self.reco_label = tk.Label(self.bottom_frame_2, text='Reco status:')
-        self.reco_label.grid(row=0, column=2, sticky='WE')
-
-        self.reco_availability_label = tk.Label(self.bottom_frame_2, text='Not Loaded')
-        self.reco_availability_label.grid(row=1, column=2, sticky='WE')
-
-        self.select_reco_button = tk.Button(self.bottom_frame_2, text='Select reco file', command=self.select_reco_file)
-        self.select_reco_button.grid(row=2, column=2, sticky='WE')
-
-        self.convert_reco_button = tk.Button(self.bottom_frame_2, text='Create reco file', command=self.convert_reco_from_merged_all)
-        self.convert_reco_button.grid(row=3, column=2, sticky='WE')
+        self.add_display_var('pset_lo')
+        self.add_display_var('pset_hi')
+        self.add_display_var('trigger_source')
 
         self.back_frame_button = tk.Button(self.bottom_frame_3, text='back frame')
         self.back_frame_button['command'] = lambda: self.load_frame(int(self.frame) - 1)
