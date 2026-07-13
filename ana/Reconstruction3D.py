@@ -90,9 +90,9 @@ def bubble_mult(bubble_data, frameCount):
     '''
     # grab info
     
-    frames = [int(f[0]) for f in bubble_data["frame"]]
-    cams   = [int(c[0]) if isinstance(c, list) else c for c in bubble_data["cam"]]
-    sigs   = [float(s[0]) for s in bubble_data["significance"]]
+    frames = [int(f[0]) if isinstance(f, list) else int(f) for f in bubble_data["frame"]]
+    cams   = [int(c[0]) if isinstance(c, list) else int(c) for c in bubble_data["cam"]]
+    sigs   = [float(s[0])if isinstance(s,list) else float(s) for s in bubble_data["significance"]]
     
     # find first mutli cam frame
     firstFrame = -1
@@ -105,22 +105,16 @@ def bubble_mult(bubble_data, frameCount):
             break
 
     # get all camera frame pairs within a range of the first mutli cam event
-    n = 5
+    n = 2
     seq = [(f, c) for f, c, s  in zip(frames, cams, sigs) if ( f >= firstFrame and f <= firstFrame + (10 + n) and s >= 0.75) ]
     if not seq:
         return -1
 
     mult = Counter(seq)  # {(frame, cam): multiplicity}
-    byCamDict = defaultdict(dict)
-    lastSeen = set()
-    for f, c in seq:
-        if (f,c) not in lastSeen:
-            byCamDict[c][f] = mult[(f,c)]
-            lastSeen.add((f,c)) 
-   
     
-    sortedByMult = sorted(mult.keys(), key = lambda k: mult[k], reverse=True)
+    sortedByMult = sorted(mult.keys(), key = lambda k: (-mult[k],k))
     checked  = []
+    m0 = 0
     for f0, c0 in sortedByMult:
         if ( (f0,c0) in checked):
             continue
@@ -128,14 +122,17 @@ def bubble_mult(bubble_data, frameCount):
         m0 = mult[(f0,c0)]
         ok = True
         for offset in range(n):    
-            if f0 + offset > frameCount:
+            if f0 + offset >= frameCount:
                 break
-            if  mult[f0 + offset, 1] < m0 or mult[f0 + offset, 2] < m0 or mult[f0 + offset, 3] < m0:
+            disagree = mult[f0 + offset, 1] < m0
+            disagree+= mult[f0 + offset, 2] < m0 
+            disagree+= mult[f0 + offset, 3] < m0
+            if disagree >= 2:
                 ok = False
                 break
         if ok:
             return m0
-    return -2
+    return m0
 
 
 '''
@@ -159,7 +156,7 @@ def pull_bubble_coords(bubble_data, frameCount):
 
     if len(frames) == 0:
         returnList = []
-        for i in range(50):
+        for i in range(frameCount):
             returnList.append(np.full(6, np.nan), i) 
             # No found bubbles
         return returnList
@@ -173,7 +170,7 @@ def pull_bubble_coords(bubble_data, frameCount):
     unique_frames = np.unique(frames)
     coordsToReturn  = []
     maxFrame = frameCount
-    for frame in range(maxFrame):
+    for frame in range(0,maxFrame):
         if frame in unique_frames:
 
             pick_frame = (frames == frame)
@@ -209,8 +206,17 @@ def pull_bubble_coords(bubble_data, frameCount):
     return coordsToReturn
 
 
+def reproj(P,x):
+    x = x/25.4
+    X_h = np.append(x,1.0)
+    proj = P @ X_h
+    proj = proj[:2]/ proj[2]
+    return proj
+
+
+
 def reconstruct_2D_to_3D(data):
-    frameCount = -2
+    frameCount = 0
     for maybekey in (data["cam"]["c1"].keys()):
         if "frame" in maybekey:
             frameCount += 1
@@ -218,27 +224,31 @@ def reconstruct_2D_to_3D(data):
     if "bubble" in data["analysis"]:
         bubble_data = data["analysis"]["bubble"]
         # if it ran and the estimated multiplicity isnt 1, this could be a multi bubble so we ignore it.
-        if bubble_mult(bubble_data, frameCount) > 1:
+        mult = bubble_mult(bubble_data, frameCount)
+        if mult > 1:
             coordsToReturn = []
+            coordsToReturn.append((-1000,-1000,-1000))
             frames = []
+            reprojErrors = []
             for i in range(0,frameCount):
                 coordsToReturn.append((-1000,-1000,-1000))
+                reprojErrors.append(np.nan)
                 frames.append(i)
-            return {"coords_3D": coordsToReturn, "frame": frames}
-        print(bubble_mult(bubble_data, frameCount))
+            return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
         # list of 3d coordinates to return to event dealer
         coordsToReturn = []
     
         # Pulls all 2D coordinates
-        print(frameCount)
         coords_2D  = pull_bubble_coords(bubble_data, frameCount)
         frames = []
+        reprojErrors = []
         # for every frame there is a set of 2d coordinates, each one corresponding to a certian cameras bubble location
         for coord in coords_2D:
             # if the camera didnt have a bubble, we should just ignore this frame and more on
             if isinstance(coord, int) or len(coord) != 2:
                 coordsToReturn.append(np.full(3,np.nan))
                 frames.append(len(frames))
+                reprojErrors.append(np.nan)
                 continue
             frames.append(coord[1])
             nancheck = 0
@@ -247,16 +257,38 @@ def reconstruct_2D_to_3D(data):
                     nancheck += 1
             if len(coord) != 2 or len(coord[0]) != 6 or  coord[0][0] <= -999 or nancheck >= 4:
                 coordsToReturn.append((-999,-999,-999))
+                reprojErrors.append(np.nan)
                 continue
             # triangulate the bubble into 3d space, then add it to the list to return
             coords_3D = triangulate_multi_cam_LS(coord[0])
             coordsToReturn.append(coords_3D)
-        return {"coords_3D": coordsToReturn, "frame": frames}
+            reprojCoord = reproj(getProjMat(1), coords_3D)
+            reprojError = 0
+            count = 0
+            if not np.isnan(coord[0][0]) and not np.isnan(coord[0][1]):
+                reprojError += np.linalg.norm(reproj(getProjMat(1), coords_3D) - (coord[0][0], coord[0][1]))
+                count += 1
+            if not np.isnan(coord[0][2]) and not np.isnan(coord[0][3]):
+                reprojError += np.linalg.norm(reproj(getProjMat(2), coords_3D) - (coord[0][2], coord[0][3]))
+            if not np.isnan(coord[0][4]) and not np.isnan(coord[0][5]):
+                reprojError += np.linalg.norm(reproj(getProjMat(3), coords_3D) - (coord[0][4], coord[0][5]))
+            if count != 0:
+                reprojError /= count
+            else:
+                reprojError = np.nan
+            reprojErrors.append(1/reprojError)
+        
+
+        return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
 
     else:
         coordsToReturn = []
+        coordsToReturn.append(np.full(3,np.nan))
         frames = []
+        reprojErrors = []
         for i in range(0,frameCount):
             coordsToReturn.append(np.full(3,np.nan))
             frames.append(i)
-        return {"coords_3D": coordsToReturn, "frame": frames}
+            reprojErrors.append(np.nan)
+        return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
+
