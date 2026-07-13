@@ -418,11 +418,8 @@ class Configuration(tk.Frame):
         self.piezo_plot_t0_checkbutton.config(state=state)
         # self.dytran_plot_t0_checkbutton.config(state=state)
         for child in self.bottom_frame_2.winfo_children():
-            child.config(state=state)
-        self.convert_reco_button['state'] = tk.NORMAL
-        self.select_reco_button['state'] = tk.NORMAL
-        self.reco_label['state'] = tk.NORMAL
-        self.reco_availability_label['state'] = tk.NORMAL
+            if 'state' in child.keys():
+                child.config(state=state)
 
     # Creates a new config file based on combo-box/text inputs that saves with a record of the user, day, and time
     def save_current_config(self):
