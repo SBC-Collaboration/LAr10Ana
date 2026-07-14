@@ -85,6 +85,9 @@ Here's the recommended steps when running a new version on the grid.
     git push --tags
     ```
     or do it on GitHub by creating a new release. 
+```{note} <!-- this is a callout -->
+The version number numbering scheme changed starting v0.2.0. Before, most new versions only have incremented z number, including feature release and bug fixes. From v0.2.0, feature release should increment the y number, and bug-fix only versions should increment the z number. This way, v0.3.0 will have improved feature compared to v0.2.0, but v0.3.1 may only include a fix for a bug from v0.3.0.
+```
 5. Update the `LAr10Ana` repository on coupppro@couppsbcgpvm01.fnal.gov to pull the new tag and commit. 
 6. It is ready to be deployed. Either wait for the cron job to run, or manually start by running 
     ```
@@ -100,7 +103,7 @@ To add a new module to run by EventDealer on the grid, following these steps.
 1. Create a feature branch based on the latest main branch. Ideally give it a descriptive name.
 2. If you are working on this branch for more than a couple days, consider:
     - Commit any work along the way. Push your changes to github, the new branch should show up.
-    - Rebase onto the main branch periodically when new commits are available in the main branch. This means syncing the new commits from the main branch before the first unique branch in the feature branch.
+    - Rebase onto the main branch periodically when new commits are available in the main branch. This means syncing the new commits from the main branch before the first unique commit in the feature branch.
 3. Add the new module as a separate python file inthe `ana/` directory. See existing modules for guideline of structure. Mainly, each module should have a main function that takes the output of `GetEvent` as an argument, and returns a dictionary of pre-defined keys and values. Every value should be a list / array in the dictionary should have the same size, but that size can be different for each event. This dictionary does not need to include the run and event ID, as that will be added by the Event Dealer.
 4. Edit `ana/EventDealer.py` to add the following lines. For example, this uses the `BubbleFinder` module.
     - At the top, import the main function from the module

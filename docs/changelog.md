@@ -1,6 +1,9 @@
 # Change Log
 
-## [LAr10Ana v0.2.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.2.0)
+## [LAr10Ana v0.3.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.3.0) (2026-07-14)
+- 3D reconstruction: check the confidence values of the bubble finder, implement our own confidence values, have better error outputs, and update the multiplicity estimate.
+
+## [LAr10Ana v0.2.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.2.0) (2026-06-26)
 - Bugfix in pressure t0 module
 - Bugfix of unit convertion in reconstruction 3D module
 

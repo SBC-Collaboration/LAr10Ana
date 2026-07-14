@@ -6,7 +6,7 @@ The reconstructed data is available at
 ```
 The output from the latest version will be available at `dev-output/` folder, and any new data will be processed and saved here. Older versions are archived in folders named by the version number, like `v0.0.5/`.
 
-```{seealso}
+```{seealso} <!-- this is a callout -->
 For documentation on the raw data, see [Run Control Documentation](https://runcontrol.readthedocs.io/stable/data_format.html)
 ```
 
