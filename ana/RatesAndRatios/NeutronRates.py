@@ -299,19 +299,14 @@ ratiosSim.append([0.03417694, 0.01363073, 0.01183152, 0.00800400, 0.00636605, 0.
 simError.append([0.00322163, 0.00264983, 0.00262369, 0.00218002, 0.00198435, 0.00205089])
 
 seitzRatios = []
+seitzThresholds = [1.0530287933286058, 1.1391899070606315, 1.235873456434369, 1.3448015203144668, 1.468053352541133, 1.7682026967519062, 2.164316091009131, 2.699825488759606, 3.4446953964301947, 4.516768136484239, 8.668378138755212, 20.90193280201993]
 
-seitzThresholds = [1.0530287933286058, 1.235873456434369, 1.468053352541133, 1.7682026967519062, 2.699825488759606, 4.516768136484239, 2.123625320716643]
-
-#seitzThresholds =  [0.526909797423797, 0.5985370523824889, 1.3448015203144668, 1.468053352541133, 0.6851980039055187, 1.7682026967519062, 0.7912523924096592, 2.164316091009131, 2.699825488759606, 1.088038322980897, 3.4446953964301947, 1.5747574169275487]
 seitzRatios.append([1,1,1,1,1,1,1,1,1,1,1,1])
-#seitzRatios.append([0.40310078, 0.4025974, 0.41315789, 0.41052632, 0.4025974, 0.40789474, 0.40469974, 0.40419948, 0.4047619, 0.41145833, 0.40909091, 0.41052632])
-#seitzRatios.append([0.15762274, 0.16103896, 0.15, 0.15, 0.16103896, 0.15, 0.1618799, 0.1496063, 0.15079365, 0.1484375, 0.15240642, 0.15])
-#seitzRatios.append([0.0878553, 0.08571429, 0.08684211, 0.08684211, 0.08571429, 0.08684211, 0.08616188, 0.08661417, 0.08994709, 0.0859375, 0.09090909, 0.08684211, 0.08684211])
-#seitzRatios.append([0.02842377, 0.02857143, 0.02631579, 0.02631579, 0.02597403, 0.02631579, 0.02610966, 0.02624672, 0.02380952, 0.02604167, 0.02406417, 0.02631579])
-seitzRatios.append([0.4151436, 0.41469816, 0.41052632, 0.40789474, 0.4047619, 0.41734417, 0.40419948])
-seitzRatios.append([0.14882507, 0.1496063, 0.15, 0.15, 0.15079365, 0.14905149, 0.1496063 ])
-seitzRatios.append([0.08616188, 0.08661417, 0.08684211, 0.08684211, 0.08994709, 0.09214092, 0.08661417])
-seitzRatios.append([0.02610966, 0.02624672, 0.02631579, 0.02631579, 0.02380952, 0.02439024, 0.02624672])
+seitzRatios.append([0.4151436,0.41253264,0.41469816,0.41315789,0.41052632,0.40789474,0.40419948,0.4047619,0.40909091,0.41734417,0.39678284,0.38419619])
+seitzRatios.append([0.14882507,0.14882507,0.1496063,0.15,0.15,0.15,0.1496063,0.15079365,0.15240642,0.14905149,0.14477212,0.14945652])
+seitzRatios.append([0.08616188,0.08616188,0.08661417,0.08684211,0.08684211,0.08684211,0.08661417,0.08994709,0.09090909,0.09214092,0.09115282,0.08991826])
+seitzRatios.append([0.02610966,0.02610966,0.02624672,0.02631579,0.02631579,0.02631579,0.02624672,0.02380952,0.02406417,0.02439024,0.02412869,0.02724796])
+
 usedSeitz = []
 mostCommon = None
 mostCommonCount = 0
@@ -350,12 +345,12 @@ for p,T in pToUse:
     backSubBins = []
     backSubError = []
     binCountError = []
-    binCountError.append(0)
+    binCountError.append(np.sqrt(binCounts[0]))
     for i in range(len(backBins)):
         backSubBins.append(binCounts[i] - backBins[i])
         if not i == 0:
             binCountError.append(np.sqrt(binCounts[i]))    
-        backSubError.append(binCountError[i] + backError[i])
+        backSubError.append(np.sqrt(np.abs(binCountError[i]**2 + backError[i]**2)))
 
     ratios = [1]
     backSubRatios = [1]
@@ -389,7 +384,7 @@ for p,T in pToUse:
     plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
 
     # source off
-    plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label=f"Background Rate\n(Livetime Norm. to Source")
+    plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label=f"Background Rate\n(Livetime Norm. to Source)")
     # on - off
     plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
     
@@ -506,12 +501,12 @@ for c in backBins:
 backSubBins = []
 backSubError = []
 binCountError = []
-binCountError.append(0)
+binCountError.append(np.sqrt(binCounts[0]))
 for i in range(len(backBins)):
     backSubBins.append(binCounts[i] - backBins[i])
     if not i == 0:
         binCountError.append(np.sqrt(binCounts[i]))
-    backSubError.append(binCountError[i] + backError[i])
+    backSubError.append(np.sqrt(np.abs(binCountError[i]**2 + backError[i]**2)))
 
 ratios = [1]
 backSubRatios = [1]
@@ -587,10 +582,13 @@ plt.close()
 
 # averaged seitz threshold
 avg = np.mean(usedSeitz)
+print(mostCommon)
+print(usedSeitz)
+print(np.mean(usedSeitz))
 ratios = None
-if avg == 2.123625320716643:
+if avg == 4.200422148324119:
     print("avg is correct")
-    ratios = [1, 0.40419948, 0.1496063, 0.08661417,  0.02624672]
+    ratios = [1, 0.41018767,0.15013405, 0.09115282,  0.02412869]
 else:
     print("go get the new avg threshold it's value is:" + str(avg))
     exit()
@@ -629,9 +627,7 @@ plt.ylabel("Count",fontsize=20)
 plt.legend(fontsize=20)
 plt.tight_layout()
 plt.savefig("avgseitz.png", dpi=500)
-plt.show()
+#plt.show()
 plt.close()
 
-print(mostCommon)
-print(usedSeitz)
-print(np.mean(usedSeitz))
+
