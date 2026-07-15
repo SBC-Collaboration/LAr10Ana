@@ -354,7 +354,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
 
         self.base_directory = os.path.dirname(self.raw_init_directory)
 
-
     def reset_event(self):
         self.run = ''
         self.reco_row = None
@@ -417,12 +416,12 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         """        
         test_path = run_path + '.zip'
         if os.path.exists(test_path):
-            #self.logger.error('zip file found. Attempting to unzip...')
+            # self.logger.error('zip file found. Attempting to unzip...')
             self.zipped_event = zipfile.ZipFile(test_path, 'r')
             self.raw_directory = self.raw_directory
             self.zip_flag = True
-            #self.logger.error('Zip flag has set to True')
-            #zipfile.ZipFile(test_path).extractall(self.raw_directory )
+            # self.logger.error('Zip flag has set to True')
+            # zipfile.ZipFile(test_path).extractall(self.raw_directory )
             return True
         else:
             for ext in tar_postfixes:
@@ -794,14 +793,18 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         else:
             events = self.selected_events
 
-        if (self.row_index + step) < 0:
-            self.logger.error('reached first event: stopping here')
+        if len(events) == 0:
             self.reset_event()
             return
 
+        if (self.row_index + step) < 0:
+            self.logger.error('reached first event: wrapping to last event')
+            self.increment_event((len(events) - 1) - self.row_index)
+            return
+
         if (self.row_index + step) >= len(events):
-            self.logger.error('reached final event: starting over3')
-            self.reset_event()
+            self.logger.error('reached final event: wrapping to first event')
+            self.increment_event(-self.row_index)
             return
 
         self.row_index += step
@@ -827,6 +830,39 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         # printing out all error messages for an event at once
         if not self.error == '':
             self.logger.error('This event had the following errors:\n' + self.error)
+
+    def increment_run(self, direction):
+        # Jump to the first event of the next/previous run and respects active cuts
+        # End-of-list falls back to reset_event
+        events = self.raw_events if self.selected_events is None else self.selected_events
+        runs = events['run']
+
+        if self.row_index < 0 or self.row_index >= len(runs):
+            self.increment_event(direction)
+            return
+
+        cur = runs[self.row_index]
+        if direction > 0:
+            after = np.nonzero(runs[self.row_index + 1:] != cur)[0]
+            if len(after) == 0:
+                self.logger.error('reached final run: wrapping to first run')
+                target = 0
+            else:
+                target = self.row_index + 1 + after[0]
+        else:
+            before = np.nonzero(runs[:self.row_index] != cur)[0]
+            if len(before) == 0:
+                self.logger.error('reached first run: wrapping to last run')
+                last = runs[-1]
+                starts = np.nonzero(runs != last)[0]
+                target = 0 if len(starts) == 0 else starts[-1] + 1
+            else:
+                prev_run_last = before[-1]
+                prev_run = runs[prev_run_last]
+                earlier = np.nonzero(runs[:prev_run_last + 1] != prev_run)[0]
+                target = 0 if len(earlier) == 0 else earlier[-1] + 1
+
+        self.increment_event(target - self.row_index)
 
     ##find all dataset folders in the base directory of the form X*(size)-XX(year)-data
     def get_datasets(self):
@@ -932,7 +968,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
             self.compute_bubble_t0()
         else:
-            self.logger.error('no bubble.sbc found under {}'.format(roots))
+            self.logger.info('no bubble.sbc found under {}'.format(roots))
 
     def compute_bubble_t0(self):
         # Bubble t0 per event is earliest bubble frame across cameras
@@ -1085,13 +1121,13 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                                        command=lambda: self.increment_event(1))
         self.forward_event.grid(row=2, column=2, columnspan=2, sticky='WE')
 
-        self.back_1000events_button = tk.Button(self.bottom_frame_1, text='back 1k events')
-        self.back_1000events_button['command'] = lambda: self.increment_event(-1000)
-        self.back_1000events_button.grid(row=3, column=0, columnspan=2, sticky='WE')
+        self.back_run_button = tk.Button(self.bottom_frame_1, text='back run')
+        self.back_run_button['command'] = lambda: self.increment_run(-1)
+        self.back_run_button.grid(row=3, column=0, columnspan=2, sticky='WE')
 
-        self.forward_1000events_button = tk.Button(self.bottom_frame_1, text='forward 1k events')
-        self.forward_1000events_button['command'] = lambda: self.increment_event(1000)
-        self.forward_1000events_button.grid(row=3, column=2, columnspan=2, sticky='WE')
+        self.forward_run_button = tk.Button(self.bottom_frame_1, text='forward run')
+        self.forward_run_button['command'] = lambda: self.increment_run(1)
+        self.forward_run_button.grid(row=3, column=2, columnspan=2, sticky='WE')
 
         self.fill_trigger_type = tk.Label(self.bottom_frame_1, textvariable=self.trigger_type_label, width=11)
         self.fill_trigger_type.grid(row=4, column=0, sticky='WE')
