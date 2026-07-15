@@ -66,6 +66,8 @@ def scint_t0(data):
     results['last_pulse_pt0_40ms'] = [np.nan, np.nan]
 
     results['first_scint_in_livetime'] = [np.nan, np.nan]
+
+    results['last_pulse_before_trig'] = [np.nan, np.nan]
     
     ### Digiscope
     
@@ -294,6 +296,20 @@ def scint_t0(data):
     else:
         results['Failed'] = 8
 
+
+
+    ### Sometimes pT0 window extends past trigger latch. Save last pulse before trigger:
+
+    before_latch = np.where(scint_tsec < (latch_time_corrected / 1000.0))[0]
+    
+    if len(before_latch) > 0:
+        last_idx_before_latch = before_latch[-1]
+        results['last_pulse_before_trig'] = np.array([
+            int(last_idx_before_latch),
+            float(scint_tsec[last_idx_before_latch] * 1000.0)
+        ])
+    else:
+        results['Failed'] = 9
     
     
     
