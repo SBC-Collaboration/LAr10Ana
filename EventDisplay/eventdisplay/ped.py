@@ -198,6 +198,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.reco_events = None
         self.reco_row = None
         self.bubble_events = None
+        self.reco3d_events = None
         self.bubble_t0 = {}
 
         # Initial Functions
@@ -577,7 +578,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             widget.destroy()
 
         self.apply_cuts()
-        if self.selected_events == None:
+        if self.selected_events is None:
             self.reload_run()
 
     def remove_all_cuts(self):
@@ -589,7 +590,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                 widget.destroy()
 
         self.apply_cuts()
-        if self.selected_events == None:
+        if self.selected_events is None:
             self.reload_run()
 
     def reset_cuts(self):
@@ -599,7 +600,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             value.delete(0, tk.END)
 
         self.apply_cuts()
-        if self.selected_events == None:
+        if self.selected_events is None:
             self.reload_run()
 
     def _select_and_goto(self, selected):
@@ -942,33 +943,43 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         # views. Called on every run change.
         self.reco_row = None
         self.bubble_events = None
+        self.reco3d_events = None
         self.bubble_t0 = {}
 
         # refresh the global reco table (handles dataset / reco-file changes)
         self.load_reco_events()
 
-        # Eventdisplay looks in CUSTOM_RECO_PATH first, then the configured reco dir.
-        custom = os.environ.get('CUSTOM_RECO_PATH')
-        roots = [r for r in (os.path.expanduser(custom) if custom else None, self.reco_directory) if r]
-
-        def find_recon(name):  # first <root>/dev-output/<run>/<name> that exists
-            for root in roots:
-                candidate = os.path.join(root, 'dev-output', self.run, name)
-                if os.path.isfile(candidate):
-                    return candidate
-            return None
-
-        if not roots or not self.run:
-            return
-
         # bubble.sbc drives the per-run overlay (independent of the global reco table)
-        bubble_path = find_recon('bubble.sbc')
+        bubble_path = self._find_recon('bubble.sbc', self.run)
         if bubble_path is not None:
             self.bubble_events = Streamer(bubble_path).data
             print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
             self.compute_bubble_t0()
-        else:
-            self.logger.info('no bubble.sbc found under {}'.format(roots))
+        elif self.run:
+            self.logger.info('no bubble.sbc found for run {}'.format(self.run))
+
+        # reco.sbc holds the per-run 3D coordinates used by the 3D Bubble Map tab
+        self.reco3d_events = self.load_reco3d_for_run(self.run)
+
+    def _find_recon(self, name, run):
+        # First <root>/dev-output/<run>/<name> that exists, honoring
+        # CUSTOM_RECO_PATH then the configured reco dir.
+        if not run:
+            return None
+        custom = os.environ.get('CUSTOM_RECO_PATH')
+        roots = [r for r in (os.path.expanduser(custom) if custom else None, self.reco_directory) if r]
+        for root in roots:
+            candidate = os.path.join(root, 'dev-output', run, name)
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+
+    def load_reco3d_for_run(self, run):
+        # used in 3d bubble graph tab
+        path = self._find_recon('reco.sbc', run)
+        if path is None:
+            return None
+        return Streamer(path).data
 
     def compute_bubble_t0(self):
         # Bubble t0 per event is earliest bubble frame across cameras

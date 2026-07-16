@@ -37,7 +37,7 @@ class Configuration(tk.Frame):
     def update_dataset(self):
         dataset = self.dataset_select.get()
         self.remove_all_cuts()
-        self.show_var.set(False)
+        self.view_mode.set('off')
         self.load_3d_bubble_data()
         if self.run_entry['state'] == tk.DISABLED:
             for child in self.bottom_frame_1.winfo_children():
@@ -223,7 +223,7 @@ class Configuration(tk.Frame):
         self.piezo_selector_combobox.current(0)
         self.piezo_plot_t0_checkbutton_var.set(False)
         # self.dytran_plot_t0_checkbutton_var.set(False)
-        self.show_var.set(False)
+        self.view_mode.set('off')
         
         # update all of the widget values
         self.raw_init_directory_path_var.set(os.path.normpath(self.raw_init_directory))
@@ -385,7 +385,7 @@ class Configuration(tk.Frame):
         self.piezo_selector_combobox.current(0)
 
         # reset other values
-        self.show_all_reco_var.set(False)
+        self.view_mode.set('off')
         self.load_3d_bubble_data()
         self.update_num_cams()
         self.reset_images()
