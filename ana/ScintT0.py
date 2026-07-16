@@ -68,6 +68,8 @@ def scint_t0(data):
     results['first_scint_in_livetime'] = [np.nan, np.nan]
 
     results['last_pulse_before_trig'] = [np.nan, np.nan]
+
+    results["last_pulse_off_bub"] = [np.nan, np.nan]
     
     ### Digiscope
     
@@ -310,6 +312,20 @@ def scint_t0(data):
         ])
     else:
         results['Failed'] = 9
+
+
+    ### Sometimes pT0 window will not have any pulses in it. Save last pulse before window begins:
+
+    before_window = np.where(scint_tsec < (pt0_center - 0.040))[0]
+    
+    if len(before_window) > 0:
+        last_idx_in_off_bub = before_window[-1]
+        results["last_pulse_off_bub"] = np.array([
+            int(last_idx_in_off_bub),
+            float(scint_tsec[last_idx_in_off_bub] * 1000.0)
+        ])
+    else:
+        results['Failed'] = 10
     
     
     
