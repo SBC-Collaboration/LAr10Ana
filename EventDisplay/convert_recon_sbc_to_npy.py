@@ -29,7 +29,11 @@ EVENT_BINARIES = {
     "exposure.sbc": {"PT2121_livetime": "f8", "PT1101_livetime": "f8"},
     # 'pressure_t0.sbc': {'t0_fitting': 'f4', 't0_chi_sq': 'f4'},
     "t_expansion.sbc": {"expansion_time": "f4"},
-    'run.sbc':         {'source1_ID': 'U100', 'source1_location': 'U100'},
+    "run.sbc": {"source1_ID": "U100", "source1_location": "U100"},
+    # "Failed" stored as float so runs
+    # with SiPM off (no scint_t0.sbc) read as NaN rather than a fake 0.
+    # Values: 0 = module ran, scint data valid; >0 = scint on but a failure mode (see ScintT0.py).
+    "scint_t0.sbc": {"Failed": "f4"},
 }
 
 # event.sbc defines which events exist in a run so it must be present.
@@ -70,8 +74,18 @@ def load_run_events(run, run_dir):
 
     for fname, cols in EVENT_BINARIES.items():
         path = os.path.join(run_dir, fname)
-        data = canonical if fname == CANONICAL_FILE else (
-            Streamer(path).to_dict() if os.path.isfile(path) else None)
+        if fname == CANONICAL_FILE:
+            data = canonical
+        elif os.path.isfile(path):
+            # An unparseable file should only empty its own columns, not abort the whole run.
+            try:
+                data = Streamer(path).to_dict()
+            except Exception as e:
+                print('  {}: {} unreadable ({}), leaving {} empty'.format(
+                    run, fname, e, list(cols)))
+                data = None
+        else:
+            data = None
         if data is None:
             print('  {}: no {}, leaving {} empty'.format(run, fname, list(cols)))
             continue
