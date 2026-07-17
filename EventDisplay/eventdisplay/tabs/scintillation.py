@@ -3,6 +3,7 @@ import os
 import sys
 import numpy as np
 import tkinter as tk
+from tkinter import ttk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -14,6 +15,17 @@ from sbcbinaryformat import Streamer
 # Recon scintillation.sbc columns surfaced in the Pulse Info panel. Each is stored
 # per channel (shape (32,)) per CAEN trigger row.
 INFO_FIELDS = ["hit_t0", "hit_amp", "hit_area", "wvf_area", "second_pulse", "baseline", "rms"]
+INFO_COLUMNS = {
+    "hit_t0": ("hit_t0", 72),
+    "hit_amp": ("hit_amp", 72),
+    "hit_area": ("hit_area", 72),
+    "wvf_area": ("wvf_area", 72),
+    "second_pulse": ("Second Pulse", 78),
+    "baseline": ("Baseline", 62),
+    "rms": ("RMS", 62),
+}
+# All 32 channels can be selected at once; cap the visible rows and scroll
+INFO_MAX_ROWS = 6
 
 
 class Scintillation(tk.Frame):
@@ -214,12 +226,17 @@ class Scintillation(tk.Frame):
 
             self.scintillation_ax.set_xlim(self.t_start_var.get(), self.t_end_var.get())
             self.scintillation_ax.set_ylim(self.v_lower_var.get(), self.v_upper_var.get())
+            # All 32 channels would overrun the title, and the legend carries two
+            # entries (raw + filtered) per channel.
+            chans = [i + 1 for i in selections]
+            chan_txt = (", ".join(str(c) for c in chans) if len(chans) <= 6
+                        else f"{len(chans)} selected")
             self.scintillation_ax.set_title(
-                "Channels: " + ", ".join(str(i + 1) for i in selections)
-                + f"  Run: {self.run}  Event: {self.event}  Trigger: {self.trigger_index + 1}")
+                f"Channels: {chan_txt}  Run: {self.run}  Event: {self.event}"
+                f"  Trigger: {self.trigger_index + 1}")
             self.scintillation_ax.set_xlabel('[s]')
             self.scintillation_ax.set_ylabel('[ADC]')
-            self.scintillation_ax.legend(loc='upper right', fontsize='small')
+            self.scintillation_ax.legend(loc='upper right', fontsize='small', ncol=2)
 
             if fft_mins and fft_maxs:
                 self.fft_ax.set_ylim(min(fft_mins), max(fft_maxs))
@@ -236,10 +253,10 @@ class Scintillation(tk.Frame):
         # Amplitude histogram(recon file)
         amps = self.event_amps()
         if amps is None:
-            self.gain_ax.set_title("No recon analysis for this run")
+            self.gain_ax.set_title("No recon analysis for this run", fontsize='small')
         else:
             self.gain_ax.hist(amps, bins=100)
-            self.gain_ax.set_title(f"Hits per Amplitude histogram (n={len(amps)})")
+            self.gain_ax.set_title(f"Hit Amplitudes (n={len(amps)})")
             self.gain_ax.set_xlabel("Pulse amplitude (mV)")
             self.gain_ax.set_ylabel("Hits")
 
@@ -271,6 +288,7 @@ class Scintillation(tk.Frame):
                         (self.fft_ax, "No FFT Data")):
             ax.clear()
             ax.text(0.5, 0.5, msg, transform=ax.transAxes, fontsize=10, ha='center', va='center')
+        self.update_channel_info_display()
         self.scintillation_canvas.draw_idle()
 
     # Get FFT arrays
@@ -306,28 +324,23 @@ class Scintillation(tk.Frame):
         self.refresh()
 
     def update_channel_info_display(self):
-        for widget in self.info_frame.winfo_children():
-            widget.destroy()
+        self.info_tree.delete(*self.info_tree.get_children())
 
         selected_channels = self.scintillation_listbox.curselection()
+        self.info_tree.config(height=max(1, min(len(selected_channels), INFO_MAX_ROWS)))
         if not selected_channels:
             return
 
-        variable_names = ["hit_t0", "hit_amp", "hit_area", "wvf_area",
-                          "Second Pulse", "Baseline", "RMS"]
-        for row, var in enumerate(variable_names, start=1):
-            tk.Label(self.info_frame, text=var).grid(row=row, column=0, sticky='w')
-
         have_recon = self.recon is not None and self.trigger_index < len(self.recon)
-        for col, ch_idx in enumerate(selected_channels, start=1):
-            tk.Label(self.info_frame, text=f"Ch {ch_idx + 1}",
-                     font=("Arial", 9, "underline")).grid(row=0, column=col, padx=5)
+        r = self.recon[self.trigger_index] if have_recon else None
+        for ch_idx in selected_channels:
             if not have_recon:
-                tk.Label(self.info_frame, text="—").grid(row=1, column=col, padx=5)
+                self.info_tree.insert('', tk.END,
+                                      values=[ch_idx + 1] + ["—"] * len(INFO_FIELDS))
                 continue
-            r = self.recon[self.trigger_index]
             try:
                 values = [
+                    ch_idx + 1,
                     f"{r['hit_t0'][ch_idx]:.4e}",
                     f"{r['hit_amp'][ch_idx]:.4e}",
                     f"{r['hit_area'][ch_idx]:.4e}",
@@ -336,23 +349,37 @@ class Scintillation(tk.Frame):
                     f"{r['baseline'][ch_idx]:.4f}",
                     f"{r['rms'][ch_idx]:.4f}",
                 ]
-                for row, val in enumerate(values, start=1):
-                    tk.Label(self.info_frame, text=val).grid(row=row, column=col, padx=5)
             except Exception as e:
                 print(f"Error showing pulse info for Channel {ch_idx}: {e}")
+                continue
+            self.info_tree.insert('', tk.END, values=values)
+
+    def scintillation_fig_width(self):
+        # Claim whatever width the controls don't use. The panel's width comes
+        # from the platform's font metrics. A hardcoded split that fits on one OS
+        # overflows or is too narrow on another.
+        self.scintillation_tab_left.update_idletasks()
+        try:
+            window_width = int(self.winfo_toplevel().geometry().split('x')[0])
+        except (ValueError, tk.TclError):
+            window_width = 1650
+        # Frame borders, the notebook edge, and the app's vertical scrollbar.
+        overhead = 50
+        avail = window_width - self.scintillation_tab_left.winfo_reqwidth() - overhead
+        return min(max(avail / 100.0, 7.0), 11.0)
 
     def scintillation_canvas_setup(self):
-        self.scintillation_fig = Figure(figsize=(7, 9), dpi=100)
-        gs = self.scintillation_fig.add_gridspec(3, 1)
-        self.scintillation_ax = self.scintillation_fig.add_subplot(gs[0, 0])
+        # Waveform spans the top row; FFT and the amplitude histogram split the bottom.
+        # 500px height keeps the bottom bar on screen.
+        self.scintillation_fig = Figure(figsize=(self.scintillation_fig_width(), 5.2),
+                                        dpi=100, constrained_layout=True)
+        gs = self.scintillation_fig.add_gridspec(2, 2, height_ratios=[1.3, 1])
+        self.scintillation_ax = self.scintillation_fig.add_subplot(gs[0, :])
         self.fft_ax = self.scintillation_fig.add_subplot(gs[1, 0])
-        self.gain_ax = self.scintillation_fig.add_subplot(gs[2, 0])
-        self.scintillation_fig.subplots_adjust(left=0.12, right=0.98, top=0.95, bottom=0.05, hspace=0.8)
+        self.gain_ax = self.scintillation_fig.add_subplot(gs[1, 1])
 
         self.scintillation_canvas = FigureCanvasTkAgg(self.scintillation_fig, self.scintillation_tab_right)
-        self.scintillation_canvas.get_tk_widget().grid(row=0, column=1, sticky='NSEW')
-        self.scintillation_tab_right.grid_rowconfigure(0, weight=1)
-        self.scintillation_tab_right.grid_columnconfigure(1, weight=1)
+        self.scintillation_canvas.get_tk_widget().grid(row=0, column=0, sticky='NW')
 
     def create_scintillation_widgets(self):
         # Main frame
@@ -364,22 +391,22 @@ class Scintillation(tk.Frame):
         self.scintillation_tab_left.grid(row=0, column=0, sticky='NW')
         self.scintillation_tab_right = tk.Frame(self.scintillation_tab, bd=5, relief=tk.SUNKEN)
         self.scintillation_tab_right.grid(row=0, column=1, sticky='NW')
-        self.info_frame = tk.LabelFrame(self.scintillation_tab_left, text="Pulse Info", padx=5, pady=5)
-        self.info_frame.grid(row=7, column=0, columnspan=4, sticky='WE', pady=(10, 0))
-        self.trigger_step_frame = tk.Frame(self.scintillation_tab_left)
-        self.trigger_step_frame.grid(row=1, column=4, padx=(10, 0), sticky="W")
 
         # Load SiPM checkbutton
         self.load_sipm_checkbutton = tk.Checkbutton(
             self.scintillation_tab_left, text='Load SiPM',
             variable=self.load_fastdaq_scintillation_var,
             command=self.load_fastdaq_scintillation)
-        self.load_sipm_checkbutton.grid(row=0, column=0, columnspan=2, sticky='WE')
+        self.load_sipm_checkbutton.grid(row=0, column=0, sticky='W')
+        
+        top_frame = tk.Frame(self.scintillation_tab_left)
+        top_frame.grid(row=1, column=0, sticky='NW')
 
         # Channel selector listbox + scrollbar
-        tk.Label(self.scintillation_tab_left, text='Channel:').grid(row=1, column=0, sticky='WE')
-        listbox_frame = tk.Frame(self.scintillation_tab_left)
-        listbox_frame.grid(row=1, column=1, sticky='WE')
+        channel_frame = tk.LabelFrame(top_frame, text='Channel', padx=3, pady=3)
+        channel_frame.grid(row=0, column=0, sticky='NW')
+        listbox_frame = tk.Frame(channel_frame)
+        listbox_frame.grid(row=0, column=0, sticky='NSEW')
         self.scintillation_listbox = tk.Listbox(
             listbox_frame, selectmode='multiple', height=6, exportselection=False,
             yscrollcommand=lambda *args: self.listbox_scrollbar.set(*args))
@@ -389,15 +416,19 @@ class Scintillation(tk.Frame):
         self.listbox_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.scintillation_listbox.bind("<<ListboxSelect>>", lambda _: self.refresh())
 
-        # Trigger count + selection entry
-        self.trigger_count_label = tk.Label(self.scintillation_tab_left, text="Triggers: ?")
-        self.trigger_count_label.grid(row=1, column=2, padx=(10, 0), sticky="W")
+        # Trigger count, jump-to entry, and the step buttons
+        trigger_frame = tk.LabelFrame(top_frame, text='Trigger', padx=3, pady=3)
+        trigger_frame.grid(row=0, column=1, padx=(8, 0), sticky='NW')
+        self.trigger_count_label = tk.Label(trigger_frame, text="Triggers: ?")
+        self.trigger_count_label.grid(row=0, column=0, columnspan=2, sticky='W')
+        tk.Label(trigger_frame, text='Go to:').grid(row=1, column=0, sticky='E')
         self.trigger_var = tk.StringVar(value="1")
-        self.trigger_entry = tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_var, width=6)
-        self.trigger_entry.grid(row=1, column=3, padx=(2, 10), sticky="W")
+        self.trigger_entry = tk.Entry(trigger_frame, textvariable=self.trigger_var, width=6)
+        self.trigger_entry.grid(row=1, column=1, sticky='W')
         self.trigger_entry.bind("<Return>", self.on_trigger_entry_change)
 
-        # Trigger step buttons (3x2 grid)
+        self.trigger_step_frame = tk.Frame(trigger_frame)
+        self.trigger_step_frame.grid(row=2, column=0, columnspan=2, pady=(4, 0))
         btn_specs = [
             ("-1", -1), ("+1", 1),
             ("-10", -10), ("+10", 10),
@@ -411,67 +442,94 @@ class Scintillation(tk.Frame):
             btn.grid(row=i // 2, column=i % 2, padx=1, pady=1)
 
         # Histogram trigger window (start/end)
-        tk.Label(self.scintillation_tab_left, text='Start Trigger:').grid(row=2, column=0, sticky='E')
+        hist_frame = tk.LabelFrame(top_frame, text='Histogram Triggers', padx=3, pady=3)
+        hist_frame.grid(row=0, column=2, padx=(8, 0), sticky='NW')
+        tk.Label(hist_frame, text='Start:').grid(row=0, column=0, sticky='E')
         self.trigger_range_start_var = tk.IntVar(value=0)
-        tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_range_start_var, width=6).grid(row=2, column=1, sticky='W')
-        tk.Label(self.scintillation_tab_left, text='End Trigger:').grid(row=2, column=2, sticky='E')
+        tk.Entry(hist_frame, textvariable=self.trigger_range_start_var,
+                 width=6).grid(row=0, column=1, sticky='W')
+        tk.Label(hist_frame, text='End:').grid(row=1, column=0, sticky='E')
         self.trigger_range_end_var = tk.IntVar(value=0)
-        tk.Entry(self.scintillation_tab_left, textvariable=self.trigger_range_end_var, width=6).grid(row=2, column=3, sticky='W')
+        tk.Entry(hist_frame, textvariable=self.trigger_range_end_var,
+                 width=6).grid(row=1, column=1, sticky='W')
+
+        # Axis-range sliders
+        slider_frame = tk.LabelFrame(self.scintillation_tab_left, text='Display Ranges',
+                                     padx=3, pady=3)
+        slider_frame.grid(row=2, column=0, sticky='NW', pady=(6, 0))
 
         # Time-domain sliders
         self.t_start_var = tk.DoubleVar(value=0.0)
         self.t_end_var = tk.DoubleVar(value=0.0)
-        tk.Label(self.scintillation_tab_left, text='T start:').grid(row=3, column=0, sticky='E')
-        self.t_start_slider = tk.Scale(self.scintillation_tab_left, variable=self.t_start_var,
+        tk.Label(slider_frame, text='T start:').grid(row=0, column=0, sticky='E')
+        self.t_start_slider = tk.Scale(slider_frame, variable=self.t_start_var,
                                        orient='horizontal', from_=0, to=0, resolution=1,
                                        showvalue=True, length=200)
-        self.t_start_slider.grid(row=3, column=1, sticky='WE')
+        self.t_start_slider.grid(row=0, column=1, sticky='WE')
         self.t_start_slider.bind("<ButtonRelease-1>", self.on_slider_release)
-        tk.Label(self.scintillation_tab_left, text='T end:').grid(row=3, column=2, sticky='E')
-        self.t_end_slider = tk.Scale(self.scintillation_tab_left, variable=self.t_end_var,
+        tk.Label(slider_frame, text='T end:').grid(row=0, column=2, sticky='E')
+        self.t_end_slider = tk.Scale(slider_frame, variable=self.t_end_var,
                                      orient='horizontal', from_=0, to=0, resolution=1,
                                      showvalue=True, length=200)
-        self.t_end_slider.grid(row=3, column=3, sticky='WE')
+        self.t_end_slider.grid(row=0, column=3, sticky='WE')
         self.t_end_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
         # Voltage sliders
         self.v_lower_var = tk.DoubleVar(value=0.0)
         self.v_upper_var = tk.DoubleVar(value=0.0)
-        tk.Label(self.scintillation_tab_left, text='V lower:').grid(row=4, column=0, sticky='E')
-        self.v_lower_slider = tk.Scale(self.scintillation_tab_left, variable=self.v_lower_var,
+        tk.Label(slider_frame, text='V lower:').grid(row=1, column=0, sticky='E')
+        self.v_lower_slider = tk.Scale(slider_frame, variable=self.v_lower_var,
                                        orient='horizontal', from_=0, to=0, resolution=1e-3,
                                        showvalue=True, length=200)
-        self.v_lower_slider.grid(row=4, column=1, sticky='WE')
+        self.v_lower_slider.grid(row=1, column=1, sticky='WE')
         self.v_lower_slider.bind("<ButtonRelease-1>", self.on_slider_release)
-        tk.Label(self.scintillation_tab_left, text='V upper:').grid(row=4, column=2, sticky='E')
-        self.v_upper_slider = tk.Scale(self.scintillation_tab_left, variable=self.v_upper_var,
+        tk.Label(slider_frame, text='V upper:').grid(row=1, column=2, sticky='E')
+        self.v_upper_slider = tk.Scale(slider_frame, variable=self.v_upper_var,
                                        orient='horizontal', from_=0, to=0, resolution=1e-3,
                                        showvalue=True, length=200)
-        self.v_upper_slider.grid(row=4, column=3, sticky='WE')
+        self.v_upper_slider.grid(row=1, column=3, sticky='WE')
         self.v_upper_slider.bind("<ButtonRelease-1>", self.on_slider_release)
-
-        self.lock_voltage_var = tk.BooleanVar(value=False)
-        self.lock_voltage_check = tk.Checkbutton(self.scintillation_tab_left, text='Lock Voltage',
-                                                 variable=self.lock_voltage_var)
-        self.lock_voltage_check.grid(row=4, column=4, padx=(10, 0), sticky='W')
 
         # Frequency-cutoff sliders
         self.f_low_var = tk.DoubleVar(value=0.0)
         self.f_high_var = tk.DoubleVar(value=0.0)
-        tk.Label(self.scintillation_tab_left, text='F low (Hz):').grid(row=5, column=0, sticky='E')
-        self.f_low_slider = tk.Scale(self.scintillation_tab_left, variable=self.f_low_var,
+        tk.Label(slider_frame, text='F low (Hz):').grid(row=2, column=0, sticky='E')
+        self.f_low_slider = tk.Scale(slider_frame, variable=self.f_low_var,
                                      orient='horizontal', from_=0, to=0, resolution=1,
                                      showvalue=True, length=200)
-        self.f_low_slider.grid(row=5, column=1, sticky='WE')
+        self.f_low_slider.grid(row=2, column=1, sticky='WE')
         self.f_low_slider.bind("<ButtonRelease-1>", self.on_slider_release)
-        tk.Label(self.scintillation_tab_left, text='F high (Hz):').grid(row=5, column=2, sticky='E')
-        self.f_high_slider = tk.Scale(self.scintillation_tab_left, variable=self.f_high_var,
+        tk.Label(slider_frame, text='F high (Hz):').grid(row=2, column=2, sticky='E')
+        self.f_high_slider = tk.Scale(slider_frame, variable=self.f_high_var,
                                       orient='horizontal', from_=0, to=0, resolution=1,
                                       showvalue=True, length=200)
-        self.f_high_slider.grid(row=5, column=3, sticky='WE')
+        self.f_high_slider.grid(row=2, column=3, sticky='WE')
         self.f_high_slider.bind("<ButtonRelease-1>", self.on_slider_release)
+
+        self.lock_voltage_var = tk.BooleanVar(value=False)
+        self.lock_voltage_check = tk.Checkbutton(slider_frame, text='Lock Voltage',
+                                                 variable=self.lock_voltage_var)
+        self.lock_voltage_check.grid(row=3, column=2, columnspan=2, sticky='E')
 
         # Reload button (re-reads current trigger + re-applies the histogram window)
         self.reload_fastdaq_scintillation_button = tk.Button(
             self.scintillation_tab_left, text='Reload', command=self.refresh)
-        self.reload_fastdaq_scintillation_button.grid(row=6, column=0, columnspan=4, sticky='WE')
+        self.reload_fastdaq_scintillation_button.grid(row=3, column=0, sticky='WE', pady=(6, 0))
+
+        # Pulse Info table, one row per selected channel
+        self.info_frame = tk.LabelFrame(self.scintillation_tab_left, text="Pulse Info",
+                                        padx=5, pady=5)
+        self.info_frame.grid(row=4, column=0, sticky='NWE', pady=(6, 0))
+        self.info_tree = ttk.Treeview(self.info_frame, columns=["ch"] + INFO_FIELDS,
+                                      show='headings', height=1, selectmode='none')
+        self.info_tree.heading("ch", text="Ch")
+        self.info_tree.column("ch", width=40, anchor='center', stretch=False)
+        for field in INFO_FIELDS:
+            heading, width = INFO_COLUMNS[field]
+            self.info_tree.heading(field, text=heading)
+            self.info_tree.column(field, width=width, anchor='e', stretch=False)
+        self.info_tree.grid(row=0, column=0, sticky='NWE')
+        self.info_scrollbar = tk.Scrollbar(self.info_frame, orient='vertical',
+                                           command=self.info_tree.yview)
+        self.info_scrollbar.grid(row=0, column=1, sticky='NS')
+        self.info_tree.configure(yscrollcommand=self.info_scrollbar.set)
