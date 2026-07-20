@@ -390,7 +390,7 @@ for p,T in pToUse:
     
     # 0KeV threshold
     edges = np.concatenate(([points[0] - 0.5], (points[:-1] + points[1:])/2, [points[-1] + 0.5]))
-    plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0KeV Threshold")
+    plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0keV Threshold")
     # seitz threshold
     seitz = sm.SeitzModel(p * 14.5038, -273.15 + T, 'argon').Q
     usedSeitz.append(seitz)
@@ -411,7 +411,7 @@ for p,T in pToUse:
                     seitzCount.append(backSubBins[0]* estRatio )
                 break
 
-    plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold\n({seitz:0.2f} KeV )")
+    plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold\n({seitz:0.2f} keV )")
     plt.xticks(x,binLabels, fontsize=20)
     plt.yticks(fontsize=20)
     plt.xlabel("Bubble Multiplicity",fontsize=20)
@@ -451,7 +451,7 @@ for p,T in pToUse:
         offset = (i - (num_groups - 1) / 2) * width
         xPos = x + offset
         bars = plt.bar(xPos, simCountMin[i], width=width, color=colors[i % len(colors)],
-                   edgecolor="black", label=f"{thresholds[i]/1000}KeV",zorder=2)
+                   edgecolor="black", label=f"{thresholds[i]/1000}keV",zorder=2)
         shadedInBars.append(bars)
 
     points = x
@@ -558,7 +558,7 @@ for i in range(num_groups):
     offset = (i - (num_groups - 1) / 2) * width
     xPos = x + offset
     bars = plt.bar(xPos, simCountMin[i], width=width, color=colors[i % len(colors)],
-                edgecolor="black", label=f"{thresholds[i]/1000}KeV",zorder=2)
+                edgecolor="black", label=f"{thresholds[i]/1000}keV",zorder=2)
     shadedInBars.append(bars)
 points = x
 plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
@@ -602,13 +602,13 @@ points = x
 plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
 
 # source off
-plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label="Background Rate (Livetime Norm. to Source)")
+plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label=f"Background Rate\n(Livetime Norm. to Source)")
 # on - off
 plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
 
 # 0KeV threshold
 edges = np.concatenate(([points[0] - 0.5], (points[:-1] + points[1:])/2, [points[-1] + 0.5]))
-plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0KeV Threshold")
+plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0keV Threshold")
 # seitz threshold
 seitz = avg
 
@@ -617,7 +617,7 @@ seitzIndex = -1
 for i in range(0,len(ratios)):
     seitzCount.append(backSubBins[0] * ratios[i])
 
-plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold ({seitz:0.2f} KeV)")
+plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold ({seitz:0.2f} keV)")
 
 
 plt.xticks(x,binLabels, fontsize=20)
