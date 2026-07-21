@@ -331,15 +331,20 @@ for p,T in pToUse:
     if curCount > mostCommonCount:
         mostCommonCount = curCount
         mostCommon = (p,T)
+    # turn into a rate
+    for i in range(binCounts):
+        binCounts[i]/= sourceTime
     # background rate subtraction
-    backgroundSingleEst = backgroundSingles * sourceTime/backgroundTime 
-    background2sEst = background2s * sourceTime/backgroundTime 
-    background3sEst = background3s * sourceTime/backgroundTime 
-    background4sEst = background4s * sourceTime/backgroundTime 
-    background5sEst = background5s * sourceTime/backgroundTime 
+    # make sure this is in a rate
+    backgroundSingleEst = backgroundSingles/backgroundTime
+    background2sEst = background2s/backgroundTime
+    background3sEst = background3s/backgroundTime
+    background4sEst = background4s/backgroundTime
+    background5sEst = background5s/backgroundTime 
     backBins = [backgroundSingleEst, background2sEst, background3sEst, background4sEst, background5sEst]
     backError = []
     for c in backBins:
+        #TODO: add case for 0 upper limit
         backError.append(np.sqrt(c))
 
     backSubBins = []
