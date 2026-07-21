@@ -11,6 +11,7 @@ may need to add to your paths:
 # Imports
 import os
 os.umask(6)
+import csv
 import json
 import re
 import time
@@ -200,6 +201,10 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.bubble_events = None
         self.reco3d_events = None
         self.bubble_t0 = {}
+        self.bubble_t0_ms_cache = {}  # ev -> bubble t0 [ms] (lazy, per displayed event)
+        self.pressure_t0 = {}         # ev -> pressure t0 [ms], trigger-relative
+        self.scint_t0 = {}            # ev -> scint t0 [ms], trigger-relative
+        self.t_compression = {}       # ev -> compression time [ms] on the slowDAQ time_ms axis
 
         # Initial Functions
         self.create_widgets()
@@ -945,6 +950,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.bubble_events = None
         self.reco3d_events = None
         self.bubble_t0 = {}
+        self.bubble_t0_ms_cache = {}
 
         # refresh the global reco table (handles dataset / reco-file changes)
         self.load_reco_events()
@@ -952,14 +958,27 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         # bubble.sbc drives the per-run overlay (independent of the global reco table)
         bubble_path = self._find_recon('bubble.sbc', self.run)
         if bubble_path is not None:
-            self.bubble_events = Streamer(bubble_path).data
-            print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
-            self.compute_bubble_t0()
+            # A corrupt bubble.sbc must not break run navigation
+            try:
+                self.bubble_events = Streamer(bubble_path).data
+                print("bubble loaded: {} rows, fields: {}".format(len(self.bubble_events), self.bubble_events.dtype.names))
+                self.compute_bubble_t0()
+            except Exception as e:
+                self.logger.error('failed to load bubble.sbc from {}: {}'.format(bubble_path, e))
+                self.bubble_events = None
+                self.bubble_t0 = {}
         elif self.run:
             self.logger.info('no bubble.sbc found for run {}'.format(self.run))
 
         # reco.sbc holds the per-run 3D coordinates used by the 3D Bubble Map tab
         self.reco3d_events = self.load_reco3d_for_run(self.run)
+
+        # pressure t0 and scint t0 are tiny reco files;
+        # load them here so the tabs can draw t0 lines.
+        # t_compression is the trigger's position on the slowDAQ time_ms axis
+        self.load_pressure_t0(self._find_recon('pressure_t0.sbc', self.run))
+        self.load_scint_t0(self._find_recon('scint_t0.sbc', self.run))
+        self.load_t_compression(self._find_recon('t_expansion.sbc', self.run))
 
     def _find_recon(self, name, run):
         # First <root>/dev-output/<run>/<name> that exists, honoring
@@ -979,7 +998,112 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         path = self._find_recon('reco.sbc', run)
         if path is None:
             return None
-        return Streamer(path).data
+        # A corrupt reco.sbc disables the 3D tab rather than breaking run navigation
+        try:
+            return Streamer(path).data
+        except Exception as e:
+            self.logger.error('failed to load reco.sbc from {}: {}'.format(path, e))
+            return None
+
+    def load_pressure_t0(self, path):
+        self.pressure_t0 = {}
+        if not path:
+            return
+        try:
+            press = Streamer(path).to_dict()
+            t0_fitting = np.asarray(press['t0_fitting']).ravel()
+            evs = np.asarray(press['ev']).ravel()
+            pre_trig_len = self.get_acous_pre_trig_len()
+            for ev, t0 in zip(evs, t0_fitting):
+                # t0_fitting == 0 means the fit failed
+                self.pressure_t0[int(ev)] = (float(t0) - pre_trig_len * 1000.0
+                                          if float(t0) != 0.0 else float('nan'))
+            print('pressure t0 loaded: {} events from {}'.format(len(self.pressure_t0), path))
+        except Exception as e:
+            self.logger.error('failed to load pressure t0 from {}: {}'.format(path, e))
+            self.pressure_t0 = {}
+
+    def load_scint_t0(self, path):
+        # Values are frequently NaN; NaN is stored and skipped while plotting
+        # first_pulse_pt0_20ms is (N, 2) = [trigger index, time ms]
+        self.scint_t0 = {}
+        if not path:
+            return
+        try:
+            scint = Streamer(path).to_dict()
+            scint_time = np.asarray(scint['first_pulse_pt0_20ms'])[:, 1]
+            latch = np.asarray(scint['latch_time_corrected']).ravel()
+            evs = np.asarray(scint['ev']).ravel()
+            for ev, s, l in zip(evs, scint_time, latch):
+                self.scint_t0[int(ev)] = float(s) - float(l)
+            print('scint t0 loaded: {} events from {}'.format(len(self.scint_t0), path))
+        except Exception as e:
+            self.logger.error('failed to load scint t0 from {}: {}'.format(path, e))
+            self.scint_t0 = {}
+
+    def load_t_compression(self, path):
+        # t_compression [ms] per event from t_expansion.sbc. This is the compression
+        # (acoustic trigger) time on the slowDAQ time_ms axis, so adding it to a
+        # trigger-relative t0 places that t0 at the correct x on the slowDAQ plot.
+        self.t_compression = {}
+        if not path:
+            return
+        try:
+            te = Streamer(path).to_dict()
+            evs = np.asarray(te['ev']).ravel()
+            tcomp = np.asarray(te['t_compression']).ravel()
+            for ev, tc in zip(evs, tcomp):
+                self.t_compression[int(ev)] = float(tc)
+            print('t_compression loaded: {} events from {}'.format(len(self.t_compression), path))
+        except Exception as e:
+            self.logger.error('failed to load t_compression from {}: {}'.format(path, e))
+            self.t_compression = {}
+
+    def get_acous_pre_trig_len(self):
+        # pre-trigger length [s] from the current run's rc.json (acous block); 0 if unavailable
+        try:
+            rc_path = os.path.join(self.raw_directory, self.run, 'rc.json')
+            with open(rc_path, mode='r', encoding='utf-8') as f:
+                config = json.load(f)
+            return float(config['acous']['pre_trig_len'])
+        except Exception:
+            return 0.0
+
+    def bubble_t0_ms(self, ev):
+        # Bubble t0 [ms] for one event, relative to the camera trigger frame (see Get_t0s.txt).
+        # Computed lazily from the unpacked camN-info.csv timestamps + rc.json and cached.
+        ev = int(ev)
+        if ev in self.bubble_t0_ms_cache:
+            return self.bubble_t0_ms_cache[ev]
+        result = None
+        try:
+            if self.bubble_events is not None:
+                bubs = self.bubble_events[self.bubble_events['ev'] == ev]
+                if len(bubs) > 0:
+                    frames = bubs['frame']
+                    cams = bubs['cam']
+                    bt0_frame = int(np.min(frames))
+                    bt0_cam = int(cams[int(np.argmin(frames))])
+
+                    run_dir = os.path.join(self.raw_directory, self.run)
+                    cam_csv = os.path.join(run_dir, str(ev), 'cam{}-info.csv'.format(bt0_cam))
+                    with open(cam_csv, mode='r', encoding='utf-8') as camfile:
+                        cam_info = list(csv.DictReader(camfile))
+
+                    with open(os.path.join(run_dir, 'rc.json'), mode='r', encoding='utf-8') as confile:
+                        config = json.load(confile)
+
+                    post_trig = config['cams']['cam{}'.format(bt0_cam)]['post_trig']
+                    tot_frames = config['cams']['cam{}'.format(bt0_cam)]['buffer_len']
+                    trig_frame = tot_frames - post_trig
+
+                    result = (float(cam_info[bt0_frame]['timestamp'])
+                              - float(cam_info[trig_frame]['timestamp'])) * 1000.0  # ms
+        except Exception as e:
+            self.logger.error('failed to compute bubble t0 (ms) for ev {}: {}'.format(ev, e))
+            result = None
+        self.bubble_t0_ms_cache[ev] = result
+        return result
 
     def compute_bubble_t0(self):
         # Bubble t0 per event is earliest bubble frame across cameras

@@ -16,6 +16,8 @@ from PIL import Image, ImageTk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 from GetEvent import GetEvent
 
+SLOWDAQ_T0_COLORS = {'pressure': 'r', 'bubble': 'g', 'scint': 'b'}
+
 
 class SlowDAQ(tk.Frame):
     def __init__(self):
@@ -25,6 +27,10 @@ class SlowDAQ(tk.Frame):
         self.slowDAQ_ymax = None
         self.slowDAQ_tmin = None
         self.slowDAQ_tmax = None
+
+        self.slowDAQ_t0_vars = {
+            key: tk.BooleanVar(value=False) for key in SLOWDAQ_T0_COLORS
+        }
 
         self.create_slowDAQ_widgets()
 
@@ -98,6 +104,20 @@ class SlowDAQ(tk.Frame):
         )
         self.slowDAQ_apply_button.grid(row=6, column=0, columnspan=2, sticky='we', pady=(5, 0))
 
+        self.slowDAQ_t0_checkbuttons = {}
+        row = 7
+        for key in SLOWDAQ_T0_COLORS:
+            cb = tk.Checkbutton(
+                self.slowDAQ_tab_left,
+                text=f'Show {key} t0',
+                variable=self.slowDAQ_t0_vars[key],
+                command=self.draw_slowDAQ,
+                state=DISABLED,
+            )
+            cb.grid(row=row, column=0, columnspan=2, sticky='we')
+            self.slowDAQ_t0_checkbuttons[key] = cb
+            row += 1
+
         # Right: plot
         self.slowDAQ_tab_right = tk.Frame(self.slowDAQ_tab, bd=5, relief=tk.SUNKEN)
         self.slowDAQ_tab_right.grid(row=0, column=1, sticky='NW')
@@ -129,7 +149,11 @@ class SlowDAQ(tk.Frame):
             self.slowDAQ_combobox.set('')
             self.slowDAQ_combobox.state(['disabled'])
             self.slowDAQ_event = None
-            
+
+            for key, cb in self.slowDAQ_t0_checkbuttons.items():
+                cb.config(state=DISABLED)
+                self.slowDAQ_t0_vars[key].set(False)
+
             self.slowDAQ_ax.clear()
             self.slowDAQ_canvas.draw_idle()
             return
@@ -265,8 +289,59 @@ class SlowDAQ(tk.Frame):
         self.slowDAQ_ax.set_title(f"{sensor_name} {self.run}-{self.event}")
         self.slowDAQ_ax.grid(True)
 
+        self.update_slowDAQ_t0_widgets()
+        self.draw_slowDAQ_t0_lines()
+
         self.slowDAQ_fig.tight_layout()
         self.slowDAQ_canvas.draw_idle()
+
+    def update_slowDAQ_t0_widgets(self):
+        try:
+            ev = int(self.event)
+        except (TypeError, ValueError):
+            ev = None
+
+        for key, cb in self.slowDAQ_t0_checkbuttons.items():
+            val = self.get_slowDAQ_t0(key, ev) if ev is not None else None
+            if val is not None and np.isfinite(val):
+                cb.config(state=NORMAL)
+            else:
+                cb.config(state=DISABLED)
+                self.slowDAQ_t0_vars[key].set(False)
+
+    def get_slowDAQ_t0(self, key, ev):
+        if key == 'pressure':
+            return self.pressure_t0.get(ev)
+        elif key == 'scint':
+            return self.scint_t0.get(ev)
+        elif key == 'bubble':
+            return self.bubble_t0_ms(ev)
+
+    def draw_slowDAQ_t0_lines(self):
+        # Draw a dashed vertical line per enabled t0 type at its event value+offset
+        try:
+            ev = int(self.event)
+        except (TypeError, ValueError):
+            return
+
+        # t_compression maps the trigger t0 onto the absolute slowDAQ time_ms axis
+        offset_auto = self.t_compression.get(ev, 0.0)
+
+        drawn = False
+        for key, color in SLOWDAQ_T0_COLORS.items():
+            if not self.slowDAQ_t0_vars[key].get():
+                continue
+            val = self.get_slowDAQ_t0(key, ev)
+            if val is None or not np.isfinite(val):
+                continue
+            self.slowDAQ_ax.axvline(
+                x=val + offset_auto,
+                linestyle='dashed', color=color, label=f'{key} t0',
+            )
+            drawn = True
+
+        if drawn:
+            self.slowDAQ_ax.legend()
     
     def slowDAQ_error(self, label, error=None):
         if error is not None:
