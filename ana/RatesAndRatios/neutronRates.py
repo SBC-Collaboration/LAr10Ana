@@ -157,7 +157,8 @@ backgroundPairs = process_dir_ana('/exp/e961/data/SBC-25-recon/dev-output/')
 backgroundBinCounts = [0] * 5
 backgroundTime = 0.0
 for mult, livetime in backgroundPairs:
-    backgroundBinCounts[min(mult, 5) - 1] += 1
+    if mult !=0:
+        backgroundBinCounts[min(mult, 5) - 1] += 1
     backgroundTime += livetime
 backgroundSingles, background2s, background3s, background4s, background5s = backgroundBinCounts
 backgroundMultis = background2s + background3s + background4s + background5s
@@ -199,7 +200,7 @@ makeMultPlots = True
 
 ## whether the background-subtracted rate's error bar carries through the background
 ## error's asymmetry (zero-count bins only have an upper limit), or stays symmetric
-asymmetricBackSubError = False
+asymmetricBackSubError = True
 
 
 def process_dir(dirpath):
@@ -266,7 +267,8 @@ def bin_multiplicities(bubbleCount, sourceTimes, keep):
             continue
         sourceTime += sourceTimes[i]
         count += 1
-        binCounts[min(mult, 5) - 1] += 1
+        if mult != 0:
+            binCounts[min(mult, 5) - 1] += 1
     return binCounts, sourceTime, count
 
 
@@ -279,9 +281,9 @@ def background_subtract(binCounts, sourceTime, backgroundBinCounts, backgroundTi
     # on backBins (before the caller scales everything to a per-minute rate) - if
     # checked after, every bin's rate is small and this would trigger everywhere
     backErrorLow = [np.sqrt(b) if b >= 1 else 0.0 for b in backBins]
-    backErrorHigh = [np.sqrt(b) if b >= 1 else -np.log(1 - 0.68) / backgroundTime for b in backBins]
+    backErrorHigh = [np.sqrt(b) if b >= 1 else -np.log(1 - 0.68) /(backgroundTime) for b in backBins]
     binCountError = [np.sqrt(c) for c in binCounts]
-    backSubBins = [c - b for c, b in zip(binCounts, backBins)]
+    backSubBins = [(c - b) for c, b in zip(binCounts, backBins)]
     # background high -> subtracted rate pulled down; background low -> subtracted rate pulled up
     backSubErrorLow = [np.sqrt(np.abs(ce**2 + be**2)) for ce, be in zip(binCountError, backErrorHigh)]
     if asymmetricBackSubError:
