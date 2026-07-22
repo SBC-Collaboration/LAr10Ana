@@ -331,22 +331,22 @@ for p,T in pToUse:
     if curCount > mostCommonCount:
         mostCommonCount = curCount
         mostCommon = (p,T)
-    # turn into a rate
-    for i in range(binCounts):
-        binCounts[i]/= sourceTime
+
     # background rate subtraction
     # make sure this is in a rate
-    backgroundSingleEst = backgroundSingles/backgroundTime
-    background2sEst = background2s/backgroundTime
-    background3sEst = background3s/backgroundTime
-    background4sEst = background4s/backgroundTime
-    background5sEst = background5s/backgroundTime 
+    backgroundSingleEst = backgroundSingles * sourceTime/backgroundTime
+    background2sEst = background2s* sourceTime/backgroundTime
+    background3sEst = background3s* sourceTime/backgroundTime
+    background4sEst = background4s* sourceTime/backgroundTime
+    background5sEst = background5s* sourceTime/backgroundTime 
     backBins = [backgroundSingleEst, background2sEst, background3sEst, background4sEst, background5sEst]
     backError = []
     for c in backBins:
         #TODO: add case for 0 upper limit
-        backError.append(np.sqrt(c))
-
+        if c != 0:
+            backError.append(np.sqrt(c))
+        else:
+            backError.append(-np.log(1-0.68)/backgroundTime)
     backSubBins = []
     backSubError = []
     binCountError = []
@@ -380,22 +380,6 @@ for p,T in pToUse:
             simCountMin[i].append(np.abs(backSubBins[0]* (ratiosSim[j][i] - simError[j][i])))
             simCountMax[i].append(np.abs(backSubBins[0] * (ratiosSim[j][i] + simError[j][i])))
 
-    # new graphing
-    plt.figure(figsize=(10,10))
-    x = np.arange(len(binLabels))
-    points = x
-
-    # source on
-    plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
-
-    # source off
-    plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label=f"Background Rate\n(Livetime Norm. to Source)")
-    # on - off
-    plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
-    
-    # 0KeV threshold
-    edges = np.concatenate(([points[0] - 0.5], (points[:-1] + points[1:])/2, [points[-1] + 0.5]))
-    plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0keV Threshold")
     # seitz threshold
     seitz = sm.SeitzModel(p * 14.5038, -273.15 + T, 'argon').Q
     usedSeitz.append(seitz)
@@ -415,12 +399,57 @@ for p,T in pToUse:
                     estRatio = ratiosSim[j][i-1] + (ratiosSim[j][i] - ratiosSim[j][i-1]) * t
                     seitzCount.append(backSubBins[0]* estRatio )
                 break
+    
+    # change this into a rate plot instead of count plot
+    # change to minutes?
+    sourceTime /= 60
+    for i in range(len(seitzCount)):
+            binCounts[i]     /= sourceTime
+            binCountError[i] /= sourceTime
+            backBins[i]      /= sourceTime
+            backError[i]     /= sourceTime
+            backSubBins[i]   /= sourceTime
+            backSubError[i]  /= sourceTime
+            seitzCount[i]    /= sourceTime
+            simCountMin[0][i]/= sourceTime
+            simCountMax[0][i]/= sourceTime
+    
+    meanNorm = 0
+    for c in backSubBins:
+        meanNorm += c
+    div1 = 0
+    for c in seitzCount:
+        div1 += c
+    div2 = 0
+    for c in simCountMin[0]:
+        div2 += c
+    for i in range(len(seitzCount)):
+        seitzCount[i] *= meanNorm/div1
+        simCountMin[0][i] *= meanNorm/div2
+        simCountMax[0][i] *= meanNorm/div2
+
+    # new graphing
+    plt.figure(figsize=(10,10))
+    x = np.arange(len(binLabels))
+    points = x
+
+    # source on
+    plt.errorbar(points, binCounts, yerr=binCountError,fmt='o',color="red", ecolor="red", label="Source Rate")
+
+    # source off
+    plt.errorbar(points, backBins, yerr=backError, fmt='o',color="blue", label=f"Background Rate")
+    # on - off
+    plt.errorbar(points, backSubBins,yerr=backSubError, fmt='o',color="purple", label="Background Subtracted Rate")
+    
+    # 0KeV threshold
+    edges = np.concatenate(([points[0] - 0.5], (points[:-1] + points[1:])/2, [points[-1] + 0.5]))
+    plt.stairs(simCountMax[0], edges, color="orange", linewidth=4, label="0keV Threshold")
 
     plt.stairs(seitzCount, edges, color="green", linewidth=6, label=f"Seitz Threshold\n({seitz:0.2f} keV )")
     plt.xticks(x,binLabels, fontsize=20)
     plt.yticks(fontsize=20)
     plt.xlabel("Bubble Multiplicity",fontsize=20)
-    plt.ylabel("Count",fontsize=20)
+    plt.ylabel("Rate [count/min]",fontsize=20)
     plt.legend(fontsize=20)
     plt.tight_layout()
     plt.savefig("linhist" + str(p) + str(T)+".png")
