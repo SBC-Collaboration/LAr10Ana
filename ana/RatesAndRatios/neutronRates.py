@@ -199,7 +199,7 @@ makeMultPlots = True
 
 ## whether the background-subtracted rate's error bar carries through the background
 ## error's asymmetry (zero-count bins only have an upper limit), or stays symmetric
-asymmetricBackSubError = True
+asymmetricBackSubError = False
 
 
 def process_dir(dirpath):
@@ -471,13 +471,9 @@ if makeMultPlots:
 
 # averaged seitz threshold
 avg = np.mean(usedSeitz)
-print(mostCommon)
-print(usedSeitz)
-print(avg)
 if avg != 4.200422148324119:
     print("go get the new avg threshold it's value is:" + str(avg))
     exit()
-print("avg is correct")
 ratios = [1, 0.41018767, 0.15013405, 0.09115282, 0.02412869]
 
 plt.figure(figsize=(10, 10))
