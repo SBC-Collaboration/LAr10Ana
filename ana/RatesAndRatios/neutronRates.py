@@ -274,9 +274,12 @@ def bin_multiplicities(bubbleCount, sourceTimes, keep):
 # make sure this is in a rate
 def background_subtract(binCounts, sourceTime, backgroundBinCounts, backgroundTime, asymmetricBackSubError):
     backBins = [b * sourceTime / backgroundTime for b in backgroundBinCounts]
-    # 0 observed background: one-sided upper limit, so no lower error bar
-    backErrorLow = [np.sqrt(b) if b != 0 else 0.0 for b in backBins]
-    backErrorHigh = [np.sqrt(b) if b != 0 else -np.log(1 - 0.68) / backgroundTime for b in backBins]
+    # b < 1 -> sqrt(b) alone would push the lower bound negative, so switch to a
+    # one-sided upper limit there too, not just at exactly 0. this has to be checked
+    # on backBins (before the caller scales everything to a per-minute rate) - if
+    # checked after, every bin's rate is small and this would trigger everywhere
+    backErrorLow = [np.sqrt(b) if b >= 1 else 0.0 for b in backBins]
+    backErrorHigh = [np.sqrt(b) if b >= 1 else -np.log(1 - 0.68) / backgroundTime for b in backBins]
     binCountError = [np.sqrt(c) for c in binCounts]
     backSubBins = [c - b for c, b in zip(binCounts, backBins)]
     # background high -> subtracted rate pulled down; background low -> subtracted rate pulled up
@@ -284,7 +287,9 @@ def background_subtract(binCounts, sourceTime, backgroundBinCounts, backgroundTi
     if asymmetricBackSubError:
         backSubErrorHigh = [np.sqrt(np.abs(ce**2 + be**2)) for ce, be in zip(binCountError, backErrorLow)]
     else:
-        backSubErrorHigh = backSubErrorLow
+        # must be an independent list, not an alias: the caller divides both lists
+        # element-wise by sourceTime later, which would double-divide a shared list
+        backSubErrorHigh = list(backSubErrorLow)
     return backBins, backErrorLow, backErrorHigh, backSubBins, backSubErrorLow, backSubErrorHigh, binCountError
 
 
