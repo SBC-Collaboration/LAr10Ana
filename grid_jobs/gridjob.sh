@@ -45,7 +45,7 @@ OUTDIR_FULL="${OUTDIR}/${LOCAL_RUNDIR}-${CLUSTER}_${PROCESS}"
 ifdh mkdir -p ${OUTDIR_FULL}
 echo "OUTDIR created at ${OUTDIR_FULL}"
 VERSION_FILE="${INPUT_TAR_DIR_LOCAL}/version.txt"
-ifdh cp -r ${VERSION_FILE} ${LOG} ${OUT}/* ${OUTDIR_FULL} >>${LOG} 2>&1 
+ifdh cp -D -r ${VERSION_FILE} ${LOG} ${OUT}/* ${OUTDIR_FULL} >>${LOG} 2>&1 
 ifdh_exit_code=$?
 echo "Data copy exited with code ${ifdh_exit_code}"
 
