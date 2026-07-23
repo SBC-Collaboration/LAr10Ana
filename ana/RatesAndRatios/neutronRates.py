@@ -282,6 +282,8 @@ def background_subtract(binCounts, sourceTime, backgroundBinCounts, backgroundTi
     # checked after, every bin's rate is small and this would trigger everywhere
     backErrorLow = [np.sqrt(b) if b >= 1 else 0.0 for b in backBins]
     backErrorHigh = [np.sqrt(b) if b >= 1 else -np.log(1 - 0.68) /(backgroundTime) for b in backBins]
+    print(-np.log(1 - 0.68) /(backgroundTime))
+
     binCountError = [np.sqrt(c) for c in binCounts]
     backSubBins = [(c - b) for c, b in zip(binCounts, backBins)]
     # background high -> subtracted rate pulled down; background low -> subtracted rate pulled up
