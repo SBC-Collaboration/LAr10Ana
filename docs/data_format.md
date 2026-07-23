@@ -118,6 +118,8 @@ This module (`ScintT0.py`) correlates scintillation triggers with digiscope entr
 - **first_pulse_pt0_40ms** (array(`int`,`float`),(index,ms)): first pulse within ±40ms of pressureT0
 - **last_pulse_pt0_40ms** (array(`int`,`float`),(index,ms)): last pulse in 80ms pT0 window
 - **first_scint_in_livetime** (array(`int`,`float`),(index,ms)): first scintillation trigger during post-expanded livetime
+- **last_pulse_before_trig** (array(`int`,`float`),(index,ms))
+- **last_pulse_off_bub** (array(`int`,`float`),(index,ms))
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
@@ -135,4 +137,13 @@ This module (`AcousticNoise.py`) checks for successful expansions and quiet mode
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
-
+## Bubble Clustering (`clustering.sbc`)
+This module (`SingleBubClustering.py`) uses the output of bubble finder and returns bubble clustering.
+- **bub_num**
+- **cam**
+- **pos**
+- **radius**
+- **significance**
+- **frame**
+- **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
+- **ev** (`int`): Event ID of this row. (Added by EventDealer)

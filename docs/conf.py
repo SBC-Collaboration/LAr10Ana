@@ -7,8 +7,8 @@ project = 'SBC LAr10Ana'
 copyright = '2024-2026 SBC Collaboration'
 author = 'SBC Collaboration'
 
-release = '0.3.0'
-version = '0.3.0'
+release = '0.4.0'
+version = '0.4.0'
 
 # -- General configuration
 

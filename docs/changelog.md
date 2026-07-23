@@ -1,5 +1,10 @@
 # Change Log
 
+## [LAr10Ana v0.4.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.4.0) (2026-07-23)
+- Update scint t0 module, include last_pulse_before_trig and last_pulse_off_bub.
+- Add bubble clustering module.
+- Fix ifdh cp for directories.
+
 ## [LAr10Ana v0.3.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.3.0) (2026-07-14)
 - 3D reconstruction: check the confidence values of the bubble finder, implement our own confidence values, have better error outputs, and update the multiplicity estimate.
 
