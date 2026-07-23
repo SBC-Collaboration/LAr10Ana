@@ -112,17 +112,16 @@ def ClusterBubs(cams, frames, pos, rads, sigs, cam, out=None):
                 r_clean.append(tag_rads[indx])
                 s_clean.append(tag_sigs[indx])
 
-        
-        out['frame'].append(f_clean)
-        out['pos'].append(p_clean)
-        out['radius'].append(r_clean)
-        out['cam'].append(np.full(len(f_clean),cam))
-        #out['cam'].append(cam)
-        out['significance'].append(s_clean)
-        out['bub_num'].append(np.full(len(f_clean),nGoodBubs))
-        #out['bub_num'].append(nGoodBubs)
-        
-        nGoodBubs+=1
+        for k in range(len(f_clean)):
+            xy = np.ravel(p_clean[k])
+            out["bub_num"].append([nGoodBubs])
+            out["cam"].append([cam])
+            out["pos"].append([float(xy[0]), float(xy[1])])
+            out["radius"].append([float(np.ravel(r_clean[k])[0])])
+            out["significance"].append([float(np.ravel(s_clean[k])[0])])
+            out["frame"].append([int(f_clean[k])])
+
+        nGoodBubs += 1
     
     return out
 

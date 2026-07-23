@@ -23,6 +23,7 @@ from ana.PressureT0 import PressureT0Finding as pt0
 from ana.SlowDAQTexpansion import SlowDAQTexpansionFinding as t_exp
 from ana.AcousticNoise import acoustic_noise as acousN
 from ana.ScintT0 import scint_t0 as st0
+from ana.SingleBubClusteringEv import CleanBubDict as bc
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
@@ -39,7 +40,8 @@ ANALYSES = {
     "pressure_t0": pt0,
     "t_expansion": t_exp,
     "acoustic_noise": acousN,
-    "scint_t0": st0
+    "scint_t0": st0,
+    "clustering": bc
 }
 
 def BuildEventList(rundir, maxevt=-1):
@@ -162,6 +164,9 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             elif p == "scint_t0" and not data["scintillation"]["loaded"]:
                 print(f"Skipping {p} analysis -- scintillation data not loaded.")
                 continue
+            elif p == "clustering" and not data["cam"]["loaded"]:
+                print(f"Skipping {p} analysis -- camera data not loaded.")
+                continue
 
             try:
                 result = ANALYSES[p](data, **parameter_config[p])
@@ -189,7 +194,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                         val = np.array(val)
                     dtypes.append(dname(val.dtype.str))
                     
-                    if p == "scint_rate" or p == "bubble":
+                    if p in ("scint_rate", "bubble", "clustering"):
                         shape = list(np.atleast_1d(val).shape)
                     else:
                         shape = list(np.squeeze(val).shape)
@@ -226,10 +231,10 @@ if __name__ == "__main__":
             rundir=sys.argv[1],
             recondir=sys.argv[2],
             process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco", "pressure_t0", "t_expansion",
-                            "acoustic_noise", "scint_t0"])
+                            "acoustic_noise", "scint_t0", "clustering"])
     else:
         ProcessSingleRun(
             rundir="/exp/e961/data/SBC-25-daqdata/20260212_1.tar",
             recondir="/home/zsheng/test", # Use your own directory for testing~
             process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "reco", "pressure_t0", "t_expansion",
-                            "acoustic_noise", "scint_t0"])
+                            "acoustic_noise", "scint_t0", "clustering"])
