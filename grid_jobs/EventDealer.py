@@ -23,7 +23,7 @@ from ana.PressureT0 import PressureT0Finding as pt0
 from ana.SlowDAQTexpansion import SlowDAQTexpansionFinding as t_exp
 from ana.AcousticNoise import acoustic_noise as acousN
 from ana.ScintT0 import scint_t0 as st0
-from ana.SingleBubClusteringEv import CleanBubDict as bc
+from ana.SingleBubClustering import CleanBubDict as bc
 
 from GetEvent import GetEvent, NEvent
 from sbcbinaryformat import Streamer, Writer
