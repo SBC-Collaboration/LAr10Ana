@@ -198,6 +198,10 @@ neutronRuns = (neutronRunsWarmB + neutronRunsColdB + neutronRunsHotB) if useConf
 ## the multhist bar plots are slow and not always wanted, toggle off when not needed
 makeMultPlots = True
 
+## number of multiplicity classes for the combined seitz-threshold plot:
+## 3 -> ticks are 1, 2, 3+ ; 2 -> ticks are 1, 2+
+combinedPlotBins = 3
+
 ## whether the background-subtracted rate's error bar carries through the background
 ## error's asymmetry (zero-count bins only have an upper limit), or stays symmetric
 asymmetricBackSubError = True
@@ -282,7 +286,6 @@ def background_subtract(binCounts, sourceTime, backgroundBinCounts, backgroundTi
     # checked after, every bin's rate is small and this would trigger everywhere
     backErrorLow = [np.sqrt(b) if b >= 1 else 0.0 for b in backBins]
     backErrorHigh = [np.sqrt(b) if b >= 1 else -np.log(1 - 0.68) /(backgroundTime) for b in backBins]
-    print(-np.log(1 - 0.68) /(backgroundTime))
 
     binCountError = [np.sqrt(c) for c in binCounts]
     backSubBins = [(c - b) for c, b in zip(binCounts, backBins)]
@@ -295,6 +298,25 @@ def background_subtract(binCounts, sourceTime, backgroundBinCounts, backgroundTi
         # element-wise by sourceTime later, which would double-divide a shared list
         backSubErrorHigh = list(backSubErrorLow)
     return backBins, backErrorLow, backErrorHigh, backSubBins, backSubErrorLow, backSubErrorHigh, binCountError
+
+
+# collapse the 5 multiplicity classes (1,2,3,4,5+) into numBins classes for the
+# combined seitz-threshold plot: 3 -> [1, 2, 3+], 2 -> [1, 2+]
+def _multiplicity_groups(numBins):
+    if numBins == 2:
+        return [[0], [1, 2, 3, 4]]
+    if numBins == 3:
+        return [[0], [1], [2, 3, 4]]
+    raise ValueError("combinedPlotBins must be 2 or 3")
+
+
+def rebin_values(values, numBins):
+    return [sum(values[i] for i in g) for g in _multiplicity_groups(numBins)]
+
+
+# values are independent counts/rates, so combine their errors in quadrature
+def rebin_errors(errors, numBins):
+    return [np.sqrt(sum(errors[i]**2 for i in g)) for g in _multiplicity_groups(numBins)]
 
 
 # this is probably not the best way to do this but it works for now
@@ -375,6 +397,70 @@ def plot_multiplicity_bars(binLabels, thresholds, ratiosSim, simCountMin, simCou
     plt.close()
 
 
+# one combined plot across every (P,T) permutation: background-subtracted rate
+# points + that permutation's seitz threshold prediction, grouped side by side
+# with a whitespace gap between groups, ordered by ascending seitz threshold.
+# groups are wrapped onto multiple rows (groupsPerRow per row) sharing one
+# y-scale so bar heights stay comparable across rows. Sized to fit a single
+# journal text column: narrow bars/gaps keep the figure width down.
+def plot_combined_seitz_groups(groups, numBins, savepath, groupsPerRow=4):
+    binLabels = ["1", "2+"] if numBins == 2 else ["1", "2", "3+"]
+    barWidth = 1.0
+    gap = 0.6
+    colWidthInches = 3.5
+
+    nRows = int(np.ceil(len(groups) / groupsPerRow))
+    fig, axes = plt.subplots(nRows, 1, figsize=(colWidthInches, 3.2 * nRows), squeeze=False)
+    axes = axes[:, 0]
+
+    tops = [max(max(g["seitzCount"]), max(b + e for b, e in zip(g["backSub"], g["errHigh"])))
+            for g in groups]
+    globalMax = max(tops)
+
+    for rowIdx, ax in enumerate(axes):
+        trans = ax.get_xaxis_transform()  # x in data coords, y in axes-fraction coords
+        rowGroups = groups[rowIdx * groupsPerRow:(rowIdx + 1) * groupsPerRow]
+
+        pos = 0
+        for gi, g in enumerate(rowGroups):
+            xs = np.arange(pos, pos + numBins)
+
+            ax.bar(xs, g["seitzCount"], width=barWidth, color="lightblue", edgecolor="steelblue", zorder=1)
+            ax.errorbar(xs, g["backSub"], yerr=[g["errLow"], g["errHigh"]], fmt='o', color="red",
+                        ecolor="red", zorder=2, markersize=3, elinewidth=1, capsize=2)
+
+            for x, label in zip(xs, binLabels):
+                ax.text(x, -0.05, label, transform=trans, ha='center', va='top', fontsize=12)
+
+            # seitz threshold label justified to the top of the plot, same height for every group
+            center = (xs[0] + xs[-1]) / 2
+            ax.text(center, 0.97, f'{g["seitz"]:0.2f}', transform=trans, ha='center', va='top',
+                    fontsize=10)
+
+            # thin dashed separator centered in the whitespace before the next seitz group
+            if gi < len(rowGroups) - 1:
+                ax.axvline(pos + numBins + gap / 2 - 0.5, linestyle='--', linewidth=0.7,
+                           color='gray', zorder=0)
+
+            pos += numBins + gap
+
+        ax.set_ylim(0, globalMax * 1.2)
+        ax.set_xlim(-1, pos - gap)
+        ax.set_xticks([])
+        ax.tick_params(axis='y', labelsize=12)
+
+    # marks the row of values along the top of each subplot as Q_seitz [keV]
+    axes[0].set_title(r'$Q_{seitz}$ [keV]', loc='left', fontsize=16, pad=2)
+    axes[0].set_title(r'$^{252}$Cf Source', loc='right', fontsize=16, pad=2)
+
+    axes[nRows // 2].set_ylabel("Rate [count/min]", fontsize=16)
+    axes[-1].set_xlabel("Bubble Multiplicity", fontsize=12, labelpad=28)
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.15)
+    fig.savefig(savepath)
+    plt.close(fig)
+
+
 binLabels = ["1", "2", "3", "4", "5+"]
 #idk if we need this but could help
 excludedRegions = []
@@ -382,6 +468,7 @@ excludedRegions = []
 usedSeitz = []
 mostCommon = None
 mostCommonCount = 0
+combinedSeitzGroups = []
 for p, T in pToUse:
     binCounts, sourceTime, curCount = bin_multiplicities(
         bubbleCount, sourceTimes,
@@ -413,6 +500,16 @@ for p, T in pToUse:
     seitz = sm.SeitzModel(p * 14.5038, -273.15 + T, 'argon').Q
     usedSeitz.append(seitz)
     seitzCount = seitz_count(seitz, seitzThresholds, seitzRatios, thresholds, ratiosSim, meanNorm)
+
+    combinedSeitzGroups.append({
+        "seitz": seitz,
+        "p": p,
+        "T": T,
+        "backSub": rebin_values(backSubBins, combinedPlotBins),
+        "errLow": rebin_errors(backSubErrorLow, combinedPlotBins),
+        "errHigh": rebin_errors(backSubErrorHigh, combinedPlotBins),
+        "seitzCount": rebin_values(seitzCount, combinedPlotBins),
+    })
 
     # new graphing
     plt.figure(figsize=(10, 10))
@@ -448,6 +545,14 @@ for p, T in pToUse:
             title=f"Multiplicites Comparison for P={p}bara and T={T}K",
             savepath=f"multhist{p}{T}.png",
         )
+
+# combined background-subtracted rate vs seitz threshold, all (P,T) permutations
+# grouped side by side ordered by ascending seitz threshold value
+combinedSeitzGroups.sort(key=lambda g: g["seitz"])
+plot_combined_seitz_groups(
+    combinedSeitzGroups, combinedPlotBins,
+    savepath="combinedSeitzMultiplicity.png",
+)
 
 # averaged out stats
 binCounts, sourceTime, _ = bin_multiplicities(
