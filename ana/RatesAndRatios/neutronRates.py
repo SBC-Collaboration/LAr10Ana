@@ -504,6 +504,7 @@ for p, T in pToUse:
     # normalize the simulated/seitz predictions to the background-subtracted total
     meanNorm = sum(backSubBins)
     simCountMin, simCountMax = sim_count_bounds(thresholds, ratiosSim, simError, meanNorm)
+    
 
     # seitz threshold
     seitz = sm.SeitzModel(p * 14.5038, -273.15 + T, 'argon').Q
@@ -513,15 +514,22 @@ for p, T in pToUse:
     # seitzRatios/meanNorm/liveTime are kept per-group so the combined multi-row plot
     # can scale each group's own shape either by its own total (per threshold) or by
     # a livetime-weighted shared shape fit across every group's real data below
+    
+    backRatios = [1]
+    for i in backSubBins[1:]:
+        backRatios.append(i/backSubBins[0])
+    
     combinedSeitzGroups.append({
         "seitz": seitz,
         "p": p,
         "T": T,
+        "meanNorm": meanNorm,
         "backSub": rebin_values(backSubBins, combinedPlotBins),
+        "seitzCount": rebin_values(seitzCount,combinedPlotBins),
         "errLow": rebin_errors(backSubErrorLow, combinedPlotBins),
         "errHigh": rebin_errors(backSubErrorHigh, combinedPlotBins),
         "seitzRatios": get_seitz_ratios(seitz, seitzThresholds, seitzRatios, thresholds, ratiosSim),
-        "meanNorm": meanNorm,
+        "backRatios": backRatios,
         "liveTime": sourceTime,
     })
 
@@ -570,15 +578,21 @@ if normalizePerThreshold:
         scale = g["meanNorm"] / sum(g["seitzRatios"])
         g["seitzCount"] = rebin_values([scale * r for r in g["seitzRatios"]], combinedPlotBins)
 else:
-    totalLiveTime = sum(g["liveTime"] for g in combinedSeitzGroups)
-    meanLiveTime = np.mean([g["liveTime"] for g in combinedSeitzGroups])
-    dataRatios = [g["meanNorm"] / sum(g["seitzRatios"]) for g in combinedSeitzGroups]
-    avgRatio = (sum(r * g["liveTime"] for r, g in zip(dataRatios, combinedSeitzGroups))
+    liveTimeStr = "liveTime"
+    liveTimeStr = "meanNorm"
+    totalLiveTime = sum(g[liveTimeStr] for g in combinedSeitzGroups)
+    meanLiveTime = np.mean([g[liveTimeStr] for g in combinedSeitzGroups])
+    # dataRatios = [sum(g["backSub"])/sum(g["seitzCount"]) for g in combinedSeitzGroups]
+    dataRatios = [g["meanNorm"]/sum(g["seitzRatios"]) for g in combinedSeitzGroups]
+    avgRatio = (sum(r * g[liveTimeStr] for r, g in zip(dataRatios, combinedSeitzGroups))
                 / totalLiveTime)
-    for g in combinedSeitzGroups:
-        predictedTotal = avgRatio * g["liveTime"] / meanLiveTime
-        scale = predictedTotal / sum(g["seitzRatios"])
-        g["seitzCount"] = rebin_values([scale * r for r in g["seitzRatios"]], combinedPlotBins)
+    # for g in combinedSeitzGroups:
+    for i, g in enumerate(combinedSeitzGroups):
+        # predictedTotal = dataRatios[i]
+        predictedTotal = avgRatio * g[liveTimeStr] / meanLiveTime
+        #scale = predictedTotal / sum(g["seitzRatios"])
+        scale = predictedTotal
+        combinedSeitzGroups[i]["seitzCount"] = rebin_values([scale * r for r in g["seitzRatios"]], combinedPlotBins)
 
 # combined background-subtracted rate vs seitz threshold, all (P,T) permutations
 # grouped side by side ordered by ascending seitz threshold value
