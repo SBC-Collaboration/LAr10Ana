@@ -206,6 +206,11 @@ combinedPlotBins = 3
 ## error's asymmetry (zero-count bins only have an upper limit), or stays symmetric
 asymmetricBackSubError = True
 
+## whether the combined multi-row seitz plot's predicted curve is scaled per group to
+## match that group's own background-subtracted total ("per threshold"), or scaled by
+## one shared factor fit across every group's real data combined ("entire dataset")
+normalizePerThreshold = False
+
 
 def process_dir(dirpath):
     bubbleCount = []
@@ -334,21 +339,24 @@ def sim_count_bounds(thresholds, ratiosSim, simError, total):
 
 
 # seitz threshold
+# raw (unscaled) simulated multiplicity shape for a given seitz threshold value
+def get_seitz_ratios(seitz, seitzThresholds, seitzRatios, thresholds, ratiosSim):
+    if seitz in seitzThresholds:
+        col = seitzThresholds.index(seitz)
+        return [seitzRatios[j][col] for j in range(len(seitzRatios))]
+    print("Couldnt find exact value, using lerp")
+    # linear interpolate for now
+    for i in range(1, len(thresholds)):
+        if thresholds[i - 1] <= seitz <= thresholds[i]:
+            t = (seitz - thresholds[i - 1]) / (thresholds[i] - thresholds[i - 1])
+            return [ratiosSim[j][i - 1] + (ratiosSim[j][i] - ratiosSim[j][i - 1]) * t for j in range(len(ratiosSim))]
+    raise ValueError(f"seitz value {seitz} outside thresholds range")
+
+
 # same idea: scale the simulated shape at the seitz threshold to match the
 # background-subtracted total, instead of anchoring to backSubBins[0]
 def seitz_count(seitz, seitzThresholds, seitzRatios, thresholds, ratiosSim, total):
-    if seitz in seitzThresholds:
-        col = seitzThresholds.index(seitz)
-        ratios = [seitzRatios[j][col] for j in range(len(seitzRatios))]
-    else:
-        print("Couldnt find exact value, using lerp")
-        # linear interpolate for now
-        ratios = None
-        for i in range(1, len(thresholds)):
-            if thresholds[i - 1] <= seitz <= thresholds[i]:
-                t = (seitz - thresholds[i - 1]) / (thresholds[i] - thresholds[i - 1])
-                ratios = [ratiosSim[j][i - 1] + (ratiosSim[j][i] - ratiosSim[j][i - 1]) * t for j in range(len(ratiosSim))]
-                break
+    ratios = get_seitz_ratios(seitz, seitzThresholds, seitzRatios, thresholds, ratiosSim)
     scale = total / sum(ratios)
     return [scale * r for r in ratios]
 
@@ -469,6 +477,7 @@ usedSeitz = []
 mostCommon = None
 mostCommonCount = 0
 combinedSeitzGroups = []
+
 for p, T in pToUse:
     binCounts, sourceTime, curCount = bin_multiplicities(
         bubbleCount, sourceTimes,
@@ -501,6 +510,9 @@ for p, T in pToUse:
     usedSeitz.append(seitz)
     seitzCount = seitz_count(seitz, seitzThresholds, seitzRatios, thresholds, ratiosSim, meanNorm)
 
+    # seitzRatios/meanNorm/liveTime are kept per-group so the combined multi-row plot
+    # can scale each group's own shape either by its own total (per threshold) or by
+    # a livetime-weighted shared shape fit across every group's real data below
     combinedSeitzGroups.append({
         "seitz": seitz,
         "p": p,
@@ -508,7 +520,9 @@ for p, T in pToUse:
         "backSub": rebin_values(backSubBins, combinedPlotBins),
         "errLow": rebin_errors(backSubErrorLow, combinedPlotBins),
         "errHigh": rebin_errors(backSubErrorHigh, combinedPlotBins),
-        "seitzCount": rebin_values(seitzCount, combinedPlotBins),
+        "seitzRatios": get_seitz_ratios(seitz, seitzThresholds, seitzRatios, thresholds, ratiosSim),
+        "meanNorm": meanNorm,
+        "liveTime": sourceTime,
     })
 
     # new graphing
@@ -545,6 +559,26 @@ for p, T in pToUse:
             title=f"Multiplicites Comparison for P={p}bara and T={T}K",
             savepath=f"multhist{p}{T}.png",
         )
+
+# scale each group's predicted shape into a count: either every group gets its own
+# scale (matching its own real total, "per threshold"), or every group is built from
+# one livetime-weighted average shape ("entire dataset") -
+# ratio = sum(r_i * t_i) / sum(t_i), r_i/t_i are group i's shape/livetime
+# seitzCount_j = ratio * t_j / mean(t_i), scaling the shared shape by group j's own livetime
+if normalizePerThreshold:
+    for g in combinedSeitzGroups:
+        scale = g["meanNorm"] / sum(g["seitzRatios"])
+        g["seitzCount"] = rebin_values([scale * r for r in g["seitzRatios"]], combinedPlotBins)
+else:
+    totalLiveTime = sum(g["liveTime"] for g in combinedSeitzGroups)
+    meanLiveTime = np.mean([g["liveTime"] for g in combinedSeitzGroups])
+    dataRatios = [g["meanNorm"] / sum(g["seitzRatios"]) for g in combinedSeitzGroups]
+    avgRatio = (sum(r * g["liveTime"] for r, g in zip(dataRatios, combinedSeitzGroups))
+                / totalLiveTime)
+    for g in combinedSeitzGroups:
+        predictedTotal = avgRatio * g["liveTime"] / meanLiveTime
+        scale = predictedTotal / sum(g["seitzRatios"])
+        g["seitzCount"] = rebin_values([scale * r for r in g["seitzRatios"]], combinedPlotBins)
 
 # combined background-subtracted rate vs seitz threshold, all (P,T) permutations
 # grouped side by side ordered by ascending seitz threshold value
