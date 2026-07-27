@@ -267,7 +267,6 @@ def scint_t0(data):
         
         elif width_ms == 40 and len(window_indices) == 0: # no pulses found in larger window
             results['Failed'] = 7
-            return results
     
         else:
     
@@ -299,7 +298,6 @@ def scint_t0(data):
         results['Failed'] = 8
 
 
-
     ### Sometimes pT0 window extends past trigger latch. Save last pulse before trigger:
 
     before_latch = np.where(scint_tsec < (latch_time_corrected / 1000.0))[0]
@@ -310,6 +308,7 @@ def scint_t0(data):
             int(last_idx_before_latch),
             float(scint_tsec[last_idx_before_latch] * 1000.0)
         ])
+
     else:
         results['Failed'] = 9
 
@@ -324,9 +323,9 @@ def scint_t0(data):
             int(last_idx_in_off_bub),
             float(scint_tsec[last_idx_in_off_bub] * 1000.0)
         ])
+
     else:
         results['Failed'] = 10
-    
     
     
     return results
