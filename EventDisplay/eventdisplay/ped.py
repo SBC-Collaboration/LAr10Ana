@@ -205,6 +205,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.bubble_t0_ms_cache = {}  # ev -> bubble t0 [ms] (lazy, per displayed event)
         self.pressure_t0 = {}         # ev -> pressure t0 [ms], trigger-relative
         self.scint_t0 = {}            # ev -> scint t0 [ms], trigger-relative
+        self.scint_latch = {}         # ev -> latch_time_corrected [ms], since first CAEN trigger
         self.t_compression = {}       # ev -> compression time [ms] on the slowDAQ time_ms axis
 
         # Initial Functions
@@ -1029,6 +1030,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         # Values are frequently NaN; NaN is stored and skipped while plotting
         # first_pulse_pt0_20ms is (N, 2) = [trigger index, time ms]
         self.scint_t0 = {}
+        self.scint_latch = {}
         if not path:
             return
         try:
@@ -1038,10 +1040,14 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             evs = np.asarray(scint['ev']).ravel()
             for ev, s, l in zip(evs, scint_time, latch):
                 self.scint_t0[int(ev)] = float(s) - float(l)
+                # Kept so raw CAEN trigger times (which are measured from the first
+                # trigger) can be shifted into the same trigger-relative frame.
+                self.scint_latch[int(ev)] = float(l)
             print('scint t0 loaded: {} events from {}'.format(len(self.scint_t0), path))
         except Exception as e:
             self.logger.error('failed to load scint t0 from {}: {}'.format(path, e))
             self.scint_t0 = {}
+            self.scint_latch = {}
 
     def load_t_compression(self, path):
         # t_compression [ms] per event from t_expansion.sbc. This is the compression
