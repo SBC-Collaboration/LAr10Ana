@@ -219,13 +219,19 @@ def reproj(P,x):
     proj = proj[:2]/ proj[2]
     return proj
 
-
-
 def reconstruct_2D_to_3D(data):
     frameCount = 0
-    for maybekey in (data["cam"]["c1"].keys()):
-        if "frame" in maybekey:
-            frameCount += 1
+
+    def _count_frames(cam_data):
+        if not cam_data["loaded"]:
+            return 0
+        return sum(1 for key in cam_data if key.startswith("frame"))
+        
+    frameCount = max([_count_frames(data["cam"][cam]) for cam in ["c1", "c2", "c3"]])
+
+    if frameCount == 0:
+        raise ValueError("No frame detected in this event")
+    
     # checking if the bubble finder ran
     if "bubble" in data["analysis"]:
         bubble_data = data["analysis"]["bubble"]
