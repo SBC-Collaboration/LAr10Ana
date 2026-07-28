@@ -1,5 +1,9 @@
 # Change Log
 
+## [LAr10Ana v0.4.2](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.4.2) (2026-07-28)
+- Big fix in 3D reco module
+- Better logging for failed runs
+
 ## [LAr10Ana v0.4.1](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.4.1) (2026-07-27)
 - Big fix in scint t0 module
 
