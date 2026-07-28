@@ -52,6 +52,7 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
     # Extract run number and job ID (format: 20251120_0-38273648.0)
     run_num=$(echo "$folder_name" | cut -d'-' -f1)
     job_id=$(echo "$folder_name" | cut -d'-' -f2)
+    new_version=$(cat "$folder/version.txt" 2>/dev/null || echo "")
     
     log_file=$(find "$folder" -name "*.log" -type f | head -n1)
     echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
@@ -67,7 +68,6 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
             if [ -d "$dest_folder" ]; then
                 # Compare versions
                 old_version=$(cat "$dest_folder/version.txt" 2>/dev/null || echo "")
-                new_version=$(cat "$folder/version.txt" 2>/dev/null || echo "")
                 
                 if [ -z "$new_version" ]; then
                     should_move=false
@@ -91,6 +91,7 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
             if [ "$should_move" = true ]; then
                 rm -rf "$dest_folder"
                 mv "$folder" "$dest_folder"
+                echo "New run processed, version: $new_version"
                 echo "Moved $folder_name to $dest_folder"
             else
                 rm -rf "$folder"
@@ -105,8 +106,9 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
 
         else
             # Failed: keep log file, and delete the folder
-            cp "$log_file" "$FAILED_LOG_DIR/${run_num}_${job_id}.log" \
-                && echo "Saved failed log to $FAILED_LOG_DIR/${run_num}_${job_id}.log" \
+            FAILED_LOG_NAME="${new_version}_${run_num}_${job_id}.log"
+            cp "$log_file" "$FAILED_LOG_DIR/${FAILED_LOG_NAME}" \
+                && echo "Saved failed log to $FAILED_LOG_DIR/${FAILED_LOG_NAME}" \
                 || echo "Warning: could not copy log for $folder_name"
 
             rm -rf "$folder"

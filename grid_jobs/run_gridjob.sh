@@ -81,9 +81,11 @@ LAR10ANA_DIR="${SCRIPT_DIR}/.."
 VERSION_FILE="version.txt"
 TARBALL="LAr10ana${SAFE_TAG:+_${SAFE_TAG}}.tar"
 
+TARBALL_DIR="${HOME}/.cache/sbc/tarballs"
+mkdir -p "$TARBALL_DIR"
+TARBALL_PATH="${TARBALL_DIR}/${TARBALL}"
+
 cleanup() {
-    # Always clean tar/tbz
-    rm -f "${LAR10ANA_DIR}/${TARBALL}" "${LAR10ANA_DIR}/${TARBALL}"*.tbz* >/dev/null 2>&1 || true
     # Clean worktree if it exists
     if [ -n "${WT_DIR:-}" ]; then
         git -C "${LAR10ANA_DIR}" worktree remove --force "${WT_DIR}" >/dev/null 2>&1 || true
@@ -93,26 +95,27 @@ cleanup() {
 trap cleanup EXIT
 
 if [ -n "$TAG" ]; then
-    # Update to latest tags
-    git -C "${LAR10ANA_DIR}" fetch --tags --quiet || true
-    # Create a temporary worktree folder
-    WT_DIR="$(mktemp -d -t lar10ana_wt_XXXXXX)"
-    # Add the worktree at the requested tag
-    git -C "${LAR10ANA_DIR}" worktree add --detach "${WT_DIR}" "refs/tags/${TAG}" >/dev/null
-    VERSION="$(git -C "${WT_DIR}" describe --tags --always)"
-    ( cd "${WT_DIR}"
-      # Inside the worktree, generate version file
-      printf '%s' "$VERSION" > "${VERSION_FILE}"
-      # Tar the required files
-      tar --mtime='1970-01-01 00:00:00' --sort=name -cf "${LAR10ANA_DIR}/${TARBALL}" --exclude='*.pyc' *.py *.sh ana grid_jobs "${VERSION_FILE}"
-      rm -f "${VERSION_FILE}"
-    )
+    if [ -f "$TARBALL_PATH" ]; then
+        # Reuse cached build — still need VERSION for logging/output naming
+        VERSION="$TAG"
+        [ $VERBOSE = true ] && echo "Using cached tarball for tag ${TAG}: ${TARBALL_PATH}"
+    else
+        git -C "${LAR10ANA_DIR}" fetch --tags --quiet || true
+        WT_DIR="$(mktemp -d -t lar10ana_wt_XXXXXX)"
+        git -C "${LAR10ANA_DIR}" worktree add --detach "${WT_DIR}" "refs/tags/${TAG}" >/dev/null
+        VERSION="$(git -C "${WT_DIR}" describe --tags --always)"
+        ( cd "${WT_DIR}"
+          printf '%s' "$VERSION" > "${VERSION_FILE}"
+          tar --mtime='1970-01-01 00:00:00' --sort=name -cf "${TARBALL_PATH}" --exclude='*.pyc' *.py *.sh ana grid_jobs "${VERSION_FILE}"
+          rm -f "${VERSION_FILE}"
+        )
+    fi
 else
     cd "${LAR10ANA_DIR}"
     # Generate version file and tar required files
     VERSION="$(git describe --tags --always)"
     printf '%s' "$VERSION" > "${VERSION_FILE}"
-    tar --mtime='1970-01-01 00:00:00' --sort=name -cf $TARBALL --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
+    tar --mtime='1970-01-01 00:00:00' --sort=name -cf ${TARBALL_PATH} --exclude='*.pyc' *.py *.sh ana grid_jobs ${VERSION_FILE}
     rm ${VERSION_FILE}
 fi
 if [ $VERBOSE = true ]; then
@@ -144,7 +147,7 @@ fi
 output=$( \
   jobsub_submit --disk=${DISK_GB}GB --expected-lifetime=${RUN_TIME}h --memory=${RAM_GB}GB -G coupp \
     --resource-provides=usage_model=OPPORTUNISTIC,OFFSITE,DEDICATED \
-	--tar_file_name dropbox:///${LAR10ANA_DIR}/${TARBALL} \
+	--tar_file_name dropbox:///${TARBALL_PATH} \
 	-N 1 ${ROLE_ARG} \
 	file://${SCRIPT_DIR}/gridjob.sh \
 	"${DST}" \

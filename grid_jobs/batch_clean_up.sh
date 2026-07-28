@@ -34,5 +34,5 @@ for FOLDER in "$OUTPUT_DIR"/grid_output*; do
     bash "$CLEAN_UP_SCRIPT" -t "$tag"
 done
 
-echo "Batch clean up completed."
-echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') ==========\n"
+echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
+echo -e "Batch clean up completed.\n"
