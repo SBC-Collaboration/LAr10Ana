@@ -42,6 +42,7 @@ if [ "$USER" = "coupppro" ]; then
     DEST_DIR="/pnfs/coupp/scratch/coupppro"
 fi
 DATA_DIR="/exp/e961/data/SBC-25-daqdata"
+UNPACKED_DIR="/exp/e961/data/SBC-25-unpacked"
 # Directory where run data will be copied to for this grid job
 TEMP_DIR="${DEST_DIR}/temp_data"
 # Directory where job output will be saved to
@@ -125,14 +126,24 @@ fi
 # Calculate disk and memory usage by tar file size
 TAR_SIZE_BYTES=$(stat -f%z "${DATA_DIR}/${RUN_ID}.tar" 2>/dev/null || stat -c%s "${DATA_DIR}/${RUN_ID}.tar")
 TAR_SIZE_GB=$((TAR_SIZE_BYTES / 1024 / 1024 / 1024))
-LARGEST_FILE_BYTES=$(tar -tvf "${DATA_DIR}/${RUN_ID}.tar" 2>/dev/null | sort -k3 -rn | head -1 | awk '{print $3}')
+
+# Use unpacked directory to find largest file size, if it exists
+EXTRACT_DIR="${UNPACKED_DIR}/${RUN_ID}"
+if [[ -d "${EXTRACT_DIR}" ]]; then
+    LARGEST_FILE_BYTES=$(find "${EXTRACT_DIR}" -type f -printf '%s\n' 2>/dev/null | sort -rn | head -1)
+    LARGEST_FILE_BYTES=${LARGEST_FILE_BYTES:-0}
+else
+    # No extracted copy: skip scanning the tarball entirely
+    LARGEST_FILE_BYTES=${TAR_SIZE_BYTES}
+fi
 LARGEST_FILE_GB=$((LARGEST_FILE_BYTES / 1024 / 1024 / 1024))
+
 # Disk: 3x size + 5GB, min 5GB, max 500GB
 DISK_GB=$((TAR_SIZE_GB * 3 + 5))
 DISK_GB=$((DISK_GB < 5 ? 5 : DISK_GB))
 DISK_GB=$((DISK_GB > 500 ? 500 : DISK_GB))
-# RAM: 2x size + 2GB, minimum 2GB, max 16GB
-RAM_GB=$((LARGEST_FILE_GB * 2 + 2))
+# RAM: 4x size + 2GB, minimum 2GB, max 16GB
+RAM_GB=$((LARGEST_FILE_GB * 4 + 2))
 RAM_GB=$((RAM_GB < 2 ? 2 : RAM_GB))
 RAM_GB=$((RAM_GB > 64 ? 64 : RAM_GB))
 # Run time: 1h/2GB x (size + 1) + 2h, minimum 2h, maximum 24h
