@@ -233,13 +233,12 @@ def reconstruct_2D_to_3D(data):
         mult = bubble_mult(bubble_data, frameCount)
         if mult > 1:
             coordsToReturn = []
-            coordsToReturn.append((-1000,-1000,-1000))
             frames = []
             reprojErrors = []
             for i in range(0,frameCount):
-                coordsToReturn.append((-1000,-1000,-1000))
-                reprojErrors.append(np.nan)
-                frames.append(i)
+                coordsToReturn.append([-1000.0,-1000.0,-1000.0])
+                reprojErrors.append([np.nan])
+                frames.append([i])
             return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
         # list of 3d coordinates to return to event dealer
         coordsToReturn = []
@@ -252,22 +251,24 @@ def reconstruct_2D_to_3D(data):
         for coord in coords_2D:
             # if the camera didnt have a bubble, we should just ignore this frame and more on
             if isinstance(coord, int) or len(coord) != 2:
-                coordsToReturn.append(np.full(3,np.nan))
-                frames.append(len(frames))
-                reprojErrors.append(np.nan)
+                coordsToReturn.append([np.nan, np.nan, np.nan])
+                frames.append([len(frames)])
+                reprojErrors.append([np.nan])
                 continue
-            frames.append(coord[1])
+            frames.append([coord[1]])
             nancheck = 0
             for i in coord[0]:
                 if np.isnan(i):
                     nancheck += 1
             if len(coord) != 2 or len(coord[0]) != 6 or  coord[0][0] <= -999 or nancheck >= 4:
-                coordsToReturn.append((-999,-999,-999))
-                reprojErrors.append(np.nan)
+                coordsToReturn.append([-999.0, -999.0, -999.0])
+                reprojErrors.append([np.nan])
                 continue
             # triangulate the bubble into 3d space, then add it to the list to return
             coords_3D = triangulate_multi_cam_LS(coord[0])
-            coordsToReturn.append(coords_3D)
+            coordsToReturn.append([float(coords_3D[0]),
+                           float(coords_3D[1]),
+                           float(coords_3D[2])])
             reprojCoord = reproj(getProjMat(1), coords_3D)
             reprojError = 0
             count = 0
@@ -282,19 +283,18 @@ def reconstruct_2D_to_3D(data):
                 reprojError /= count
             else:
                 reprojError = np.nan
-            reprojErrors.append(1/reprojError)
+            reprojErrors.append([1/reprojError])
         
 
         return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
 
     else:
         coordsToReturn = []
-        coordsToReturn.append(np.full(3,np.nan))
         frames = []
         reprojErrors = []
         for i in range(0,frameCount):
-            coordsToReturn.append(np.full(3,np.nan))
-            frames.append(i)
-            reprojErrors.append(np.nan)
+            coordsToReturn.append([np.nan, np.nan, np.nan])
+            frames.append([i])
+            reprojErrors.append([np.nan])
         return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
 

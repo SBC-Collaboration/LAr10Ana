@@ -194,7 +194,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                         val = np.array(val)
                     dtypes.append(dname(val.dtype.str))
                     
-                    if p in ("scint_rate", "bubble", "clustering"):
+                    if p in ("scint_rate", "bubble", "reco", "clustering"):
                         shape = list(np.atleast_1d(val).shape)
                     else:
                         shape = list(np.squeeze(val).shape)
