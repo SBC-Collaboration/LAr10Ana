@@ -37,10 +37,12 @@ JOBS_LIST="${HOME}/.cache/sbc/jobs_list.csv"
 if [ -n "$TAG" ]; then
     JOBS_LIST="${HOME}/.cache/sbc/jobs_list_${SAFE_TAG}.csv"
 fi
+FAILED_LOG_DIR="${HOME}/.cache/sbc/failed_logs"
 
 echo -e "\n========== $(date '+%Y-%m-%d %H:%M:%S') =========="
 echo "Starting clean up of grid job outputs in $OUT_DIR"
 mkdir -p "$RECON_DIR"
+mkdir -p "$FAILED_LOG_DIR"
 
 # Process each run
 for folder in "$OUT_DIR"/20*_*-*_*; do
@@ -102,7 +104,11 @@ for folder in "$OUT_DIR"/20*_*-*_*; do
             # fi
 
         else
-            # Failed: delete the folder
+            # Failed: keep log file, and delete the folder
+            cp "$log_file" "$FAILED_LOG_DIR/${run_num}_${job_id}.log" \
+                && echo "Saved failed log to $FAILED_LOG_DIR/${run_num}_${job_id}.log" \
+                || echo "Warning: could not copy log for $folder_name"
+
             rm -rf "$folder"
             echo "Deleted $folder_name (non-zero exit code)"
         fi
