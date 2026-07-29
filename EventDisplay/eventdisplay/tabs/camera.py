@@ -51,8 +51,9 @@ class Camera(tk.Frame):
         # self.load_fastDAQ_dytran()
         self.load_fastdaq_scintillation()
         self.load_fastDAQ_analysis()
-        self.frame = str(self.get_event_trig_frame())
-        self.trig_frame_button.config(text='t0 frame' if self.event_has_bubble_t0() else 'trig frame')
+        trig_frame, trig_label = self.get_event_trig_frame()
+        self.frame = str(trig_frame)
+        self.trig_frame_button.config(text=trig_label)
         # self.diff_checkbutton_var.set(False)
         self.invert_checkbutton_var.set(False)
 
