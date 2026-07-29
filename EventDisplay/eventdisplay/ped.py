@@ -200,6 +200,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.bubble_events = None
         self.reco3d_events = None
         self.bubble_t0 = {}
+        self.bubble_t0_2cam = {}
 
         # Initial Functions
         self.create_widgets()
@@ -945,6 +946,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.bubble_events = None
         self.reco3d_events = None
         self.bubble_t0 = {}
+        self.bubble_t0_2cam = {}
 
         # refresh the global reco table (handles dataset / reco-file changes)
         self.load_reco_events()
@@ -985,6 +987,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         # Bubble t0 per event is earliest bubble frame across cameras
         # Events with a bubble at the buffer start (min frame <= 1) are skipped
         self.bubble_t0 = {}
+        self.bubble_t0_2cam = {}
         if self.bubble_events is None:
             return
 
@@ -1011,14 +1014,21 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
             if min(t0_list) > 1:
                 self.bubble_t0[int(ev)] = int(min(t0_list))
 
-    def event_has_bubble_t0(self):
-        return self.event is not None and int(self.event) in self.bubble_t0
+                # Earliest frame carrying crosshairs on 2+ cameras at once, if any
+                for frame in np.unique(frames[frames > 1]):
+                    if np.unique(cams[frames == frame]).size >= 2:
+                        self.bubble_t0_2cam[int(ev)] = int(frame)
+                        break
 
     def get_event_trig_frame(self):
-        # Priority is t0 OR rc.json OR config file trigger frame
-        if self.event_has_bubble_t0():
-            return self.bubble_t0[int(self.event)]
-        return int(self.init_frame)
+        # (frame, button label) for the trig frame button. Priority is
+        # 2-camera t0 OR single-camera t0 OR rc.json / config trigger frame.
+        ev = int(self.event) if self.event is not None else None
+        if ev in self.bubble_t0_2cam:
+            return self.bubble_t0_2cam[ev], "t0 (≥2 cams)"
+        if ev in self.bubble_t0:
+            return self.bubble_t0[ev], 't0 frame'
+        return int(self.init_frame), 'trig frame'
 
     def do_handscan(self):
         os.makedirs(self.scan_directory, exist_ok=True)
@@ -1218,7 +1228,7 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.last_frame_button.grid(row=1, column=1, sticky='WE')
 
         self.trig_frame_button = tk.Button(self.bottom_frame_3, text='trig frame')
-        self.trig_frame_button['command'] = lambda: self.load_frame(self.get_event_trig_frame())
+        self.trig_frame_button['command'] = lambda: self.load_frame(self.get_event_trig_frame()[0])
         self.trig_frame_button.grid(row=1, column=2, sticky='WE')
 
         self.jump_frame_label = tk.Label(self.bottom_frame_3, text='jump to:')
