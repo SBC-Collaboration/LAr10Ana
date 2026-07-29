@@ -21,6 +21,9 @@ v1 by Ryan
 output (t0_fiting, a_fitting, t0_uncertainty, a_uncertainty, chi_square value)
  t0_fiting[ms], a_fitting[bara/ms**2], t0_uncertainty[ms], a_uncertainty[bara/ms**2], chi_square value: in the fitting, the pressure change is fit to flat constant 0 + linear increasing function
  described by the t0: the junction point and a, the linear slope. The t0 here is in the timescale of acoustic channel
+ 
+v2 to be improved: 1. finding ending index, if not found, then return the error message instead of use the last index to fit
+2. if no acoustic or reading file, report error
  """
 def PressureT0Finding(ev, t0_fitting = 0, a_fitting=0, t0_sigma = 0, a_sigma = 0, t0_chi_sq=0):
 
