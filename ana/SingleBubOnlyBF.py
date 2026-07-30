@@ -6,6 +6,23 @@ from skimage.measure import label, regionprops
 import diplib as dip
 from skimage.restoration import rolling_ball
 
+"""
+Args:
+  ev: event
+  cam: camera
+  noise_thresh: diff values below this threshold will be set to zero
+
+Returns:
+  bub_dict: dictionary of lists, where each row is a bubble frame from one camera
+    cam (int): camera number of this bubble
+    pos (float, 2): x and y axis of the pixel position of the bubble
+    rad (float): radius of the bubble in pixels
+    frame (int): frame number of this bubble
+    bad_cam_likely (bool): if any value in this list is true for a given camera, 
+    the bubble finder failed to find a consistent location for the bubble in this camera, 
+    and the tags for this camera should not be used for 3d position reconstruction
+"""
+
 out_keys = ['rad','pos','frame','cam','bad_cam_likely']
    
 def _new_bub_dict():
