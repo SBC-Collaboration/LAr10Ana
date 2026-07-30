@@ -7,8 +7,8 @@ project = 'SBC LAr10Ana'
 copyright = '2024-2026 SBC Collaboration'
 author = 'SBC Collaboration'
 
-release = '0.4.2'
-version = '0.4.2'
+release = '0.5.0'
+version = '.'.join(release.split('.')[:2])  # only keep X.Y part of the version
 
 # -- General configuration
 

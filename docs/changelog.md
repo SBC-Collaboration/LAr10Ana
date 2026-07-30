@@ -1,5 +1,9 @@
 # Change Log
 
+## [LAr10Ana v0.5.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.5.0) (2026-07-30)
+- Add bubble finder with single bubble only
+- Improve logging and speed of grid job submission
+
 ## [LAr10Ana v0.4.2](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.4.2) (2026-07-28)
 - Big fix in 3D reco module
 - Better logging for failed runs
