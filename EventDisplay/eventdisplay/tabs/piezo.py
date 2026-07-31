@@ -11,7 +11,6 @@ import sys
 matplotlib.use('TkAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from PIL import Image, ImageTk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from GetEvent import GetEvent
@@ -201,11 +200,33 @@ class Piezo(tk.Frame):
 
         self.draw_filtered_piezo_trace(selected)
 
-    def draw_filtered_piezo_trace(self, selected_names):
-        # A failed load leaves fastDAQ_event None with its message already on the
-        # axes. Any redraw after that (a checkbutton, 'reload') would subscript None,
-        # which the handler below does not catch, so stop here and keep the message.
+    def piezo_acoustics_missing(self):
+        # What stops this event being plotted, or None if it can be.
+        #
+        # GetEvent only fills Waveforms_V/time_s when acoustics['loaded'] is true
+        # (GetEvent.py, 'if event["acoustics"]["loaded"]'), so an event whose
+        # acoustics failed to unpack still yields a dict -- just one missing the
+        # keys we need. Checking for None alone is not enough: the redraw would
+        # KeyError straight out of the Tk callback.
         if self.fastDAQ_event is None:
+            return 'no acoustics loaded'
+        acoustics = self.fastDAQ_event.get('acoustics')
+        if not acoustics:
+            return 'no acoustics in event'
+        if not acoustics.get('loaded'):
+            return 'acoustics did not load'
+        missing = [k for k in ('time_s', 'Waveforms_V', 'sample_rate')
+                   if k not in acoustics]
+        if missing:
+            return 'acoustics missing {}'.format(', '.join(missing))
+        return None
+
+    def draw_filtered_piezo_trace(self, selected_names):
+        # Degrade to the message panel rather than raising out of a Tk callback.
+        reason = self.piezo_acoustics_missing()
+        if reason is not None:
+            self.logger.info('piezo: {} for {}-{}'.format(reason, self.run, self.event))
+            self.piezo_error(reason)
             return
 
         try:
@@ -308,23 +329,13 @@ class Piezo(tk.Frame):
             self.piezo_canvas.get_tk_widget().grid(row=0, column=1)
 
         ##added same handling for IndexError for when the piezo is not in the given multiboard. May lose specificity
-        except (KeyError, IndexError, AttributeError):
-            self.error += 'piezo data not found\n'
-            self.destroy_children(self.piezo_tab_right)
-            canvas = tk.Canvas(self.piezo_tab_right, width=self.init_image_width, height=self.init_image_height)
-            self.reset_zoom(canvas)
-
-            ### draw not found image
-            image = Image.open('notfound.jpeg')
-            self.native_image_width, self.native_image_height = image.size
-            image = image.resize((int(canvas.image_width), int(canvas.image_height)),
-                                 self.antialias_checkbutton_var.get())
-            image = image.crop((canvas.crop_left, canvas.crop_bottom, canvas.crop_right, canvas.crop_top))
-
-            canvas.image = canvas.create_image(0, 0, anchor=tk.NW, image=None)
-            canvas.photo = ImageTk.PhotoImage(image)
-            canvas.itemconfig(canvas.image, image=canvas.photo)
-            canvas.grid(row=0, column=1, sticky='NW')
+        except (KeyError, IndexError, AttributeError) as e:
+            # Report on the existing axes. This used to destroy_children() the frame
+            # and draw a not-found image in a throwaway canvas, but that also
+            # destroyed the figure canvas and toolbar built once in
+            # piezo_canvas_setup(), so every later event drew into a dead widget and
+            # the tab stayed blank for the rest of the session.
+            self.piezo_error('piezo data not found', e)
 
     def piezo_event_number(self):
         try:
