@@ -13,7 +13,16 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from PIL import Image, ImageTk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from GetEvent import GetEvent
+from t0_common import T0_COLORS, SIPM_AREA_PER_PHD
+
+# Default zoom pad either side of the (pressure t0, trigger) pair, in seconds.
+PIEZO_T0_ZOOM_PAD_S = 0.100
+
+# Fraction of one trace-to-trace step reserved below the bottom trace for the
+# SiPM pulse stems.
+PIEZO_PULSE_BAND_FRAC = 0.8
 
 
 class Piezo(tk.Frame):
@@ -26,9 +35,7 @@ class Piezo(tk.Frame):
         self.piezo_beginning_time = -.1
         self.piezo_ending_time = 0.0
         self.piezo_max_points = 4000
-        self.incremented_piezo_event = False
         self.piezo_timerange_checkbutton_var = tk.BooleanVar(value=True)
-        self.t0 = None
 
         # selected_piezos persists channel-name selections across events/runs.
         # Tries to match selections from the previous event, falls back to the
@@ -37,6 +44,13 @@ class Piezo(tk.Frame):
         self.piezo_channels = []
         self.piezo_checkbox_vars = {}
         self.piezo_checkbox_widgets = []
+
+        # Trigger-relative t0 overlays, all from the recon pipeline.
+        self.piezo_t0_vars = {
+            key: tk.BooleanVar(value=False) for key in T0_COLORS
+        }
+        self.piezo_t0_checkbuttons = {}
+        self.piezo_scint_var = tk.BooleanVar(value=False)
 
         # Initial Functions
         self.create_piezo_widgets()
@@ -61,6 +75,7 @@ class Piezo(tk.Frame):
     def load_fastDAQ_piezo(self):
         if not self.load_fastDAQ_piezo_checkbutton_var.get():
             self.piezo_tab_right.grid_forget()
+            self.disable_piezo_t0_widgets()
             return
         else:
             self.piezo_tab_right.grid(row=0, column=1, sticky='NW')
@@ -120,22 +135,47 @@ class Piezo(tk.Frame):
         if channels and not any(var.get() for var in self.piezo_checkbox_vars.values()):
             self.piezo_checkbox_vars[channels[0]].set(True)
 
-    def check_t0_exists(self):
+    def update_piezo_t0_widgets(self):
+        # Enable only the overlays this event can actually supply, and clear the
+        # var when disabling so a box never stays ticked with nothing behind it.
         try:
-            self.t0 = self.reco_row['fastDAQ_t0']
-            self.piezo_plot_t0_checkbutton.config(state=NORMAL)
-        except:
-            self.piezo_plot_t0_checkbutton.config(state=DISABLED)
-            self.t0 = None
+            ev = int(self.event)
+        except (TypeError, ValueError):
+            ev = None
+
+        for key, cb in self.piezo_t0_checkbuttons.items():
+            val = self.get_t0_ms(key, ev) if ev is not None else None
+            if val is not None and np.isfinite(val):
+                cb.config(state=NORMAL)
+            else:
+                cb.config(state=DISABLED)
+                self.piezo_t0_vars[key].set(False)
+
+        if ev is not None and self.scint_pulses_unavailable(ev) is None:
+            self.piezo_scint_checkbutton.config(state=NORMAL)
+        else:
+            self.piezo_scint_checkbutton.config(state=DISABLED)
+            self.piezo_scint_var.set(False)
+
+    def disable_piezo_t0_widgets(self):
+        for key, cb in self.piezo_t0_checkbuttons.items():
+            cb.config(state=DISABLED)
+            self.piezo_t0_vars[key].set(False)
+        self.piezo_scint_checkbutton.config(state=DISABLED)
+        self.piezo_scint_var.set(False)
 
     def draw_fastDAQ_piezo(self):
+        # Refresh availability before the early returns below, or an event with no
+        # piezo data leaves the boxes advertising the previous event's data.
+        self.update_piezo_t0_widgets()
+
         if not self.load_fastDAQ_piezo_checkbutton_var.get():
             self.piezo_tab_right.grid_forget()
+            self.disable_piezo_t0_widgets()
             return
         else:
             self.piezo_tab_right.grid(row=0, column=1, sticky='NW')
 
-        self.check_t0_exists()
         self.piezo_cutoff_low = int(self.piezo_cutoff_low_entry.get())
         if(self.piezo_cutoff_low < 1):
             self.piezo_cutoff_low = 1
@@ -162,6 +202,12 @@ class Piezo(tk.Frame):
         self.draw_filtered_piezo_trace(selected)
 
     def draw_filtered_piezo_trace(self, selected_names):
+        # A failed load leaves fastDAQ_event None with its message already on the
+        # axes. Any redraw after that (a checkbutton, 'reload') would subscript None,
+        # which the handler below does not catch, so stop here and keep the message.
+        if self.fastDAQ_event is None:
+            return
+
         try:
             acoustics = self.fastDAQ_event['acoustics']
             piezo_time = np.asarray(acoustics['time_s'])
@@ -209,7 +255,7 @@ class Piezo(tk.Frame):
                 self.piezo_ending_time_label['state'] = tk.DISABLED
                 window = None
                 plot_time = piezo_time
-                self.piezo_ax.set_xlim(piezo_time[0], piezo_time[-1])
+                self.piezo_ax.set_xlim(*self.piezo_default_xlim(piezo_time))
 
             plot_time_ds = self._decimate(plot_time,
                                           max_points=self.piezo_max_points)
@@ -246,19 +292,16 @@ class Piezo(tk.Frame):
             self.piezo_ax.relim()
             self.piezo_ax.autoscale_view(scalex=False, scaley=True)
 
-            # Add line at t0
-            # self.check_t0_exists()
-            if self.piezo_plot_t0_checkbutton_var.get():
-                if self.reco_row and self.t0:
-                    self.piezo_ax.axvline(x=self.t0, linestyle='dashed', color='r', label='t0')
-                    self.incremented_piezo_event = True
-                else:
-                    if self.incremented_piezo_event:
-                        self.error += 't0 unavailable: no reco data found for current event.'
-                    else:
-                        self.logger.error('t0 unavailable: no reco data found for current event.')
-                    self.piezo_plot_t0_checkbutton_var.set(False)
-                    self.incremented_piezo_event = False
+            # Overlays go after autoscale: the pulse band is sized from the trace
+            # stack and then extends the y limits itself.
+            self.draw_piezo_t0_lines()
+            self.draw_piezo_scint_pulses(traces, step)
+
+            # One legend for every overlay. The traces themselves are labelled by
+            # the axis annotations above, so they contribute no handles.
+            handles, labels = self.piezo_ax.get_legend_handles_labels()
+            if handles:
+                self.piezo_ax.legend(handles, labels, fontsize='small', loc='upper right')
 
             # Update Canvas
             self.piezo_canvas.draw_idle()
@@ -282,6 +325,136 @@ class Piezo(tk.Frame):
             canvas.photo = ImageTk.PhotoImage(image)
             canvas.itemconfig(canvas.image, image=canvas.photo)
             canvas.grid(row=0, column=1, sticky='NW')
+
+    def piezo_event_number(self):
+        try:
+            return int(self.event)
+        except (TypeError, ValueError):
+            return None
+
+    def piezo_default_xlim(self, piezo_time):
+        # Default view for the full-time-window mode: frame the interval between the
+        # pressure t0 and the trigger, padded either side, since that is where the
+        # acoustic signal of interest sits. Falls back to the whole recorded trace
+        # (the acoustic window) when there is no usable pressure t0.
+        #
+        # View only -- nothing is masked in this mode, so zooming out still shows
+        # the full trace.
+        full = (float(piezo_time[0]), float(piezo_time[-1]))
+
+        ev = self.piezo_event_number()
+        if ev is None:
+            return full
+        pt0 = self.get_t0_ms('pressure', ev)
+        if pt0 is None or not np.isfinite(pt0):
+            return full
+
+        pt0_s = pt0 / 1000.0
+        # The trigger is t = 0 on this axis; only zoom when pt0 precedes it, else
+        # the window would be inverted or degenerate.
+        if pt0_s >= 0.0:
+            return full
+
+        lo = max(full[0], pt0_s - PIEZO_T0_ZOOM_PAD_S)
+        hi = min(full[1], PIEZO_T0_ZOOM_PAD_S)
+        if not lo < hi:
+            return full
+        return (lo, hi)
+
+    def draw_piezo_t0_lines(self):
+        # Dashed vertical line per enabled t0. All three are milliseconds relative
+        # to the trigger, which is exactly this axis's origin (see t0_common), so a
+        # unit conversion is the only transform needed.
+        ev = self.piezo_event_number()
+        if ev is None:
+            return
+
+        for key, color in T0_COLORS.items():
+            if not self.piezo_t0_vars[key].get():
+                continue
+            val = self.get_t0_ms(key, ev)
+            if val is None or not np.isfinite(val):
+                continue
+            self.piezo_ax.axvline(x=val / 1000.0, linestyle='dashed', color=color,
+                                  label=f'{key} t0')
+
+    def draw_piezo_scint_pulses(self, traces, step):
+        # One stem per CAEN trigger in a band below the bottom trace. Drawn on
+        # piezo_ax rather than a twin axis: this axis has no y ticks and stacks
+        # traces at arbitrary offsets, so a second scaled axis would have nothing
+        # to line up against. Magnitude is carried by stem height plus colour, with
+        # the absolute scale stated in the legend.
+        #
+        # A single row of stems, not one per trace, keeps a busy plot readable.
+        if not self.piezo_scint_var.get():
+            return
+
+        ev = self.piezo_event_number()
+        if ev is None:
+            return
+
+        reason = self.scint_pulses_unavailable(ev)
+        pulses = None
+        if reason is None:
+            pulses = self.load_scint_pulses(ev)
+            if pulses is None:
+                reason = 'recon/raw scintillation could not be read'
+        if reason is None and (not traces or step <= 0):
+            reason = 'no piezo trace to anchor to'
+        if reason is not None:
+            # Say so on the plot; a silently empty overlay reads as a broken checkbox.
+            self.piezo_ax.set_title(
+                '{}  |  SiPM pulses: {}'.format(self.piezo_ax.get_title(), reason),
+                fontsize='small')
+            self.logger.info('piezo SiPM pulses unavailable: {}'.format(reason))
+            return
+
+        t_caen, area = pulses
+        latch = self.scint_latch[ev]
+        # t_caen is measured from the first CAEN trigger and latch is the acoustic
+        # trigger in that same frame, so subtracting it lands on this axis directly.
+        x = (t_caen - latch) / 1000.0
+
+        # An event carries tens of thousands of triggers across the whole
+        # expansion; without clipping to the view the band is a solid block.
+        lo, hi = self.piezo_ax.get_xlim()
+        mask = (x >= lo) & (x <= hi)
+        x, area = x[mask], area[mask]
+        if not len(x):
+            return
+
+        # Rescale to an approximate photo-electron count so stem heights sit on a
+        # meaningful order of magnitude. See SIPM_AREA_PER_PHD: this is a ballpark,
+        # not a calibration, hence the '~' on the legend below.
+        phd = area / SIPM_AREA_PER_PHD
+
+        # Areas span several decades, so scale on log10; a linear scale would wash
+        # out everything but the largest few pulses. clip keeps zeros in range.
+        log_phd = np.log10(np.clip(phd, 1.0, None))
+        vmax = log_phd.max() if log_phd.max() > 0 else 1.0
+
+        # traces is drawn reversed with offset i*step, so traces[-1] is the bottom
+        # of the stack. Which channel that is changes as the user toggles channels,
+        # hence recomputing it here instead of pinning a channel name.
+        y0 = float(np.min(traces[-1][2]))
+        band = PIEZO_PULSE_BAND_FRAC * step
+        base = y0 - band
+        tops = base + band * (log_phd / vmax)
+
+        cmap = matplotlib.colormaps['seismic']
+        lc = self.piezo_ax.vlines(x, base, tops, linewidth=0.5, alpha=0.5)
+        lc.set_color(cmap(log_phd / vmax))
+        self.piezo_ax.scatter(x, tops, s=5, c=log_phd, cmap='seismic',
+                              vmin=0.0, vmax=vmax)
+        # scatter with an array c= yields no usable legend handle, so carry a proxy;
+        # it also holds the absolute scale the unlabelled band cannot show.
+        self.piezo_ax.plot(
+            [], [], linestyle='none', marker='o', markersize=4, color=cmap(0.85),
+            label='SiPM pulses (colour/height = log area, max ~{:.2e} phd)'.format(phd.max()))
+
+        # Make room for the band; autoscale has already run by this point.
+        ymin, ymax = self.piezo_ax.get_ylim()
+        self.piezo_ax.set_ylim(min(ymin, base - 0.1 * band), ymax)
 
     def _decimate(self, *arrays, max_points):
         n = len(arrays[0])
@@ -383,16 +556,30 @@ class Piezo(tk.Frame):
             command=self.draw_fastDAQ_piezo)
         self.piezo_timerange_checkbutton.grid(row=11, column=0, columnspan=2, sticky='WE')
 
-        self.piezo_plot_t0_checkbutton = tk.Checkbutton(
+        row = 12
+        for key in T0_COLORS:
+            cb = tk.Checkbutton(
+                self.piezo_tab_left,
+                text=f'Show {key} t0',
+                variable=self.piezo_t0_vars[key],
+                command=self.draw_fastDAQ_piezo,
+                state=DISABLED)
+            cb.grid(row=row, column=0, columnspan=2, sticky='WE')
+            self.piezo_t0_checkbuttons[key] = cb
+            row += 1
+
+        self.piezo_scint_checkbutton = tk.Checkbutton(
             self.piezo_tab_left,
-            text='Show t0',
-            variable=self.piezo_plot_t0_checkbutton_var,
-            command=self.draw_fastDAQ_piezo)
-        self.piezo_plot_t0_checkbutton.grid(row=12, column=0, columnspan=2, sticky='WE')
+            text='Show SiPM pulses',
+            variable=self.piezo_scint_var,
+            command=self.draw_fastDAQ_piezo,
+            state=DISABLED)
+        self.piezo_scint_checkbutton.grid(row=row, column=0, columnspan=2, sticky='WE')
+        row += 1
 
         self.reload_fastDAQ_piezo_button = tk.Button(self.piezo_tab_left, text='reload',
                                                      command=self.draw_fastDAQ_piezo)
-        self.reload_fastDAQ_piezo_button.grid(row=13, column=0, columnspan=2, sticky='WE')
+        self.reload_fastDAQ_piezo_button.grid(row=row, column=0, columnspan=2, sticky='WE')
 
     def piezo_error(self, label, error=None):
         if error is not None:
@@ -404,6 +591,7 @@ class Piezo(tk.Frame):
         self.piezo_checkbox_widgets = []
         self.piezo_checkbox_vars = {}
         self.piezo_channels = []
+        self.disable_piezo_t0_widgets()
         self.piezo_ax.clear()
         self.piezo_ax.text(0.2, 0.5, f"{label} for {self.run} - {self.event}", transform=self.piezo_ax.transAxes, fontsize=15)
 

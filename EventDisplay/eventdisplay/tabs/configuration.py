@@ -221,7 +221,6 @@ class Configuration(tk.Frame):
         self.piezo_combobox.current(0)
         self.piezo_selector_combobox['values'] = [self.piezo]
         self.piezo_selector_combobox.current(0)
-        self.piezo_plot_t0_checkbutton_var.set(False)
         # self.dytran_plot_t0_checkbutton_var.set(False)
         self.view_mode.set('off')
         
@@ -415,7 +414,8 @@ class Configuration(tk.Frame):
     def toggle_reco_widgets(self, state):
         self.draw_crosshairs_button.config(state=state)
         self.plot_t0_checkbutton.config(state=state)
-        self.piezo_plot_t0_checkbutton.config(state=state)
+        # The piezo tab's t0 overlays are gated on their own recon data, not on
+        # the reco table, so they are deliberately not toggled here.
         # self.dytran_plot_t0_checkbutton.config(state=state)
         for child in self.bottom_frame_2.winfo_children():
             if 'state' in child.keys():

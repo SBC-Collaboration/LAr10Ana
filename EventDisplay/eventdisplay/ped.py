@@ -41,6 +41,7 @@ from tabs.configuration import Configuration
 from tabs.analysis import Analysis
 from tabs.three_d_bubble import ThreeDBubble
 from tabs.scintillation import Scintillation
+from t0_common import ScintPulses
 from GetEvent import GetEvent
 from sbcbinaryformat import Streamer
 
@@ -69,7 +70,8 @@ class PopUpHandler(logging.Handler):
 
 
 # Sets width/height/zoom settings for each tk frame (rectangular window where widgets can be placed)
-class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, ThreeDBubble, Scintillation):
+class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, ThreeDBubble, Scintillation,
+                  ScintPulses):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
 
@@ -171,7 +173,6 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.diff_mode_var = tk.StringVar(value="off")
         self.diff_threshold_var = tk.IntVar(value=10)
         self.load_dytran_checkbutton_var = tk.BooleanVar(value=False)
-        self.piezo_plot_t0_checkbutton_var = tk.BooleanVar(value=False)
         self.load_fastDAQ_piezo_checkbutton_var = tk.BooleanVar(value=False)
         self.isgoodtrigger_checkbutton_var = tk.BooleanVar(value=True)
         self.crosshairsgood_checkbutton_var = tk.BooleanVar(value=True)
@@ -207,6 +208,10 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
         self.scint_t0 = {}            # ev -> scint t0 [ms], trigger-relative
         self.scint_latch = {}         # ev -> latch_time_corrected [ms], since first CAEN trigger
         self.t_compression = {}       # ev -> compression time [ms] on the slowDAQ time_ms axis
+
+        # Before create_widgets/the tab inits, so the pulse cache exists by the time
+        # any tab can draw.
+        ScintPulses.__init__(self)
 
         # Initial Functions
         self.create_widgets()
@@ -1092,6 +1097,19 @@ class Application(Camera, Piezo, SlowDAQ, LogViewer, Configuration, Analysis, Th
                     cams = bubs['cam']
                     bt0_frame = int(np.min(frames))
                     bt0_cam = int(cams[int(np.argmin(frames))])
+
+                    # A bubble already visible at the start of the camera ring
+                    # buffer nucleated at some unknown earlier time, so its frame
+                    # is only a lower bound and the t0 would be wrong. Matches the
+                    # 'min frame > 1' rule in compute_bubble_t0; returning None
+                    # disables the overlay instead of drawing a bound as a value.
+                    if bt0_frame <= 1:
+                        self.logger.info(
+                            'bubble t0 unavailable for ev {}: earliest bubble is at '
+                            'frame {} (cam {}), i.e. at the start of the buffer'.format(
+                                ev, bt0_frame, bt0_cam))
+                        self.bubble_t0_ms_cache[ev] = None
+                        return None
 
                     run_dir = os.path.join(self.raw_directory, self.run)
                     cam_csv = os.path.join(run_dir, str(ev), 'cam{}-info.csv'.format(bt0_cam))

@@ -15,22 +15,9 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from PIL import Image, ImageTk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from GetEvent import GetEvent
-from sbcbinaryformat import Streamer
-
-SLOWDAQ_T0_COLORS = {'pressure': 'r', 'bubble': 'g', 'scint': 'b'}
-
-# CAEN scintillation digitizer clock, ticks/s (matches ana/ScintT0.py)
-SCINT_SAMPLE_RATE = 125e6
-
-
-def _unwrap_caen_timestamp(ts, max_ts=2**31):
-    # The CAEN trigger clock is 31 bits and rolls over mid-event. Mirrors
-    # ana/ScintT0.py so lollipop times match the t0s computed there; kept local
-    # to avoid importing that module's sklearn dependency into the GUI.
-    ts = np.asarray(ts, dtype=np.int64)
-    rollovers = np.diff(ts, axis=-1, prepend=0) < 0
-    return ts + np.cumsum(rollovers, axis=-1) * max_ts
+from t0_common import T0_COLORS
 
 
 class SlowDAQ(tk.Frame):
@@ -43,16 +30,13 @@ class SlowDAQ(tk.Frame):
         self.slowDAQ_tmax = None
 
         self.slowDAQ_t0_vars = {
-            key: tk.BooleanVar(value=False) for key in SLOWDAQ_T0_COLORS
+            key: tk.BooleanVar(value=False) for key in T0_COLORS
         }
 
         # Scintillation lollipop overlay. Drawn on a twin y axis because pulse
         # area and the slowDAQ sensor share no units.
         self.slowDAQ_scint_var = tk.BooleanVar(value=False)
         self.slowDAQ_scint_ax = None
-        self._scint_lolli_run = None   # run whose recon file is cached
-        self._scint_lolli_all = None   # recon scintillation.sbc for the whole run
-        self._scint_lolli_cache = {}   # ev -> (x_ms, area) or None
 
         self.create_slowDAQ_widgets()
 
@@ -128,7 +112,7 @@ class SlowDAQ(tk.Frame):
 
         self.slowDAQ_t0_checkbuttons = {}
         row = 7
-        for key in SLOWDAQ_T0_COLORS:
+        for key in T0_COLORS:
             cb = tk.Checkbutton(
                 self.slowDAQ_tab_left,
                 text=f'Show {key} t0',
@@ -387,7 +371,7 @@ class SlowDAQ(tk.Frame):
             ev = None
 
         for key, cb in self.slowDAQ_t0_checkbuttons.items():
-            val = self.get_slowDAQ_t0(key, ev) if ev is not None else None
+            val = self.get_t0_ms(key, ev) if ev is not None else None
             if val is not None and np.isfinite(val):
                 cb.config(state=NORMAL)
             else:
@@ -396,19 +380,11 @@ class SlowDAQ(tk.Frame):
 
         # Mirror the t0 checkbuttons: disable when the event can't supply pulses,
         # rather than letting the user tick a box that silently unticks itself.
-        if self.scint_lollipop_unavailable(ev) is None:
+        if self.scint_pulses_unavailable(ev) is None:
             self.slowDAQ_scint_checkbutton.config(state=NORMAL)
         else:
             self.slowDAQ_scint_checkbutton.config(state=DISABLED)
             self.slowDAQ_scint_var.set(False)
-
-    def get_slowDAQ_t0(self, key, ev):
-        if key == 'pressure':
-            return self.pressure_t0.get(ev)
-        elif key == 'scint':
-            return self.scint_t0.get(ev)
-        elif key == 'bubble':
-            return self.bubble_t0_ms(ev)
 
     def draw_slowDAQ_t0_lines(self, latch=None):
         # Draw a dashed vertical line per enabled t0 type at its event value+offset
@@ -422,10 +398,10 @@ class SlowDAQ(tk.Frame):
         # absolute axis needs t_compression to place them.
         offset_auto = 0.0 if latch is not None else self.t_compression.get(ev, 0.0)
 
-        for key, color in SLOWDAQ_T0_COLORS.items():
+        for key, color in T0_COLORS.items():
             if not self.slowDAQ_t0_vars[key].get():
                 continue
-            val = self.get_slowDAQ_t0(key, ev)
+            val = self.get_t0_ms(key, ev)
             if val is None or not np.isfinite(val):
                 continue
             self.slowDAQ_ax.axvline(
@@ -444,70 +420,6 @@ class SlowDAQ(tk.Frame):
         if handles:
             self.slowDAQ_ax.legend(handles, labels)
 
-    def load_scint_lollipop(self, ev):
-        # Per-CAEN-trigger (time, summed pulse area) for one event, or None.
-        # Time comes from the raw file's TriggerTimeTag and area from the recon
-        # file; recon carries no timestamps and raw carries no pulse areas, so
-        # both are needed. Recon row N is raw trigger N.
-        if ev in self._scint_lolli_cache:
-            return self._scint_lolli_cache[ev]
-
-        result = None
-        try:
-            if self._scint_lolli_run != self.run or self._scint_lolli_all is None:
-                self._scint_lolli_all = None
-                self._scint_lolli_cache = {}  # event numbers repeat across runs
-                self._scint_lolli_run = self.run
-                path = self._find_recon('scintillation.sbc', self.run)
-                if path is not None:
-                    self._scint_lolli_all = Streamer(path).data
-
-            recon = self._scint_lolli_all
-            if recon is not None:
-                if 'ev' in recon.dtype.names:
-                    recon = recon[recon['ev'] == ev]
-                if len(recon):
-                    # NaN marks a channel with no hit, so nansum gives 0 for a
-                    # trigger with nothing on any channel.
-                    area = np.nansum(np.asarray(recon['hit_area']), axis=1)
-
-                    # TriggerTimeTag is read eagerly even in lazy mode, so this
-                    # never pulls waveforms off disk.
-                    run_path = os.path.join(self.raw_directory, self.run)
-                    event = GetEvent(run_path, ev, 'run_control', 'scintillation',
-                                     strictMode=False, lazy_load_scintillation=True)
-                    scint = event['scintillation']
-                    if scint.get('loaded'):
-                        tt = _unwrap_caen_timestamp(scint['TriggerTimeTag'])
-                        t_ms = (tt - tt[0]) / SCINT_SAMPLE_RATE * 1000.0
-                        n = min(len(t_ms), len(area))
-                        if n:
-                            result = (np.asarray(t_ms[:n], dtype=float),
-                                      np.asarray(area[:n], dtype=float))
-        except Exception as e:
-            self.logger.error(
-                'failed to load scint pulses for ev {}: {}'.format(ev, e))
-            result = None
-
-        self._scint_lolli_cache[ev] = result
-        return result
-
-    def scint_lollipop_unavailable(self, ev):
-        # Reason the overlay can't be drawn, or None if it can. Cheap checks only
-        # (dict lookups + a path probe) so this is safe to call on every redraw.
-        if ev is None:
-            return 'no event selected'
-        try:
-            # reco_directory is set from the config after this tab is constructed
-            if self._find_recon('scintillation.sbc', self.run) is None:
-                return 'no recon scintillation.sbc for this run'
-        except AttributeError:
-            return 'reco directory not configured yet'
-        latch = self.scint_latch.get(ev)
-        if latch is None or not np.isfinite(latch):
-            return 'no scint t0 for this event (missing scint_t0.sbc, or Failed)'
-        return None
-
     def draw_scint_lollipop(self, latch=None):
         # Overlay one stem per CAEN trigger on a twin y axis. Pulse area and the
         # slowDAQ sensor have unrelated units, so they must not share a scale.
@@ -523,8 +435,8 @@ class SlowDAQ(tk.Frame):
         except (TypeError, ValueError):
             return
 
-        reason = self.scint_lollipop_unavailable(ev)
-        if reason is None and self.load_scint_lollipop(ev) is None:
+        reason = self.scint_pulses_unavailable(ev)
+        if reason is None and self.load_scint_pulses(ev) is None:
             reason = 'recon/raw scintillation could not be read'
         if reason is not None:
             # Say so on the plot; a silently empty overlay reads as a broken checkbox.
@@ -534,7 +446,7 @@ class SlowDAQ(tk.Frame):
             self.logger.info('scint lollipop unavailable: {}'.format(reason))
             return
 
-        t_caen, area = self.load_scint_lollipop(ev)
+        t_caen, area = self.load_scint_pulses(ev)
         if latch is None:
             latch = self.scint_latch[ev]
 
