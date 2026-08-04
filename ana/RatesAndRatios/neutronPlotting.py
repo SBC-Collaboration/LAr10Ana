@@ -299,8 +299,36 @@ THEORETICAL THRESHOLDS
 # range to check for ratio matching
 thresholdRange = np.arange(0.05, 60.05, 0.05)
 
+# chi-squared normalization mode: if True, every group's predicted counts are scaled
+# by one shared normalization factor computed across the whole dataset; if False,
+# each group's predicted counts are scaled to match its own observed total, like the
+# old code (see oldCode.py's seitz_counts_per_threshold vs seitz_counts_entire_dataset
+# for the same per-group vs whole-dataset dichotomy)
+useGlobalChi2Normalization = False
+
+def group_observed_total(dataGroup):
+    rate = dataGroup["backSub"] if useRebinnedThresholdPlots else dataGroup["backSubFull"]
+    return sum(v * dataGroup["liveTime"] for v in rate)
+
+# livetime/total-weighted average of each group's own normalization, relative to the
+# mean group total - applying this to a group's own total pulls its predicted total
+# toward the dataset-wide average instead of forcing an exact match
+def global_normalization_factor(dataGroups):
+    weights = [group_observed_total(g) for g in dataGroups]
+    meanWeight = np.mean(weights)
+    avgRatio = sum(w ** 2 for w in weights) / sum(weights)
+    return avgRatio / meanWeight
+
+globalChi2NormFactor = global_normalization_factor(groups)
+
+def normalization_mode_label(useGlobalNorm):
+    return "Global normalization" if useGlobalNorm else "Per-threshold normalization"
+
 # get the chi squared
-def chi_squared_calc(dataGroup, estThreshold):
+def chi_squared_calc(dataGroup, estThreshold, useGlobalNorm=None):
+    if useGlobalNorm is None:
+        useGlobalNorm = useGlobalChi2Normalization
+
     if useRebinnedThresholdPlots:
         rate, errLowRate, errHighRate = dataGroup["backSub"], dataGroup["errLow"], dataGroup["errHigh"]
         predictedCounts = rebin(get_multiplicity_counts(estThreshold)[0])
@@ -314,7 +342,9 @@ def chi_squared_calc(dataGroup, estThreshold):
     observed = [v * liveTime for v in rate]
     errLow = [v * liveTime for v in errLowRate]
     errHigh = [v * liveTime for v in errHighRate]
-    predicted = seitz_count(counts_to_ratios(predictedCounts), sum(observed))
+
+    targetTotal = globalChi2NormFactor * sum(observed) if useGlobalNorm else sum(observed)
+    predicted = seitz_count(counts_to_ratios(predictedCounts), targetTotal)
 
     chi2 = 0.0
     for obs, eLow, eHigh, pred in zip(observed, errLow, errHigh, predicted):
@@ -324,22 +354,64 @@ def chi_squared_calc(dataGroup, estThreshold):
         chi2 += ((obs - pred) / err) ** 2
     return chi2
 
+def chi2_confidence_interval(gridKev, chi2Curve, bestIdx):
+    """threshold values where chi2(x) - min(chi2) crosses 1, on each side of the best fit"""
+    minChi2 = chi2Curve[bestIdx]
+    target = minChi2 + 1.0
+
+    lowThreshold = gridKev[0]
+    for i in range(bestIdx, 0, -1):
+        if chi2Curve[i - 1] >= target:
+            x0, x1 = gridKev[i - 1], gridKev[i]
+            y0, y1 = chi2Curve[i - 1], chi2Curve[i]
+            frac = (target - y0) / (y1 - y0) if y1 != y0 else 0.0
+            lowThreshold = x0 + frac * (x1 - x0)
+            break
+
+    highThreshold = gridKev[-1]
+    for i in range(bestIdx, len(chi2Curve) - 1):
+        if chi2Curve[i + 1] >= target:
+            x0, x1 = gridKev[i], gridKev[i + 1]
+            y0, y1 = chi2Curve[i], chi2Curve[i + 1]
+            frac = (target - y0) / (y1 - y0) if y1 != y0 else 0.0
+            highThreshold = x0 + frac * (x1 - x0)
+            break
+
+    return lowThreshold, highThreshold
+
 for g in groups:
     # all the chi 2 for matched thresholds
     chi2Curve = [chi_squared_calc(g, threshold) for threshold in thresholdRange]
     bestIdx = int(np.argmin(chi2Curve))
     bestThreshold = thresholdRange[bestIdx]
 
+    lowThreshold, highThreshold = chi2_confidence_interval(thresholdRange, chi2Curve, bestIdx)
+
     bestFitRatios = counts_to_ratios(get_multiplicity_counts(bestThreshold)[0])
     bestFitRateFull = seitz_count(bestFitRatios, sum(g["backSubFull"]))
+
+    # same scan under the other normalization mode, purely for the side-by-side
+    # comparison plot below - does not affect the best-fit threshold used elsewhere
+    altChi2Curve = [chi_squared_calc(g, threshold, useGlobalNorm=not useGlobalChi2Normalization)
+                     for threshold in thresholdRange]
+    altBestIdx = int(np.argmin(altChi2Curve))
+    altBestThreshold = thresholdRange[altBestIdx]
+    altLowThreshold, altHighThreshold = chi2_confidence_interval(thresholdRange, altChi2Curve, altBestIdx)
 
     g["bestFit"] = {
         "thresholdRange": thresholdRange,
         "chi2Curve": chi2Curve,
         "threshold": bestThreshold,
+        "thresholdErrLow": bestThreshold - lowThreshold,
+        "thresholdErrHigh": highThreshold - bestThreshold,
         "chi2": chi2Curve[bestIdx],
         "rate": rebin(bestFitRateFull),
         "rateFull": bestFitRateFull,
+        "altChi2Curve": altChi2Curve,
+        "altThreshold": altBestThreshold,
+        "altThresholdErrLow": altBestThreshold - altLowThreshold,
+        "altThresholdErrHigh": altHighThreshold - altBestThreshold,
+        "altChi2": altChi2Curve[altBestIdx],
     }
 
 # chi-squared vs threshold scan
@@ -355,27 +427,93 @@ def plot_chi2_scan(gridKev, chi2Curve, bestThreshold, bestChi2, savepath):
     plt.savefig(savepath)
     plt.close()
 
+# same scan, overlaying both normalization modes: blue is the mode currently selected
+# by useGlobalChi2Normalization, red is the other one
+def plot_chi2_scan_comparison(gridKev, chi2Curve, bestThreshold, bestChi2,
+                               altChi2Curve, altBestThreshold, altBestChi2, savepath):
+    label = normalization_mode_label(useGlobalChi2Normalization)
+    altLabel = normalization_mode_label(not useGlobalChi2Normalization)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(gridKev, chi2Curve, 'o', markersize=3, color="steelblue", label=label)
+    plt.axvline(bestThreshold, color='steelblue', linestyle='--',
+                label=f"{label} best fit: {bestThreshold:0.2f} keV (" + r"$\chi^2$" + f"={bestChi2:0.2f})")
+    plt.plot(gridKev, altChi2Curve, 'o', markersize=3, color="red", label=altLabel)
+    plt.axvline(altBestThreshold, color='red', linestyle='--',
+                label=f"{altLabel} best fit: {altBestThreshold:0.2f} keV (" + r"$\chi^2$" + f"={altBestChi2:0.2f})")
+    plt.xlabel("Threshold [keV]", fontsize=16)
+    plt.ylabel(r"$\chi^2$", fontsize=16)
+    plt.legend(fontsize=10)
+    plt.tight_layout()
+    plt.savefig(savepath)
+    plt.close()
+
 for g in groups:
     plot_chi2_scan(
         g["bestFit"]["thresholdRange"], g["bestFit"]["chi2Curve"],
         g["bestFit"]["threshold"], g["bestFit"]["chi2"],
         savepath=plot_path(f"chi2Scans/chi2scan{g['p']}{g['T']}.png"),
     )
+    plot_chi2_scan_comparison(
+        g["bestFit"]["thresholdRange"], g["bestFit"]["chi2Curve"],
+        g["bestFit"]["threshold"], g["bestFit"]["chi2"],
+        g["bestFit"]["altChi2Curve"], g["bestFit"]["altThreshold"], g["bestFit"]["altChi2"],
+        savepath=plot_path(f"chi2Scans/chi2scanCompare{g['p']}{g['T']}.png"),
+    )
 
 def plot_fit_to_seitz_ratio(groups, savepath):
     seitzVals = [g["seitz"] for g in groups]
-    fitRatios = [g["bestFit"]["threshold"] / g["seitz"] for g in groups]
+    fitVals = [g["bestFit"]["threshold"] for g in groups]
+    fitErrLow = [g["bestFit"]["thresholdErrLow"] for g in groups]
+    fitErrHigh = [g["bestFit"]["thresholdErrHigh"] for g in groups]
     plt.figure(figsize=(8, 6))
-    plt.plot(seitzVals, fitRatios, 'o', color="steelblue")
-    plt.axhline(1.0, color='gray', linestyle='--', label="Fit = Seitz")
+    plt.errorbar(seitzVals, fitVals, yerr=[fitErrLow, fitErrHigh],
+                 fmt='o', color="steelblue", ecolor="steelblue", capsize=4)
+    plt.axline((0, 0), slope=1, color='gray', linestyle='--', label="Fit = Seitz")
     plt.xlabel("Seitz Threshold [keV]", fontsize=16)
-    plt.ylabel("Best Fit Threshold / Seitz Threshold", fontsize=16)
+    plt.ylabel("Best Fit Threshold [keV]", fontsize=16)
     plt.legend(fontsize=12)
     plt.tight_layout()
     plt.savefig(savepath)
     plt.close()
 
 plot_fit_to_seitz_ratio(groups, savepath=plot_path("fitToSeitzRatio.png"))
+
+# if true, show delta-chi2=1 error bars on the comparison plot below
+showComparisonErrorBars = True
+
+# same plot, overlaying both normalization modes: blue is the mode currently selected
+# by useGlobalChi2Normalization, red is the other one
+def plot_fit_to_seitz_ratio_comparison(groups, savepath):
+    label = normalization_mode_label(useGlobalChi2Normalization)
+    altLabel = normalization_mode_label(not useGlobalChi2Normalization)
+
+    seitzVals = [g["seitz"] for g in groups]
+    fitVals = [g["bestFit"]["threshold"] for g in groups]
+    altFitVals = [g["bestFit"]["altThreshold"] for g in groups]
+
+    plt.figure(figsize=(8, 6))
+    if showComparisonErrorBars:
+        fitErrLow = [g["bestFit"]["thresholdErrLow"] for g in groups]
+        fitErrHigh = [g["bestFit"]["thresholdErrHigh"] for g in groups]
+        altFitErrLow = [g["bestFit"]["altThresholdErrLow"] for g in groups]
+        altFitErrHigh = [g["bestFit"]["altThresholdErrHigh"] for g in groups]
+        plt.errorbar(seitzVals, fitVals, yerr=[fitErrLow, fitErrHigh],
+                     fmt='o', color="steelblue", ecolor="steelblue", capsize=4, label=label)
+        plt.errorbar(seitzVals, altFitVals, yerr=[altFitErrLow, altFitErrHigh],
+                     fmt='o', color="red", ecolor="red", capsize=4, label=altLabel)
+    else:
+        plt.plot(seitzVals, fitVals, 'o', color="steelblue", label=label)
+        plt.plot(seitzVals, altFitVals, 'o', color="red", label=altLabel)
+    plt.axline((0, 0), slope=1, color='gray', linestyle='--', label="Fit = Seitz")
+    plt.xlabel("Seitz Threshold [keV]", fontsize=16)
+    plt.ylabel("Best Fit Threshold [keV]", fontsize=16)
+    plt.legend(fontsize=12)
+    plt.tight_layout()
+    plt.savefig(savepath)
+    plt.close()
+
+plot_fit_to_seitz_ratio_comparison(groups, savepath=plot_path("fitToSeitzRatioCompare.png"))
 
 """
 SINLGE THRESHOLD RATES WITH AND WITHOUT THEORETICAL THRESHOLD
@@ -478,6 +616,12 @@ avgBestIdx = int(np.argmin(avgChi2Curve))
 avgBestThreshold = thresholdRange[avgBestIdx]
 avgBestFitRatios = counts_to_ratios(get_multiplicity_counts(avgBestThreshold)[0])
 avgBestFitRateFull = seitz_count(avgBestFitRatios, sum(backSubBinsAvg))
+
+avgAltChi2Curve = [chi_squared_calc(avgGroup, threshold, useGlobalNorm=not useGlobalChi2Normalization)
+                    for threshold in thresholdRange]
+avgAltBestIdx = int(np.argmin(avgAltChi2Curve))
+avgAltBestThreshold = thresholdRange[avgAltBestIdx]
+
 avgBestFit = {
     "thresholdRange": thresholdRange,
     "chi2Curve": avgChi2Curve,
@@ -485,11 +629,20 @@ avgBestFit = {
     "chi2": avgChi2Curve[avgBestIdx],
     "rate": rebin(avgBestFitRateFull),
     "rateFull": avgBestFitRateFull,
+    "altChi2Curve": avgAltChi2Curve,
+    "altThreshold": avgAltBestThreshold,
+    "altChi2": avgAltChi2Curve[avgAltBestIdx],
 }
 plot_chi2_scan(
     avgBestFit["thresholdRange"], avgBestFit["chi2Curve"],
     avgBestFit["threshold"], avgBestFit["chi2"],
     savepath=plot_path("chi2scanAvg.png"),
+)
+plot_chi2_scan_comparison(
+    avgBestFit["thresholdRange"], avgBestFit["chi2Curve"],
+    avgBestFit["threshold"], avgBestFit["chi2"],
+    avgBestFit["altChi2Curve"], avgBestFit["altThreshold"], avgBestFit["altChi2"],
+    savepath=plot_path("chi2scanCompareAvg.png"),
 )
 
 if useRebinnedThresholdPlots:
