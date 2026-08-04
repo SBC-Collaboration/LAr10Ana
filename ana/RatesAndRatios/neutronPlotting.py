@@ -223,11 +223,11 @@ groups.sort(key=lambda g: g["seitz"])
 # normalize everything
 # data rate per threshold i per multiplicity j
 r_ij = [g["backSub"] for g in groups]
-# seitz relative multiplicity ratio per threshold i per multiplicity j
-s_ij = [g["seitzCounts"]/sum(g["seitzCounts"]) for g in groups]
+# seitz counts per threshold i per multiplicity j
+s_ij = [g["seitzCounts"] for g in groups]
 normalizationFactor = np.mean([sum(r) / sum(s) for r, s in zip(r_ij, s_ij)])
 for g in groups:
-    g["seitzRate"] = [normalizationFactor * ratio/sum(g["seitzCounts"]) for ratio in g["seitzCounts"]]
+    g["seitzRate"] = [normalizationFactor * ratio for ratio in g["seitzCounts"]]
 
 ## plot making
 """
