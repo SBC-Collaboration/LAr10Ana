@@ -7,6 +7,17 @@ from ana.BatchSiPMs import BatchSiPMs
 
 # Functions to run code
 
+# Unwrap the CAEN timestamp to account for rollovers
+def _unwrap_caen_timestamp(ts, max_ts):
+    ts = np.asarray(ts, dtype=np.int64)
+
+    # Detect rollovers
+    rollovers = np.diff(ts) < 0
+
+    # Cumulative count of rollovers
+    rollover_count = np.concatenate([[0], np.cumsum(rollovers)])
+    return ts + rollover_count * max_ts
+
 # Calculate the ratio of the SiPM pulse to the baseline
 def _signal_ratio_filtering(waveforms):
 
@@ -32,6 +43,7 @@ def ScintillationRateAnalysis(ev):
     output = {
         "n_hits": np.zeros((1,1), dtype=np.uint8),
         "hits_mask": np.zeros((1,1), dtype=np.uint32),
+        "trigger_rate": np.zeros((1,1), dtype=np.uint16),
     }
     if ev is None or not ev['event_info']['loaded'] or not ev['scintillation']['loaded']:
         print("File not loaded. Quitting.")
@@ -56,6 +68,15 @@ def ScintillationRateAnalysis(ev):
     # convert boolean mask array to uint32
     weights = 2**np.arange(32, dtype=np.uint32)
     output["hits_mask"] = mask.dot(weights)[:, np.newaxis]
+
+    # Calculate scintillation rate / potential buffer full
+    timetag = ev["scintillation"]['TriggerTimeTag']
+    timestamp = _unwrap_caen_timestamp(timetag, 2**31) * 8.e-9  # Convert to seconds
+    time_diff = timestamp[-1] - timestamp[0]
+    event_counter = ev["scintillation"]['EventCounter']
+    n_events = event_counter[-1] - event_counter[0] + 1
+    trigger_rate = n_events / time_diff if time_diff > 0 else 0
+    output["trigger_rate"] = np.full(output["n_hits"].shape, trigger_rate, dtype=np.uint16)
 
     return output
 
