@@ -105,6 +105,7 @@ This module (`Reconstruction3D.py`) pulls bubble pixel position data from the Bu
 - **coords_3D**(`3D array`, mm): Array of xyz coords, in milimeters. If a frame has no bubble finder information or otherwise had an error, all values are NaN. If a frame has only one camera defined, all values are -999. If a frame has multiple bubbles, or this is thought to be a multi bubble event, all values are -1000.
 - **frame**(`int`): Frame of a given output coordinate
 - **reprojError**(`float`): Average reprojection error, calculated by taking the 3d point and converting back to 2d, then getting the pixel space distance for all cameras in which the bubble was found, then averaging. 
+- **d_wall**(`float`, mm): Distance from the x,y,z calcualted in 3D coordinate to the inside surface of outer jar. 
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 

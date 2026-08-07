@@ -7,6 +7,53 @@ import os
 Projection matricies for each camera, generated using OpenCV calibration, with SiPMs and fiducial markings as training points
 
 '''
+
+def _distance_to_wall(x, y, z):
+    '''
+    x,y,z: 3D coordinates in mm
+
+    Returns:
+        distance to wall in mm
+    '''
+
+    in_to_mm = 25.4
+    r_inside = 4.525 * in_to_mm
+    thickness = 0.2 * in_to_mm
+    r_outside = r_inside + thickness
+    z_low = -12*in_to_mm
+    z_high = (14.72-15.358)*in_to_mm
+
+    angle_neck = 1.19367  # angle where the neck and dome meet
+    r_neck = 2*in_to_mm
+    r_neck_inside = r_neck - thickness
+    x_neck, z_neck = 2.725*in_to_mm, z_high  # center of neck circle
+    r_dome = 9.4*in_to_mm
+    r_dome_inside = r_dome - thickness
+    z_dome = (7.84 - 15.358)*in_to_mm  # center of dome circle
+    R = r_inside  # for r^2/R
+
+    r = np.sqrt(x**2 + y**2)
+    angle = np.atan2(z - z_dome, r)  # angle based on dome center
+    if np.isnan(x) or np.isnan(y) or np.isnan(z):
+        return -1
+    elif z <= z_high:
+        return r_inside - r
+    elif 0 <= angle and angle <= angle_neck:
+        return r_neck_inside - np.sqrt((r - x_neck)**2 + (z - z_neck)**2)
+    elif angle > angle_neck and angle <= np.pi/2:
+        return r_dome_inside - np.sqrt(r**2 + (z - z_dome)**2)
+    else:
+        return -1
+
+def _distance_to_wall_arr(arr):
+    '''
+    arr: 3D coordinates in mm, shape (N,3)
+
+    Returns:
+        distance to wall in mm, shape (N,)
+    '''
+    return np.array([_distance_to_wall(*pos) for pos in arr])
+
 def getProjMat(camNum):
     '''
     camNum: 1,2, or3
@@ -241,11 +288,16 @@ def reconstruct_2D_to_3D(data):
             coordsToReturn = []
             frames = []
             reprojErrors = []
+            d_wall = []
             for i in range(0,frameCount):
                 coordsToReturn.append([-1000.0,-1000.0,-1000.0])
                 reprojErrors.append([np.nan])
                 frames.append([i])
-            return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
+                d_wall.append([np.nan])
+            return {"coords_3D": coordsToReturn, 
+                    "frame": frames, 
+                    "reprojError": reprojErrors,
+                    "d_wall": d_wall}
         # list of 3d coordinates to return to event dealer
         coordsToReturn = []
     
@@ -253,6 +305,7 @@ def reconstruct_2D_to_3D(data):
         coords_2D  = pull_bubble_coords(bubble_data, frameCount)
         frames = []
         reprojErrors = []
+        d_wall = []
         # for every frame there is a set of 2d coordinates, each one corresponding to a certian cameras bubble location
         for coord in coords_2D:
             # if the camera didnt have a bubble, we should just ignore this frame and more on
@@ -260,6 +313,7 @@ def reconstruct_2D_to_3D(data):
                 coordsToReturn.append([np.nan, np.nan, np.nan])
                 frames.append([len(frames)])
                 reprojErrors.append([np.nan])
+                d_wall.append([np.nan])
                 continue
             frames.append([coord[1]])
             nancheck = 0
@@ -269,6 +323,7 @@ def reconstruct_2D_to_3D(data):
             if len(coord) != 2 or len(coord[0]) != 6 or  coord[0][0] <= -999 or nancheck >= 4:
                 coordsToReturn.append([-999.0, -999.0, -999.0])
                 reprojErrors.append([np.nan])
+                d_wall.append([np.nan])
                 continue
             # triangulate the bubble into 3d space, then add it to the list to return
             coords_3D = triangulate_multi_cam_LS(coord[0])
@@ -290,17 +345,26 @@ def reconstruct_2D_to_3D(data):
             else:
                 reprojError = np.nan
             reprojErrors.append([1/reprojError])
-        
 
-        return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
+            d_wall.append([_distance_to_wall(*coords_3D)]) 
+
+        return {"coords_3D": coordsToReturn, 
+                "frame": frames, 
+                "reprojError": reprojErrors, 
+                "d_wall": d_wall}
 
     else:
         coordsToReturn = []
         frames = []
         reprojErrors = []
+        d_wall = []
         for i in range(0,frameCount):
             coordsToReturn.append([np.nan, np.nan, np.nan])
             frames.append([i])
             reprojErrors.append([np.nan])
-        return {"coords_3D": coordsToReturn, "frame": frames, "reprojError": reprojErrors}
+            d_wall.append([np.nan])
+        return {"coords_3D": coordsToReturn, 
+                "frame": frames, 
+                "reprojError": reprojErrors,
+                "d_wall": d_wall}
 
