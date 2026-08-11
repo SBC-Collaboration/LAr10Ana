@@ -59,8 +59,9 @@ This module (`SiPMPulses.py`) loads the scintillation file for each event, and p
 
 ## Scintillation Rate Analysis (`scint_rate.sbc`)
 This module (`ScintRate.py`) follows the same structure as the scintillation module. For each CAEN trigger, is sums the number of channels that are hit, and gives a 32-bit number that tells which channels are hit.
-- **n_hits**: Number of hit SiPMs in this CAEN trigger.
-- **hits_mask**: 32-bit mask of channels that are hit.
+- **n_hits** (`uint8`): Number of hit SiPMs in this CAEN trigger.
+- **hits_mask** (`uint32`): 32-bit mask of channels that are hit.
+- **trigger_rate** (`uint16`, Hz): The trigger rate around this CAEN trigger. It is calculated per SiPM batch (usually 1000 saved events), by dividing the difference between the last and first `EventCounter` by the trigger time tag. The EventCounter, if CAEN is set to increment for all triggers, not just accepted triggers, will show how many triggers CAEN registers. The trigger time tag is unwrapped and converted to seconds. The rate is then saved as a 16 bit integer, up to 65535 Hz. This value will be the same for all triggers in a batch, and asnalyzer can decide how to convert this to a boolean to see whether the buffer is full. If the rate is more than 1000Hz for a second or more (if any batch has a rate of >1000), then the CAEN buffer is possibly full at some time. 
 - **runid** (`int`, 2): Run ID of this row. (Added by EventDealer)
 - **ev** (`int`): Event ID of this row. (Added by EventDealer)
 
