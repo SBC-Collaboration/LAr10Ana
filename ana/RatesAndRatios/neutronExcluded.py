@@ -1,6 +1,4 @@
-## dome exclusion: same rate/threshold-fit pipeline as neutronPlotting.py, but the sim
-## side drops dome-region hits before counting and the real side can check reco.sbc
-## positions and handscan region labels -- both gated by excludedRegions below
+## dome exclusion: same rate/threshold-fit pipeline as neutronPlotting.py, but the sim and real sides both drop dome-region hits, gated by excludedRegions below
 import glob
 import os
 import sys
@@ -25,20 +23,26 @@ DOME_Z_THRESHOLD_CM = -3
 
 SIM_DOME_Z_THRESHOLD_MM = 591
 
-# for the pre/post-cut rate comparison pipeline specifically (build_groups() below):
-# "pre" (uncut baseline) drops single-bubble events past the loose 0.6cm threshold,
-# "post" then uses the tighter -0.3cm threshold instead. Independent of DOME_Z_THRESHOLD_CM
-# above, which still drives the diagnostic single-bubble position prints/Z-distribution plots
+# withoutDomeCut/withDomeCut pipeline (build_groups()/run_pipeline()): PRE is the always-applied loose baseline, POST adds the full dome cut on top -- independent of DOME_Z_THRESHOLD_CM above
 DOME_Z_THRESHOLD_CM_PRE = 6
 DOME_Z_THRESHOLD_CM_POST = -3
 
 
-def plot_path(filename):
-    # plots/ when nothing is excluded (matches neutronPlotting.py), plotsExcluded/ otherwise
-    plotsDir = "plots" if not excludedRegions else "plotsExcluded"
-    path = os.path.join(plotsDir, filename)
+# everything lands under one "plots" root: plots/withoutDomeCut/, plots/withDomeCut/, plots/comparison/
+PLOTS_ROOT = "plots"
+
+
+def output_path(outputDir, filename):
+    path = os.path.join(PLOTS_ROOT, outputDir, filename)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     return path
+
+
+# excluded if the handscanner labeled it dome, or its precomputed position flag says it's past whichever dome-cut threshold is in play
+def make_is_region_excluded(positionDomeFlags):
+    def is_region_excluded(i, region):
+        return SOURCE_LABELS.get(region) == "dome" or positionDomeFlags[i]
+    return is_region_excluded
 
 
 # True if a real reco hit's Z (detector frame) is past the dome cut
@@ -46,8 +50,7 @@ def is_dome_event(z_mm):
     return z_mm > DOME_Z_THRESHOLD_CM * 10
 
 
-# same as is_dome_event(), but against an arbitrary threshold_cm instead of the module-level
-# DOME_Z_THRESHOLD_CM -- used by the pre/post-cut comparison pipeline to test two thresholds
+# same as is_dome_event(), but against an arbitrary threshold_cm instead of the module-level one
 def is_dome_event_at(z_mm, threshold_cm):
     return z_mm > threshold_cm * 10
 
@@ -59,11 +62,7 @@ def is_sim_dome_event(z_mm):
 
 ## sim side
 
-# same as cfconfBThresholds.get_multiplicity_counts(), but drops dome-region single-bubble
-# events first when "dome" is in excludedRegionsOverride (defaults to the module-level
-# excludedRegions when not given). Multi-bubble events are left untouched even if one of
-# their hits lands in the dome region -- only whole single-bubble events get cut, matching
-# the real-data side where only single-bubble events get a reco Z position at all.
+# same as cfconfBThresholds.get_multiplicity_counts(), but drops dome-region single-bubble events first when "dome" is in excludedRegionsOverride (defaults to module-level excludedRegions)
 def get_multiplicity_counts(energy_threshold_kev, multiplicity_cut=MULTIPLICITY_CUT, excludedRegionsOverride=None):
     activeExcludedRegions = excludedRegions if excludedRegionsOverride is None else excludedRegionsOverride
     if "dome" not in activeExcludedRegions:
@@ -173,8 +172,7 @@ def _is_bad_coord(coord):
     return np.isnan(coord).any() or coord[0] <= -999
 
 
-# {(ev, frame): first valid 3D coord}, same logic as reconLib.grabCoords() but handles
-# both reco.sbc "frame" shapes seen so far: (N,50) blocks and plain 1D per-row values
+# {(ev, frame): first valid 3D coord}, handles both reco.sbc "frame" shapes seen so far: (N,50) blocks and plain 1D per-row values
 def build_reco_lookup(reconInfo):
     recoLookup = {}
     reconEv = reconInfo["ev"]
@@ -217,10 +215,7 @@ def is_real_dome_event(region, coord):
     return coord is not None and is_dome_event(coord[2])
 
 
-# (run, ev, x, y, z) per confirmed single-bubble event with a valid reco coord;
-# drops dome events (by region label or reco Z) when excludedRegions has "dome",
-# unless applyDomeExclusion=False (then they're kept, only counted for the print below)
-# label is just for the exclusion-count print below (e.g. "source", "background")
+# (run, ev, x, y, z) per confirmed single-bubble event; drops dome events unless applyDomeExclusion=False (then kept, only counted for the print below). label is just for that print
 def load_single_bubble_positions(runList, label="real data", applyDomeExclusion=True):
     positions = []
     recoLookupCache = {}
@@ -291,10 +286,7 @@ def load_neutron_events():
     return bubbleCount, sourceTimes, psetsTemps, runEvs
 
 
-# for each neutron-run event (same index as bubbleCount/sourceTimes/psetsTemps), whether
-# it's a confirmed single-bubble event whose reco Z position is past threshold_cm.
-# Multi-bubble events can't get a reliable single 3D coord (reco.sbc marks those frames
-# with the -1000 error code), so they're always False here.
+# per neutron-run event, whether it's a confirmed single-bubble event past threshold_cm -- multi-bubble events get no reliable 3D coord, so they're always False here
 def compute_position_dome_flags(bubbleCount, runEvs, threshold_cm):
     flags = [False] * len(bubbleCount)
     recoLookupCache = {}
@@ -336,8 +328,8 @@ def background_subtract(binCounts, sourceTime, backgroundBinCounts, backgroundTi
     binCountError = [np.sqrt(c) for c in binCounts]
     backSubBins = [c - b for c, b in zip(binCounts, backBins)]
     # background high -> subtracted rate pulled down; background low -> subtracted rate pulled up
-    backSubErrorLow = [np.sqrt(ce**2 + be**2) for ce, be in zip(binCountError, backErrorHigh)]
-    backSubErrorHigh = [np.sqrt(ce**2 + be**2) for ce, be in zip(binCountError, backErrorLow)]
+    backSubErrorLow = [np.sqrt(countErr**2 + backErr**2) for countErr, backErr in zip(binCountError, backErrorHigh)]
+    backSubErrorHigh = [np.sqrt(countErr**2 + backErr**2) for countErr, backErr in zip(binCountError, backErrorLow)]
     return backBins, backErrorLow, backErrorHigh, backSubBins, backSubErrorLow, backSubErrorHigh, binCountError
 
 
@@ -364,8 +356,7 @@ backgroundBinCounts, backgroundTime = load_background()
 bubbleCount, sourceTimes, psetsTemps, neutronRunEvs = load_neutron_events()
 singleBubblePositions = load_single_bubble_positions(neutronRuns, label="source")
 
-# reco-Z-based dome flags for the pre/post-cut comparison pipeline (build_groups() below):
-# "pre" = loose 0.6cm threshold (the new "uncut" baseline), "post" = tight -0.3cm threshold
+# reco-Z-based dome flags for the withoutDomeCut/withDomeCut pipeline: "pre" = always-applied loose threshold, "post" = tighter threshold on top
 positionDomeFlagsPre = compute_position_dome_flags(bubbleCount, neutronRunEvs, DOME_Z_THRESHOLD_CM_PRE)
 positionDomeFlagsPost = compute_position_dome_flags(bubbleCount, neutronRunEvs, DOME_Z_THRESHOLD_CM_POST)
 
@@ -373,38 +364,37 @@ positionDomeFlagsPost = compute_position_dome_flags(bubbleCount, neutronRunEvs, 
 pToUse = sorted({(float(lo), float(t)) for lo, hi, t in psetsTemps if float(lo) == float(hi)})
 
 
-# builds the full per-(p,T) "groups" list (rates, background subtraction, seitz counts,
-# normalization) for one specific (simExcludedRegions, positionDomeFlags) combination --
-# lets the pre/post pipeline below independently control the sim-side cut (on/off) and the
-# real-side single-bubble position cut (which threshold_cm's flags to use). Region-label
-# dome exclusion on the real side is always applied regardless -- a handscanner-confirmed
-# dome event should be excluded no matter which Z threshold variant is being tested.
+# bins events matching `keep`, background-subtracts, and converts to a rate in counts/minute -- shared core of both build_groups()'s per-(p,T) loop and the avg-group section
+def compute_rate_group(keep):
+    binCounts, liveTimeSec = bin_multiplicities(bubbleCount, sourceTimes, keep)
+    backBins, backErrorLow, backErrorHigh, backSubBins, backSubErrorLow, backSubErrorHigh, binCountError = \
+        background_subtract(binCounts, liveTimeSec, backgroundBinCounts, backgroundTime)
+
+    liveTimeMin = liveTimeSec / 60
+    toRate = lambda values: [v / liveTimeMin for v in values]
+    return {
+        "liveTime": liveTimeMin,
+        "binCounts": toRate(binCounts),
+        "binCountError": toRate(binCountError),
+        "backBins": toRate(backBins),
+        "backErrorLow": toRate(backErrorLow),
+        "backErrorHigh": toRate(backErrorHigh),
+        "backSubFull": toRate(backSubBins),
+        "backSubErrorLowFull": toRate(backSubErrorLow),
+        "backSubErrorHighFull": toRate(backSubErrorHigh),
+    }
+
+
+# builds the full per-(p,T) "groups" list for one (simExcludedRegions, positionDomeFlags) combination -- lets the pre/post pipeline independently control the sim-side cut and real-side position cut
 def build_groups(simExcludedRegions, positionDomeFlags):
     groups = []
-
-    def is_region_excluded(i, region):
-        return SOURCE_LABELS.get(region) == "dome" or positionDomeFlags[i]
+    is_region_excluded = make_is_region_excluded(positionDomeFlags)
 
     for p, T in pToUse:
-        binCounts, sourceTime = bin_multiplicities(
-            bubbleCount, sourceTimes,
-            keep=lambda i, region: not is_region_excluded(i, region)
-                                    and psetsTemps[i][0] == p and psetsTemps[i][2] == T,
+        rateGroup = compute_rate_group(
+            keep=lambda i, region, p=p, T=T: not is_region_excluded(i, region)
+                                              and psetsTemps[i][0] == p and psetsTemps[i][2] == T
         )
-        backBins, backErrorLow, backErrorHigh, backSubBins, backSubErrorLow, backSubErrorHigh, binCountError = background_subtract(
-            binCounts, sourceTime, backgroundBinCounts, backgroundTime
-        )
-
-        # convert counts from source to a rate in counts/minute
-        sourceTime /= 60
-        binCounts = [v / sourceTime for v in binCounts]
-        binCountError = [v / sourceTime for v in binCountError]
-        backBins = [v / sourceTime for v in backBins]
-        backErrorLow = [v / sourceTime for v in backErrorLow]
-        backErrorHigh = [v / sourceTime for v in backErrorHigh]
-        backSubBins = [v / sourceTime for v in backSubBins]
-        backSubErrorLow = [v / sourceTime for v in backSubErrorLow]
-        backSubErrorHigh = [v / sourceTime for v in backSubErrorHigh]
 
         # seitz threshold for this (P,T) pair, fed straight into the dome-excluded Cf sim counts
         seitz = sm.SeitzModel(p * 14.5038, -273.15 + T, 'argon').Q
@@ -413,52 +403,36 @@ def build_groups(simExcludedRegions, positionDomeFlags):
             "p": p,
             "T": T,
             "seitz": seitz,
-            "liveTime": sourceTime,
-            "binCounts": binCounts,
-            "binCountError": binCountError,
-            "backBins": backBins,
-            "backErrorLow": backErrorLow,
-            "backErrorHigh": backErrorHigh,
-            "backSubFull": backSubBins,
-            "backSubErrorLowFull": backSubErrorLow,
-            "backSubErrorHighFull": backSubErrorHigh,
             "seitzCountsFull": seitzCounts,
-            "backSub": rebin(backSubBins),
-            "errLow": rebin_errors(backSubErrorLow),
-            "errHigh": rebin_errors(backSubErrorHigh),
+            "backSub": rebin(rateGroup["backSubFull"]),
+            "errLow": rebin_errors(rateGroup["backSubErrorLowFull"]),
+            "errHigh": rebin_errors(rateGroup["backSubErrorHighFull"]),
             "seitzRate": rebin(seitzCounts),
             "seitzCounts": rebin(seitzCounts),
             "bestFit": {},
+            **rateGroup,
         })
 
     # sort from lowest to highest seitz threshold
     groups.sort(key=lambda g: g["seitz"])
 
-    # normalize everything
-    # data rate per threshold i per multiplicity j
-    r_ij = [g["backSub"] for g in groups]
-    # seitz counts per threshold i per multiplicity j
-    s_ij = [g["seitzCounts"] for g in groups]
-    normalizationFactor = np.mean([sum(r) / sum(s) for r, s in zip(r_ij, s_ij)])
+    # scale sim-predicted counts to match observed data rates, averaged across every group's own (data total)/(sim total) ratio
+    observedRatesByGroup = [g["backSub"] for g in groups]
+    simCountsByGroup = [g["seitzCounts"] for g in groups]
+    normalizationFactor = np.mean([
+        sum(observed) / sum(sim) for observed, sim in zip(observedRatesByGroup, simCountsByGroup)
+    ])
     for g in groups:
         g["seitzRate"] = [normalizationFactor * ratio for ratio in g["seitzCounts"]]
 
     return groups, normalizationFactor
 
 
-# "pre"/uncut baseline: sim cut off, real side cut at the loose 0.6cm threshold
-# "post"/cut: sim cut on, real side cut at the tighter -0.3cm threshold
+# "withoutDomeCut": sim cut off, real side at the loose threshold. "withDomeCut": sim cut on, real side at the tighter threshold. Each gets its own run_pipeline() subfolder
 groupsWithoutDomeCut, normalizationFactorWithoutDomeCut = build_groups([], positionDomeFlagsPre)
 groupsWithDomeCut, normalizationFactorWithDomeCut = build_groups(["dome"], positionDomeFlagsPost)
-# everything else in this file (Z distributions, chi2 fits, linhists, avg group, and
-# which plots/ vs plotsExcluded/ directory things land in) still follows whatever
-# excludedRegions is set to at the top, same as before
-groups = groupsWithDomeCut if "dome" in excludedRegions else groupsWithoutDomeCut
-normalizationFactor = normalizationFactorWithDomeCut if "dome" in excludedRegions else normalizationFactorWithoutDomeCut
 
-# dump every group's data rate (background-subtracted, count/min) AND its Seitz/sim-
-# predicted rate, pre-cut (uncut baseline: real side at 0.6cm, sim off) vs post-cut
-# (real side at -0.3cm, sim on), to a plain text file
+# dumps every group's background-subtracted data rate and Seitz/sim-predicted rate, pre-cut vs post-cut, to a plain text file
 def write_rates_txt(groupsPre, groupsPost, savepath):
     binLabels = ["1", "2", "3+"]
     with open(savepath, "w") as f:
@@ -479,15 +453,13 @@ def write_rates_txt(groupsPre, groupsPost, savepath):
             f.write("\n")
     print(f"wrote pre/post-cut rates to {savepath}")
 
-write_rates_txt(groupsWithoutDomeCut, groupsWithDomeCut, savepath=os.path.join(SCRIPT_DIR, "ratesPrePostCut.txt"))
+write_rates_txt(groupsWithoutDomeCut, groupsWithDomeCut, savepath=output_path("comparison", "ratesPrePostCut.txt"))
 
 ## plot making
 """
 COMBINED PAPER PLOT -- side by side, dome cut vs no dome cut
 """
-# groupsWithCut/groupsWithoutCut must be the same length, in the same (p,T) order
-# (guaranteed since both come from build_groups() over the same pToUse, sorted by the
-# same seitz value)
+# groupsWithCut/groupsWithoutCut must be the same length, in the same (p,T) order (guaranteed since both come from build_groups() over the same pToUse, sorted by seitz)
 def plot_combined_multiplicity_comparison(groupsWithCut, groupsWithoutCut, savepath, groupsPerRow=3):
     binLabels = ["1", "2", "3+"]
     numBins = 3
@@ -571,7 +543,7 @@ def plot_combined_multiplicity_comparison(groupsWithCut, groupsWithoutCut, savep
 
 plot_combined_multiplicity_comparison(
     groupsWithDomeCut, groupsWithoutDomeCut,
-    savepath=plot_path("combinedMultiplicityComparison.png"),
+    savepath=output_path("comparison", "combinedMultiplicityComparison.png"),
 )
 
 """
@@ -595,9 +567,7 @@ def _event_pset_temp(run, ev, evDataCache):
     return None
 
 
-# {(p, T): [z, z, ...]} -- real reco Z for confirmed single-bubble events, grouped by
-# fixed pressure setpoint and temp (same convention as the main groups list above)
-# unless applyDomeExclusion=False (then dome events are kept, only counted for the print below)
+# {(p, T): [z, z, ...]} -- real reco Z for confirmed single-bubble events, grouped by (p, T); drops dome events unless applyDomeExclusion=False (then kept, only counted for the print below)
 def load_single_bubble_z_by_group(runList, applyDomeExclusion=True):
     byGroup = {}
     recoLookupCache = {}
@@ -669,13 +639,6 @@ singleBubbleZByGroup = load_single_bubble_z_by_group(neutronRuns, applyDomeExclu
 backgroundSingleBubbleZ = [pos[4] for pos in load_single_bubble_positions(backgroundList, label="background", applyDomeExclusion=False)]
 backgroundLiveTimeMin = backgroundTime / 60
 
-for g in groups[:numLowestSeitzZDist]:
-    plot_z_distribution(
-        singleBubbleZByGroup.get((g["p"], g["T"]), []), backgroundSingleBubbleZ, g["seitz"],
-        savepath=plot_path(f"zDistributions/zdist{g['p']}{g['T']}.png"),
-        sourceLiveTime=g["liveTime"], backgroundLiveTime=backgroundLiveTimeMin,
-    )
-
 # if true, use 1,2,3+ if false use 1,2,3,4,5+
 useRebinnedThresholdPlots = True
 
@@ -683,51 +646,46 @@ useRebinnedThresholdPlots = True
 THEORETICAL THRESHOLDS
 """
 # range to check for ratio matching
-thresholdRange = np.arange(0.0, 30.1, 0.1)
+thresholdRange = np.arange(0.2, 30.1, 0.1)
 
-# chi-squared normalization mode: if True, every group's predicted counts are scaled
-# by one shared normalization factor computed across the whole dataset; if False,
-# each group's predicted counts are scaled to match its own observed total, like the
-# old code (see oldCode.py's seitz_counts_per_threshold vs seitz_counts_entire_dataset
-# for the same per-group vs whole-dataset dichotomy)
+# range of multipliers to scan for the single-A "threshold = A * seitz" fit below
+seitzMultiplierRange = np.arange(0.1, 3.01, 0.01)
+
+# chi-squared normalization mode: if True, scale every group's predicted counts by one shared factor across the whole dataset; if False, scale each to its own observed total (like oldCode.py)
 useGlobalChi2Normalization = False
 
-# if True, also compute the *other* normalization mode and generate the *Compare*
-# plots (chi2scanCompare*, fitToSeitzRatioCompare) overlaying both modes. If False
-# (default), skip that extra scan entirely and just use useGlobalChi2Normalization
-# above (per-threshold normalization by default)
+# if True, also compute the *other* normalization mode and generate the *Compare* plots overlaying both. If False (default), just use useGlobalChi2Normalization above
 compareNormalizationModes = False
+
+# if True, also fit/plot the no-singles (2, 3+ only) variant alongside the normal fit. Off by default since it's almost never needed
+computeNoSinglesFit = False
 
 def group_observed_total(dataGroup):
     rate = dataGroup["backSub"] if useRebinnedThresholdPlots else dataGroup["backSubFull"]
     return sum(v * dataGroup["liveTime"] for v in rate)
 
-# livetime/total-weighted average of each group's own normalization, relative to the
-# mean group total - applying this to a group's own total pulls its predicted total
-# toward the dataset-wide average instead of forcing an exact match
+# livetime/total-weighted average of each group's own normalization, relative to the mean -- pulls a group's predicted total toward the dataset-wide average instead of forcing an exact match
 def global_normalization_factor(dataGroups):
     weights = [group_observed_total(g) for g in dataGroups]
     meanWeight = np.mean(weights)
     avgRatio = sum(w ** 2 for w in weights) / sum(weights)
     return avgRatio / meanWeight
 
-globalChi2NormFactor = global_normalization_factor(groups)
-
 def normalization_mode_label(useGlobalNorm):
     return "Global normalization" if useGlobalNorm else "Per-threshold normalization"
 
-# get the chi squared
-def chi_squared_calc(dataGroup, estThreshold, useGlobalNorm=None):
+# globalChi2NormFactor and simExcludedRegions are per-side, since they depend on which groups list / sim cut is active
+def chi_squared_calc(dataGroup, estThreshold, globalChi2NormFactor, simExcludedRegions, useGlobalNorm=None):
     if useGlobalNorm is None:
         useGlobalNorm = useGlobalChi2Normalization
 
     if useRebinnedThresholdPlots:
         rate, errLowRate, errHighRate = dataGroup["backSub"], dataGroup["errLow"], dataGroup["errHigh"]
-        predictedCounts = rebin(get_multiplicity_counts(estThreshold)[0])
+        predictedCounts = rebin(get_multiplicity_counts(estThreshold, excludedRegionsOverride=simExcludedRegions)[0])
     else:
         rate = dataGroup["backSubFull"]
         errLowRate, errHighRate = dataGroup["backSubErrorLowFull"], dataGroup["backSubErrorHighFull"]
-        predictedCounts = get_multiplicity_counts(estThreshold)[0]
+        predictedCounts = get_multiplicity_counts(estThreshold, excludedRegionsOverride=simExcludedRegions)[0]
 
     # make sure to convert everything to a count properly before matching
     liveTime = dataGroup["liveTime"]
@@ -745,6 +703,29 @@ def chi_squared_calc(dataGroup, estThreshold, useGlobalNorm=None):
             continue
         chi2 += ((obs - pred) / err) ** 2
     return chi2
+
+# same idea as chi_squared_calc, but drops the multiplicity==1 bin and fits only 2 and 3+ -- always rebinned, results go in g["bestFitNoSingles"], never g["bestFit"]
+def chi_squared_calc_no_singles(dataGroup, estThreshold, simExcludedRegions):
+    rate, errLowRate, errHighRate = dataGroup["backSub"], dataGroup["errLow"], dataGroup["errHigh"]
+    predictedCounts = rebin(get_multiplicity_counts(estThreshold, excludedRegionsOverride=simExcludedRegions)[0])
+
+    liveTime = dataGroup["liveTime"]
+    observed = [v * liveTime for v in rate][1:]
+    errLow = [v * liveTime for v in errLowRate][1:]
+    errHigh = [v * liveTime for v in errHighRate][1:]
+    predictedCounts = predictedCounts[1:]
+
+    targetTotal = sum(observed)
+    predicted = seitz_count(counts_to_ratios(predictedCounts), targetTotal)
+
+    chi2 = 0.0
+    for obs, eLow, eHigh, pred in zip(observed, errLow, errHigh, predicted):
+        err = eHigh if obs >= pred else eLow
+        if err == 0:
+            continue
+        chi2 += ((obs - pred) / err) ** 2
+    return chi2
+
 
 def chi2_confidence_interval(gridKev, chi2Curve, bestIdx):
     """threshold values where chi2(x) - min(chi2) crosses 1, on each side of the best fit"""
@@ -771,72 +752,61 @@ def chi2_confidence_interval(gridKev, chi2Curve, bestIdx):
 
     return lowThreshold, highThreshold
 
-for g in groups:
-    # all the chi 2 for matched thresholds
-    chi2Curve = [chi_squared_calc(g, threshold) for threshold in thresholdRange]
-    bestIdx = int(np.argmin(chi2Curve))
-    bestThreshold = thresholdRange[bestIdx]
 
-    lowThreshold, highThreshold = chi2_confidence_interval(thresholdRange, chi2Curve, bestIdx)
-
-    bestFitRatios = counts_to_ratios(get_multiplicity_counts(bestThreshold)[0])
-    bestFitRateFull = seitz_count(bestFitRatios, sum(g["backSubFull"]))
-
-    g["bestFit"] = {
-        "thresholdRange": thresholdRange,
-        "chi2Curve": chi2Curve,
-        "threshold": bestThreshold,
-        "thresholdErrLow": bestThreshold - lowThreshold,
-        "thresholdErrHigh": highThreshold - bestThreshold,
-        "chi2": chi2Curve[bestIdx],
+# given a chi2 value per entry of thresholdRange, locates the best-fit threshold, its 1-sigma bounds, and the best-fit rate curve -- shared by every fit in the pipeline
+# builds the standard {threshold, thresholdErrLow, thresholdErrHigh, chi2, rate, rateFull} fit dict for an already-known threshold/chi2 -- rate is scaled to match dataGroup's own observed total, same as the 0keV/avg-seitz reference lines. Shared by compute_best_fit() below and fit_seitz_multiplier()'s per-group bestFitA
+def build_fit_result(dataGroup, threshold, chi2, simExcludedRegions, thresholdErrLow=0.0, thresholdErrHigh=0.0):
+    bestFitRatios = counts_to_ratios(
+        get_multiplicity_counts(threshold, excludedRegionsOverride=simExcludedRegions)[0]
+    )
+    bestFitRateFull = seitz_count(bestFitRatios, sum(dataGroup["backSubFull"]))
+    return {
+        "threshold": threshold,
+        "thresholdErrLow": thresholdErrLow,
+        "thresholdErrHigh": thresholdErrHigh,
+        "chi2": chi2,
         "rate": rebin(bestFitRateFull),
         "rateFull": bestFitRateFull,
     }
 
-    if compareNormalizationModes:
-        # same scan under the other normalization mode, purely for the side-by-side
-        # comparison plot below - does not affect the best-fit threshold used elsewhere
-        altChi2Curve = [chi_squared_calc(g, threshold, useGlobalNorm=not useGlobalChi2Normalization)
-                         for threshold in thresholdRange]
-        altBestIdx = int(np.argmin(altChi2Curve))
-        altBestThreshold = thresholdRange[altBestIdx]
-        altLowThreshold, altHighThreshold = chi2_confidence_interval(thresholdRange, altChi2Curve, altBestIdx)
 
-        g["bestFit"].update({
-            "altChi2Curve": altChi2Curve,
-            "altThreshold": altBestThreshold,
-            "altThresholdErrLow": altBestThreshold - altLowThreshold,
-            "altThresholdErrHigh": altHighThreshold - altBestThreshold,
-            "altChi2": altChi2Curve[altBestIdx],
-        })
+def compute_best_fit(dataGroup, chi2Curve, simExcludedRegions):
+    bestIdx = int(np.argmin(chi2Curve))
+    bestThreshold = thresholdRange[bestIdx]
+    lowThreshold, highThreshold = chi2_confidence_interval(thresholdRange, chi2Curve, bestIdx)
+
+    fit = build_fit_result(
+        dataGroup, bestThreshold, chi2Curve[bestIdx], simExcludedRegions,
+        thresholdErrLow=bestThreshold - lowThreshold, thresholdErrHigh=highThreshold - bestThreshold,
+    )
+    fit["thresholdRange"] = thresholdRange
+    fit["chi2Curve"] = chi2Curve
+    return fit
 
 # chi-squared vs threshold scan
-def plot_chi2_scan(gridKev, chi2Curve, bestThreshold, bestChi2, savepath):
+def plot_chi2_scan(gridKev, chi2Curve, bestThreshold, bestChi2, savepath, xlabel="Threshold [keV]", bestLabel=None):
+    if bestLabel is None:
+        bestLabel = f"Best fit: {bestThreshold:0.2f} keV (" + r"$\chi^2$" + f"={bestChi2:0.2f})"
     plt.figure(figsize=(8, 6))
     plt.plot(gridKev, chi2Curve, 'o', markersize=3, color="steelblue")
-    plt.axvline(bestThreshold, color='red', linestyle='--',
-                label=f"Best fit: {bestThreshold:0.2f} keV (" + r"$\chi^2$" + f"={bestChi2:0.2f})")
-    plt.xlabel("Threshold [keV]", fontsize=16)
+    plt.axvline(bestThreshold, color='red', linestyle='--', label=bestLabel)
+    plt.xlabel(xlabel, fontsize=16)
     plt.ylabel(r"$\chi^2$", fontsize=16)
     plt.legend(fontsize=12)
     plt.tight_layout()
     plt.savefig(savepath)
     plt.close()
 
-# same scan, overlaying both normalization modes: blue is the mode currently selected
-# by useGlobalChi2Normalization, red is the other one
-def plot_chi2_scan_comparison(gridKev, chi2Curve, bestThreshold, bestChi2,
-                               altChi2Curve, altBestThreshold, altBestChi2, savepath):
-    label = normalization_mode_label(useGlobalChi2Normalization)
-    altLabel = normalization_mode_label(not useGlobalChi2Normalization)
-
+# generic two-series chi2 scan overlay -- used for normalization-mode, no-singles, and dome-cut comparisons alike. seriesA is blue, seriesB red
+def plot_chi2_scan_comparison(gridKev, chi2CurveA, bestThresholdA, bestChi2A, labelA,
+                               chi2CurveB, bestThresholdB, bestChi2B, labelB, savepath):
     plt.figure(figsize=(8, 6))
-    plt.plot(gridKev, chi2Curve, 'o', markersize=3, color="steelblue", label=label)
-    plt.axvline(bestThreshold, color='steelblue', linestyle='--',
-                label=f"{label} best fit: {bestThreshold:0.2f} keV (" + r"$\chi^2$" + f"={bestChi2:0.2f})")
-    plt.plot(gridKev, altChi2Curve, 'o', markersize=3, color="red", label=altLabel)
-    plt.axvline(altBestThreshold, color='red', linestyle='--',
-                label=f"{altLabel} best fit: {altBestThreshold:0.2f} keV (" + r"$\chi^2$" + f"={altBestChi2:0.2f})")
+    plt.plot(gridKev, chi2CurveA, 'o', markersize=3, color="steelblue", label=labelA)
+    plt.axvline(bestThresholdA, color='steelblue', linestyle='--',
+                label=f"{labelA} best fit: {bestThresholdA:0.2f} keV (" + r"$\chi^2$" + f"={bestChi2A:0.2f})")
+    plt.plot(gridKev, chi2CurveB, 'o', markersize=3, color="red", label=labelB)
+    plt.axvline(bestThresholdB, color='red', linestyle='--',
+                label=f"{labelB} best fit: {bestThresholdB:0.2f} keV (" + r"$\chi^2$" + f"={bestChi2B:0.2f})")
     plt.xlabel("Threshold [keV]", fontsize=16)
     plt.ylabel(r"$\chi^2$", fontsize=16)
     plt.legend(fontsize=10)
@@ -844,25 +814,11 @@ def plot_chi2_scan_comparison(gridKev, chi2Curve, bestThreshold, bestChi2,
     plt.savefig(savepath)
     plt.close()
 
-for g in groups:
-    plot_chi2_scan(
-        g["bestFit"]["thresholdRange"], g["bestFit"]["chi2Curve"],
-        g["bestFit"]["threshold"], g["bestFit"]["chi2"],
-        savepath=plot_path(f"chi2Scans/chi2scan{g['p']}{g['T']}.png"),
-    )
-    if compareNormalizationModes:
-        plot_chi2_scan_comparison(
-            g["bestFit"]["thresholdRange"], g["bestFit"]["chi2Curve"],
-            g["bestFit"]["threshold"], g["bestFit"]["chi2"],
-            g["bestFit"]["altChi2Curve"], g["bestFit"]["altThreshold"], g["bestFit"]["altChi2"],
-            savepath=plot_path(f"chi2Scans/chi2scanCompare{g['p']}{g['T']}.png"),
-        )
-
-def plot_fit_to_seitz_ratio(groups, savepath):
+def plot_fit_to_seitz_ratio(groups, savepath, bestFitKey="bestFit"):
     seitzVals = [g["seitz"] for g in groups]
-    fitVals = [g["bestFit"]["threshold"] for g in groups]
-    fitErrLow = [g["bestFit"]["thresholdErrLow"] for g in groups]
-    fitErrHigh = [g["bestFit"]["thresholdErrHigh"] for g in groups]
+    fitVals = [g[bestFitKey]["threshold"] for g in groups]
+    fitErrLow = [g[bestFitKey]["thresholdErrLow"] for g in groups]
+    fitErrHigh = [g[bestFitKey]["thresholdErrHigh"] for g in groups]
     plt.figure(figsize=(8, 6))
     plt.errorbar(seitzVals, fitVals, yerr=[fitErrLow, fitErrHigh],
                  fmt='o', color="steelblue", ecolor="steelblue", capsize=4)
@@ -874,55 +830,38 @@ def plot_fit_to_seitz_ratio(groups, savepath):
     plt.savefig(savepath)
     plt.close()
 
-plot_fit_to_seitz_ratio(groups, savepath=plot_path("fitToSeitzRatio.png"))
-
-# if true, show delta-chi2=1 error bars on the comparison plot below
-showComparisonErrorBars = True
-
-# same plot, overlaying both normalization modes: blue is the mode currently selected
-# by useGlobalChi2Normalization, red is the other one
-def plot_fit_to_seitz_ratio_comparison(groups, savepath):
-    label = normalization_mode_label(useGlobalChi2Normalization)
-    altLabel = normalization_mode_label(not useGlobalChi2Normalization)
-
-    seitzVals = [g["seitz"] for g in groups]
-    fitVals = [g["bestFit"]["threshold"] for g in groups]
-    altFitVals = [g["bestFit"]["altThreshold"] for g in groups]
-
+# generic two-series fit-vs-seitz overlay, same idea as plot_chi2_scan_comparison() above
+def plot_fit_to_seitz_ratio_comparison(seitzVals, fitValsA, errLowA, errHighA, labelA,
+                                        fitValsB, errLowB, errHighB, labelB, savepath, title=None):
     plt.figure(figsize=(8, 6))
-    if showComparisonErrorBars:
-        fitErrLow = [g["bestFit"]["thresholdErrLow"] for g in groups]
-        fitErrHigh = [g["bestFit"]["thresholdErrHigh"] for g in groups]
-        altFitErrLow = [g["bestFit"]["altThresholdErrLow"] for g in groups]
-        altFitErrHigh = [g["bestFit"]["altThresholdErrHigh"] for g in groups]
-        plt.errorbar(seitzVals, fitVals, yerr=[fitErrLow, fitErrHigh],
-                     fmt='o', color="steelblue", ecolor="steelblue", capsize=4, label=label)
-        plt.errorbar(seitzVals, altFitVals, yerr=[altFitErrLow, altFitErrHigh],
-                     fmt='o', color="red", ecolor="red", capsize=4, label=altLabel)
-    else:
-        plt.plot(seitzVals, fitVals, 'o', color="steelblue", label=label)
-        plt.plot(seitzVals, altFitVals, 'o', color="red", label=altLabel)
+    plt.errorbar(seitzVals, fitValsA, yerr=[errLowA, errHighA],
+                 fmt='o', color="steelblue", ecolor="steelblue", capsize=4, label=labelA)
+    plt.errorbar(seitzVals, fitValsB, yerr=[errLowB, errHighB],
+                 fmt='o', color="red", ecolor="red", capsize=4, label=labelB)
     plt.axline((0, 0), slope=1, color='gray', linestyle='--', label="Fit = Seitz")
     plt.xlabel("Seitz Threshold [keV]", fontsize=16)
     plt.ylabel("Best Fit Threshold [keV]", fontsize=16)
+    if title:
+        plt.title(title, fontsize=14)
     plt.legend(fontsize=12)
     plt.tight_layout()
     plt.savefig(savepath)
     plt.close()
 
-if compareNormalizationModes:
-    plot_fit_to_seitz_ratio_comparison(groups, savepath=plot_path("fitToSeitzRatioCompare.png"))
+# pulls (threshold, thresholdErrLow, thresholdErrHigh) series out of a bestFit-shaped dict, for feeding plot_fit_to_seitz_ratio_comparison() above
+def fit_threshold_series(groups, bestFitKey, thresholdField="threshold",
+                          errLowField="thresholdErrLow", errHighField="thresholdErrHigh"):
+    return (
+        [g[bestFitKey][thresholdField] for g in groups],
+        [g[bestFitKey][errLowField] for g in groups],
+        [g[bestFitKey][errHighField] for g in groups],
+    )
 
 """
-SINLGE THRESHOLD RATES WITH AND WITHOUT THEORETICAL THRESHOLD
+SINGLE THRESHOLD RATES WITH AND WITHOUT THEORETICAL THRESHOLD
 """
 binLabels3 = ["1", "2", "3+"]
 binLabelsFull = ["1", "2", "3", "4", "5+"]
-
-zeroKevCountsRaw, _ = get_multiplicity_counts(0.0)
-zeroKevCountsRebinned = rebin(zeroKevCountsRaw)
-zeroKevRate3 = [normalizationFactor * c / sum(zeroKevCountsRebinned) for c in zeroKevCountsRebinned]
-zeroKevRatiosFull = counts_to_ratios(zeroKevCountsRaw)
 
 def plot_linhist(binLabels, binCounts, binCountError, backBins, backErrorLow, backErrorHigh,
                   backSubBins, backSubErrorLow, backSubErrorHigh, zeroKevRate, seitzRate, seitz,
@@ -950,127 +889,352 @@ def plot_linhist(binLabels, binCounts, binCountError, backBins, backErrorLow, ba
     plt.savefig(savepath)
     plt.close()
 
-for g in groups:
+"""
+FULL PER-SIDE PIPELINE -- Z distributions, chi2 fits, linhists, avg group. One function per stage; run_pipeline() at the bottom calls them in order, once per side.
+"""
+
+def plot_group_z_distributions(groups, outputDir):
+    for g in groups[:numLowestSeitzZDist]:
+        plot_z_distribution(
+            singleBubbleZByGroup.get((g["p"], g["T"]), []), backgroundSingleBubbleZ, g["seitz"],
+            savepath=output_path(outputDir, f"zDistributions/zdist{g['p']}{g['T']}.png"),
+            sourceLiveTime=g["liveTime"], backgroundLiveTime=backgroundLiveTimeMin,
+        )
+
+
+# fills every group's g["bestFit"] (normal, all-bins 1/2/3+ fit); if compareNormalizationModes is on, also fills g["bestFit"]["alt*"] for the side-by-side comparison plots only
+def fit_groups(groups, globalChi2NormFactor, simExcludedRegions):
+    for g in groups:
+        chi2Curve = [chi_squared_calc(g, threshold, globalChi2NormFactor, simExcludedRegions)
+                     for threshold in thresholdRange]
+        g["bestFit"] = compute_best_fit(g, chi2Curve, simExcludedRegions)
+
+        if compareNormalizationModes:
+            altChi2Curve = [chi_squared_calc(g, threshold, globalChi2NormFactor, simExcludedRegions,
+                                              useGlobalNorm=not useGlobalChi2Normalization)
+                             for threshold in thresholdRange]
+            altFit = compute_best_fit(g, altChi2Curve, simExcludedRegions)
+            g["bestFit"].update({
+                "altChi2Curve": altFit["chi2Curve"],
+                "altThreshold": altFit["threshold"],
+                "altThresholdErrLow": altFit["thresholdErrLow"],
+                "altThresholdErrHigh": altFit["thresholdErrHigh"],
+                "altChi2": altFit["chi2"],
+            })
+
+
+def plot_group_chi2_scans(groups, outputDir):
+    for g in groups:
+        plot_chi2_scan(
+            g["bestFit"]["thresholdRange"], g["bestFit"]["chi2Curve"],
+            g["bestFit"]["threshold"], g["bestFit"]["chi2"],
+            savepath=output_path(outputDir, f"chi2Scans/chi2scan{g['p']}{g['T']}.png"),
+        )
+        if compareNormalizationModes:
+            plot_chi2_scan_comparison(
+                g["bestFit"]["thresholdRange"], g["bestFit"]["chi2Curve"],
+                g["bestFit"]["threshold"], g["bestFit"]["chi2"], normalization_mode_label(useGlobalChi2Normalization),
+                g["bestFit"]["altChi2Curve"], g["bestFit"]["altThreshold"], g["bestFit"]["altChi2"],
+                normalization_mode_label(not useGlobalChi2Normalization),
+                savepath=output_path(outputDir, f"chi2Scans/chi2scanCompare{g['p']}{g['T']}.png"),
+            )
+
+
+# separate fitting path, drops the multiplicity==1 bin -- stored in g["bestFitNoSingles"], never touches g["bestFit"] from fit_groups() above
+def fit_groups_no_singles(groups, simExcludedRegions):
+    for g in groups:
+        chi2CurveNoSingles = [chi_squared_calc_no_singles(g, threshold, simExcludedRegions)
+                               for threshold in thresholdRange]
+        g["bestFitNoSingles"] = compute_best_fit(g, chi2CurveNoSingles, simExcludedRegions)
+
+
+def plot_group_no_singles_comparisons(groups, outputDir):
+    for g in groups:
+        plot_chi2_scan(
+            g["bestFitNoSingles"]["thresholdRange"], g["bestFitNoSingles"]["chi2Curve"],
+            g["bestFitNoSingles"]["threshold"], g["bestFitNoSingles"]["chi2"],
+            savepath=output_path(outputDir, f"chi2ScansNoSingles/chi2scanNoSingles{g['p']}{g['T']}.png"),
+        )
+        plot_chi2_scan_comparison(
+            g["bestFit"]["thresholdRange"], g["bestFit"]["chi2Curve"],
+            g["bestFit"]["threshold"], g["bestFit"]["chi2"], "All bins (1, 2, 3+)",
+            g["bestFitNoSingles"]["chi2Curve"], g["bestFitNoSingles"]["threshold"], g["bestFitNoSingles"]["chi2"],
+            "No singles (2, 3+ only)",
+            savepath=output_path(outputDir, f"chi2ScansNoSingles/chi2scanCompare{g['p']}{g['T']}.png"),
+        )
+
+    plot_fit_to_seitz_ratio(
+        groups, savepath=output_path(outputDir, "fitToSeitzRatioNoSingles.png"), bestFitKey="bestFitNoSingles"
+    )
+    plot_fit_to_seitz_ratio_comparison(
+        [g["seitz"] for g in groups],
+        *fit_threshold_series(groups, "bestFit"), "All bins (1, 2, 3+)",
+        *fit_threshold_series(groups, "bestFitNoSingles"), "No singles (2, 3+ only)",
+        savepath=output_path(outputDir, "fitToSeitzRatioCompareSingles.png"),
+    )
+
+
+# 0keV reference-line shape (no energy cut at all), rebinned and full versions -- each linhist scales this to its own group's total, since on its own it's tied to no particular normalization
+def compute_zero_kev_reference(simExcludedRegions):
+    zeroKevCountsRaw, _ = get_multiplicity_counts(0.0, excludedRegionsOverride=simExcludedRegions)
+    zeroKevRatiosRebinned = counts_to_ratios(rebin(zeroKevCountsRaw))
+    zeroKevRatiosFull = counts_to_ratios(zeroKevCountsRaw)
+    return zeroKevRatiosRebinned, zeroKevRatiosFull
+
+
+# builds the positional args plot_linhist() expects for one group, respecting useRebinnedThresholdPlots -- shared by plot_group_linhists() and fit_seitz_multiplier()'s linHistsA plots
+def build_linhist_args(g, zeroKevRatiosRebinned, zeroKevRatiosFull):
     if useRebinnedThresholdPlots:
-        linhistArgs = (
+        # 0keV reference scaled to this group's own observed total, same as the full/non-rebinned branch below
+        zeroKevRate3 = seitz_count(zeroKevRatiosRebinned, sum(g["backSub"]))
+        return (
             binLabels3, rebin(g["binCounts"]), rebin_errors(g["binCountError"]),
             rebin(g["backBins"]), rebin_errors(g["backErrorLow"]), rebin_errors(g["backErrorHigh"]),
             g["backSub"], g["errLow"], g["errHigh"],
             zeroKevRate3, g["seitzRate"], g["seitz"],
         )
-        bestFitRate = g["bestFit"]["rate"]
-    else:
-        total = sum(g["backSubFull"])
-        linhistArgs = (
-            binLabelsFull, g["binCounts"], g["binCountError"], g["backBins"], g["backErrorLow"], g["backErrorHigh"],
-            g["backSubFull"], g["backSubErrorLowFull"], g["backSubErrorHighFull"],
-            seitz_count(zeroKevRatiosFull, total), seitz_count(counts_to_ratios(g["seitzCountsFull"]), total), g["seitz"],
-        )
-        bestFitRate = g["bestFit"]["rateFull"]
-
-    # one version without the chi-squared best-fit curve, one with it
-    plot_linhist(*linhistArgs, savepath=plot_path(f"linHists/linhist{g['p']}{g['T']}.png"))
-    plot_linhist(
-        *linhistArgs, savepath=plot_path(f"linHists/linhistFit{g['p']}{g['T']}.png"),
-        bestFitRate=bestFitRate, bestThreshold=g["bestFit"]["threshold"], bestChi2=g["bestFit"]["chi2"],
+    total = sum(g["backSubFull"])
+    return (
+        binLabelsFull, g["binCounts"], g["binCountError"], g["backBins"], g["backErrorLow"], g["backErrorHigh"],
+        g["backSubFull"], g["backSubErrorLowFull"], g["backSubErrorHighFull"],
+        seitz_count(zeroKevRatiosFull, total), seitz_count(counts_to_ratios(g["seitzCountsFull"]), total), g["seitz"],
     )
 
 
-"""
-AVERAGE THRESHOLD RATE WITH AND WITHOUT THEORETICAL THRESHOLD
-"""
-# bascially just redo everything but with all the data
-binCountsAvg, sourceTimeAvg = bin_multiplicities(
-    bubbleCount, sourceTimes, keep=lambda i, region: SOURCE_LABELS.get(region) not in excludedRegions
-)
-backBinsAvg, backErrorLowAvg, backErrorHighAvg, backSubBinsAvg, backSubErrorLowAvg, backSubErrorHighAvg, binCountErrorAvg = background_subtract(
-    binCountsAvg, sourceTimeAvg, backgroundBinCounts, backgroundTime
-)
+def plot_group_linhists(groups, zeroKevRatiosRebinned, zeroKevRatiosFull, outputDir):
+    for g in groups:
+        linhistArgs = build_linhist_args(g, zeroKevRatiosRebinned, zeroKevRatiosFull)
+        bestFitRate = g["bestFit"]["rate"] if useRebinnedThresholdPlots else g["bestFit"]["rateFull"]
 
-sourceTimeAvg /= 60
-binCountsAvg = [v / sourceTimeAvg for v in binCountsAvg]
-binCountErrorAvg = [v / sourceTimeAvg for v in binCountErrorAvg]
-backBinsAvg = [v / sourceTimeAvg for v in backBinsAvg]
-backErrorLowAvg = [v / sourceTimeAvg for v in backErrorLowAvg]
-backErrorHighAvg = [v / sourceTimeAvg for v in backErrorHighAvg]
-backSubBinsAvg = [v / sourceTimeAvg for v in backSubBinsAvg]
-backSubErrorLowAvg = [v / sourceTimeAvg for v in backSubErrorLowAvg]
-backSubErrorHighAvg = [v / sourceTimeAvg for v in backSubErrorHighAvg]
+        # one version without a best-fit curve, one with the normal (all-bins) fit, one with the no-singles (2, 3+ only) fit
+        plot_linhist(*linhistArgs, savepath=output_path(outputDir, f"linHists/linhist{g['p']}{g['T']}.png"))
+        plot_linhist(
+            *linhistArgs, savepath=output_path(outputDir, f"linHists/linhistFit{g['p']}{g['T']}.png"),
+            bestFitRate=bestFitRate, bestThreshold=g["bestFit"]["threshold"], bestChi2=g["bestFit"]["chi2"],
+        )
+        if computeNoSinglesFit:
+            bestFitRateNoSingles = g["bestFitNoSingles"]["rate"] if useRebinnedThresholdPlots else g["bestFitNoSingles"]["rateFull"]
+            plot_linhist(
+                *linhistArgs, savepath=output_path(outputDir, f"linHists/linhistFitNoSingles{g['p']}{g['T']}.png"),
+                bestFitRate=bestFitRateNoSingles, bestThreshold=g["bestFitNoSingles"]["threshold"],
+                bestChi2=g["bestFitNoSingles"]["chi2"],
+            )
 
-avgSeitz = np.mean([g["seitz"] for g in groups])
-avgSeitzCountsRaw, _ = get_multiplicity_counts(avgSeitz)
 
-avgGroup = {
-    "liveTime": sourceTimeAvg,
-    "backSub": rebin(backSubBinsAvg),
-    "errLow": rebin_errors(backSubErrorLowAvg),
-    "errHigh": rebin_errors(backSubErrorHighAvg),
-    "backSubFull": backSubBinsAvg,
-    "backSubErrorLowFull": backSubErrorLowAvg,
-    "backSubErrorHighFull": backSubErrorHighAvg,
-}
-avgChi2Curve = [chi_squared_calc(avgGroup, threshold) for threshold in thresholdRange]
-avgBestIdx = int(np.argmin(avgChi2Curve))
-avgBestThreshold = thresholdRange[avgBestIdx]
-avgBestFitRatios = counts_to_ratios(get_multiplicity_counts(avgBestThreshold)[0])
-avgBestFitRateFull = seitz_count(avgBestFitRatios, sum(backSubBinsAvg))
+# the "average across every (p,T) group" version of the pipeline above: one combined rate group, one normal fit, one no-singles fit, three linhist variants
+def run_avg_group_pipeline(groups, globalChi2NormFactor, simExcludedRegions, positionDomeFlags,
+                            zeroKevRatiosRebinned, zeroKevRatiosFull, outputDir):
+    is_region_excluded = make_is_region_excluded(positionDomeFlags)
+    avgRateGroup = compute_rate_group(keep=lambda i, region: not is_region_excluded(i, region))
+    avgGroup = {
+        **avgRateGroup,
+        "backSub": rebin(avgRateGroup["backSubFull"]),
+        "errLow": rebin_errors(avgRateGroup["backSubErrorLowFull"]),
+        "errHigh": rebin_errors(avgRateGroup["backSubErrorHighFull"]),
+    }
 
-avgBestFit = {
-    "thresholdRange": thresholdRange,
-    "chi2Curve": avgChi2Curve,
-    "threshold": avgBestThreshold,
-    "chi2": avgChi2Curve[avgBestIdx],
-    "rate": rebin(avgBestFitRateFull),
-    "rateFull": avgBestFitRateFull,
-}
+    avgSeitz = np.mean([g["seitz"] for g in groups])
+    avgSeitzCountsRaw, _ = get_multiplicity_counts(avgSeitz, excludedRegionsOverride=simExcludedRegions)
 
-if compareNormalizationModes:
-    avgAltChi2Curve = [chi_squared_calc(avgGroup, threshold, useGlobalNorm=not useGlobalChi2Normalization)
-                        for threshold in thresholdRange]
-    avgAltBestIdx = int(np.argmin(avgAltChi2Curve))
-    avgAltBestThreshold = thresholdRange[avgAltBestIdx]
-    avgBestFit.update({
-        "altChi2Curve": avgAltChi2Curve,
-        "altThreshold": avgAltBestThreshold,
-        "altChi2": avgAltChi2Curve[avgAltBestIdx],
-    })
+    avgChi2Curve = [chi_squared_calc(avgGroup, threshold, globalChi2NormFactor, simExcludedRegions)
+                     for threshold in thresholdRange]
+    avgBestFit = compute_best_fit(avgGroup, avgChi2Curve, simExcludedRegions)
 
-plot_chi2_scan(
-    avgBestFit["thresholdRange"], avgBestFit["chi2Curve"],
-    avgBestFit["threshold"], avgBestFit["chi2"],
-    savepath=plot_path("chi2scanAvg.png"),
-)
-if compareNormalizationModes:
-    plot_chi2_scan_comparison(
+    if compareNormalizationModes:
+        avgAltChi2Curve = [chi_squared_calc(avgGroup, threshold, globalChi2NormFactor, simExcludedRegions,
+                                             useGlobalNorm=not useGlobalChi2Normalization)
+                            for threshold in thresholdRange]
+        avgAltFit = compute_best_fit(avgGroup, avgAltChi2Curve, simExcludedRegions)
+        avgBestFit.update({
+            "altChi2Curve": avgAltFit["chi2Curve"],
+            "altThreshold": avgAltFit["threshold"],
+            "altChi2": avgAltFit["chi2"],
+        })
+
+    if computeNoSinglesFit:
+        # separate no-singles fit for the avg group, same as fit_groups_no_singles() above
+        avgChi2CurveNoSingles = [chi_squared_calc_no_singles(avgGroup, threshold, simExcludedRegions)
+                                  for threshold in thresholdRange]
+        avgBestFitNoSingles = compute_best_fit(avgGroup, avgChi2CurveNoSingles, simExcludedRegions)
+
+        plot_chi2_scan(
+            avgBestFitNoSingles["thresholdRange"], avgBestFitNoSingles["chi2Curve"],
+            avgBestFitNoSingles["threshold"], avgBestFitNoSingles["chi2"],
+            savepath=output_path(outputDir, "chi2scanAvgNoSingles.png"),
+        )
+        plot_chi2_scan_comparison(
+            avgBestFit["thresholdRange"], avgBestFit["chi2Curve"],
+            avgBestFit["threshold"], avgBestFit["chi2"], "All bins (1, 2, 3+)",
+            avgBestFitNoSingles["chi2Curve"], avgBestFitNoSingles["threshold"], avgBestFitNoSingles["chi2"],
+            "No singles (2, 3+ only)",
+            savepath=output_path(outputDir, "chi2scanAvgCompareSingles.png"),
+        )
+
+    plot_chi2_scan(
         avgBestFit["thresholdRange"], avgBestFit["chi2Curve"],
         avgBestFit["threshold"], avgBestFit["chi2"],
-        avgBestFit["altChi2Curve"], avgBestFit["altThreshold"], avgBestFit["altChi2"],
-        savepath=plot_path("chi2scanCompareAvg.png"),
+        savepath=output_path(outputDir, "chi2scanAvg.png"),
     )
+    if compareNormalizationModes:
+        plot_chi2_scan_comparison(
+            avgBestFit["thresholdRange"], avgBestFit["chi2Curve"],
+            avgBestFit["threshold"], avgBestFit["chi2"], normalization_mode_label(useGlobalChi2Normalization),
+            avgBestFit["altChi2Curve"], avgBestFit["altThreshold"], avgBestFit["altChi2"],
+            normalization_mode_label(not useGlobalChi2Normalization),
+            savepath=output_path(outputDir, "chi2scanCompareAvg.png"),
+        )
 
-if useRebinnedThresholdPlots:
-    avgSeitzCountsRebinned = rebin(avgSeitzCountsRaw)
-    avgSeitzRate = [normalizationFactor * c / sum(avgSeitzCountsRebinned) for c in avgSeitzCountsRebinned]
-    avgLinhistArgs = (
-        binLabels3, rebin(binCountsAvg), rebin_errors(binCountErrorAvg),
-        rebin(backBinsAvg), rebin_errors(backErrorLowAvg), rebin_errors(backErrorHighAvg),
-        rebin(backSubBinsAvg), rebin_errors(backSubErrorLowAvg), rebin_errors(backSubErrorHighAvg),
-        zeroKevRate3, avgSeitzRate, avgSeitz,
-    )
-    avgBestFitRate = avgBestFit["rate"]
-else:
-    totalAvg = sum(backSubBinsAvg)
-    avgSeitzRatiosFull = counts_to_ratios(avgSeitzCountsRaw)
-    avgLinhistArgs = (
-        binLabelsFull, binCountsAvg, binCountErrorAvg, backBinsAvg, backErrorLowAvg, backErrorHighAvg,
-        backSubBinsAvg, backSubErrorLowAvg, backSubErrorHighAvg,
-        seitz_count(zeroKevRatiosFull, totalAvg), seitz_count(avgSeitzRatiosFull, totalAvg), avgSeitz,
-    )
-    avgBestFitRate = avgBestFit["rateFull"]
+    if useRebinnedThresholdPlots:
+        avgSeitzCountsRebinned = rebin(avgSeitzCountsRaw)
+        # same per-total scaling as plot_group_linhists() above -- normalizationFactor isn't reliable here since avgSeitz usually falls outside the thresholds it was calibrated on
+        avgSeitzRate = seitz_count(counts_to_ratios(avgSeitzCountsRebinned), sum(avgGroup["backSub"]))
+        avgZeroKevRate3 = seitz_count(zeroKevRatiosRebinned, sum(avgGroup["backSub"]))
+        avgLinhistArgs = (
+            binLabels3, rebin(avgGroup["binCounts"]), rebin_errors(avgGroup["binCountError"]),
+            rebin(avgGroup["backBins"]), rebin_errors(avgGroup["backErrorLow"]), rebin_errors(avgGroup["backErrorHigh"]),
+            avgGroup["backSub"], avgGroup["errLow"], avgGroup["errHigh"],
+            avgZeroKevRate3, avgSeitzRate, avgSeitz,
+        )
+        avgBestFitRate = avgBestFit["rate"]
+    else:
+        totalAvg = sum(avgGroup["backSubFull"])
+        avgSeitzRatiosFull = counts_to_ratios(avgSeitzCountsRaw)
+        avgLinhistArgs = (
+            binLabelsFull, avgGroup["binCounts"], avgGroup["binCountError"], avgGroup["backBins"],
+            avgGroup["backErrorLow"], avgGroup["backErrorHigh"],
+            avgGroup["backSubFull"], avgGroup["backSubErrorLowFull"], avgGroup["backSubErrorHighFull"],
+            seitz_count(zeroKevRatiosFull, totalAvg), seitz_count(avgSeitzRatiosFull, totalAvg), avgSeitz,
+        )
+        avgBestFitRate = avgBestFit["rateFull"]
 
-# one version without the chi-squared best-fit curve, one with it
-plot_linhist(*avgLinhistArgs, savepath=plot_path("avgseitz.png"))
-plot_linhist(
-    *avgLinhistArgs, savepath=plot_path("avgseitzFit.png"),
-    bestFitRate=avgBestFitRate, bestThreshold=avgBestFit["threshold"], bestChi2=avgBestFit["chi2"],
+    # one version without a best-fit curve, one with the normal (all-bins) fit, one with the no-singles (2, 3+ only) fit
+    plot_linhist(*avgLinhistArgs, savepath=output_path(outputDir, "avgseitz.png"))
+    plot_linhist(
+        *avgLinhistArgs, savepath=output_path(outputDir, "avgseitzFit.png"),
+        bestFitRate=avgBestFitRate, bestThreshold=avgBestFit["threshold"], bestChi2=avgBestFit["chi2"],
+    )
+    if computeNoSinglesFit:
+        avgBestFitRateNoSingles = avgBestFitNoSingles["rate"] if useRebinnedThresholdPlots else avgBestFitNoSingles["rateFull"]
+        plot_linhist(
+            *avgLinhistArgs, savepath=output_path(outputDir, "avgseitzFitNoSingles.png"),
+            bestFitRate=avgBestFitRateNoSingles, bestThreshold=avgBestFitNoSingles["threshold"],
+            bestChi2=avgBestFitNoSingles["chi2"],
+        )
+
+
+def run_pipeline(groups, normalizationFactor, simExcludedRegions, positionDomeFlags, outputDir):
+    plot_group_z_distributions(groups, outputDir)
+
+    globalChi2NormFactor = global_normalization_factor(groups)
+    fit_groups(groups, globalChi2NormFactor, simExcludedRegions)
+    plot_group_chi2_scans(groups, outputDir)
+
+    plot_fit_to_seitz_ratio(groups, savepath=output_path(outputDir, "fitToSeitzRatio.png"))
+    if compareNormalizationModes:
+        plot_fit_to_seitz_ratio_comparison(
+            [g["seitz"] for g in groups],
+            *fit_threshold_series(groups, "bestFit"), normalization_mode_label(useGlobalChi2Normalization),
+            *fit_threshold_series(groups, "bestFit", "altThreshold", "altThresholdErrLow", "altThresholdErrHigh"),
+            normalization_mode_label(not useGlobalChi2Normalization),
+            savepath=output_path(outputDir, "fitToSeitzRatioCompare.png"),
+        )
+
+    if computeNoSinglesFit:
+        fit_groups_no_singles(groups, simExcludedRegions)
+        plot_group_no_singles_comparisons(groups, outputDir)
+
+    zeroKevRatiosRebinned, zeroKevRatiosFull = compute_zero_kev_reference(simExcludedRegions)
+    plot_group_linhists(groups, zeroKevRatiosRebinned, zeroKevRatiosFull, outputDir)
+
+    run_avg_group_pipeline(groups, globalChi2NormFactor, simExcludedRegions, positionDomeFlags,
+                            zeroKevRatiosRebinned, zeroKevRatiosFull, outputDir)
+
+
+# total chi2 across every group when every group is fit against threshold = A * g["seitz"], for one shared A instead of a separate best-fit threshold per group
+def chi_squared_calc_seitz_multiplier(groups, A, globalChi2NormFactor, simExcludedRegions):
+    return sum(chi_squared_calc(g, A * g["seitz"], globalChi2NormFactor, simExcludedRegions) for g in groups)
+
+
+# single-parameter fit: scans A over seitzMultiplierRange, picks the A minimizing the combined chi2 across every (p,T) group at once, then reports it per group as threshold = A * g["seitz"] (stored in g["bestFitA"], alongside g["bestFit"]/g["bestFitNoSingles"]). Run once per side, after run_pipeline(). All plots land in outputDir/linHistsA/
+def fit_seitz_multiplier(groups, simExcludedRegions, outputDir):
+    globalChi2NormFactor = global_normalization_factor(groups)
+    chi2Curve = [chi_squared_calc_seitz_multiplier(groups, A, globalChi2NormFactor, simExcludedRegions)
+                 for A in seitzMultiplierRange]
+    bestIdx = int(np.argmin(chi2Curve))
+    bestA = seitzMultiplierRange[bestIdx]
+    lowA, highA = chi2_confidence_interval(seitzMultiplierRange, chi2Curve, bestIdx)
+    bestChi2 = chi2Curve[bestIdx]
+    AErrLow, AErrHigh = bestA - lowA, highA - bestA
+
+    plot_chi2_scan(
+        seitzMultiplierRange, chi2Curve, bestA, bestChi2,
+        savepath=output_path(outputDir, "chi2scanSeitzMultiplier.png"),
+        xlabel="Seitz threshold multiplier A",
+        bestLabel=f"Best fit: A = {bestA:0.3f} (" + r"$\chi^2$" + f"={bestChi2:0.2f})",
+    )
+    print(f"[{outputDir}] best-fit Seitz threshold multiplier: A = {bestA:0.3f} "
+          f"(+{AErrHigh:0.3f}/-{AErrLow:0.3f}), chi2 = {bestChi2:0.2f}")
+
+    # per-group threshold = A * seitz, with its own chi2 and A's uncertainty propagated multiplicatively
+    for g in groups:
+        threshold = bestA * g["seitz"]
+        groupChi2 = chi_squared_calc(g, threshold, globalChi2NormFactor, simExcludedRegions)
+        g["bestFitA"] = build_fit_result(
+            g, threshold, groupChi2, simExcludedRegions,
+            thresholdErrLow=AErrLow * g["seitz"], thresholdErrHigh=AErrHigh * g["seitz"],
+        )
+
+    # same trio of plots the normal fit gets (per-group chi2 scan, fit-vs-seitz scatter, linhist with the fit overlaid), all under linHistsA/
+    plot_fit_to_seitz_ratio(groups, savepath=output_path(outputDir, "linHistsA/fitToSeitzRatioA.png"), bestFitKey="bestFitA")
+
+    zeroKevRatiosRebinned, zeroKevRatiosFull = compute_zero_kev_reference(simExcludedRegions)
+    for g in groups:
+        plot_chi2_scan(
+            g["bestFit"]["thresholdRange"], g["bestFit"]["chi2Curve"],
+            g["bestFitA"]["threshold"], g["bestFitA"]["chi2"],
+            savepath=output_path(outputDir, f"linHistsA/chi2scanA{g['p']}{g['T']}.png"),
+            bestLabel=f"A * Seitz fit: {g['bestFitA']['threshold']:0.2f} keV (" + r"$\chi^2$" + f"={g['bestFitA']['chi2']:0.2f})",
+        )
+
+        linhistArgs = build_linhist_args(g, zeroKevRatiosRebinned, zeroKevRatiosFull)
+        bestFitRateA = g["bestFitA"]["rate"] if useRebinnedThresholdPlots else g["bestFitA"]["rateFull"]
+        plot_linhist(
+            *linhistArgs, savepath=output_path(outputDir, f"linHistsA/linhistFitA{g['p']}{g['T']}.png"),
+            bestFitRate=bestFitRateA, bestThreshold=g["bestFitA"]["threshold"], bestChi2=g["bestFitA"]["chi2"],
+        )
+
+    return {
+        "aRange": seitzMultiplierRange,
+        "chi2Curve": chi2Curve,
+        "A": bestA,
+        "AErrLow": AErrLow,
+        "AErrHigh": AErrHigh,
+        "chi2": bestChi2,
+    }
+
+
+run_pipeline(groupsWithoutDomeCut, normalizationFactorWithoutDomeCut, [], positionDomeFlagsPre, "withoutDomeCut")
+run_pipeline(groupsWithDomeCut, normalizationFactorWithDomeCut, ["dome"], positionDomeFlagsPost, "withDomeCut")
+
+# dome cut vs no dome cut, normal (all-bins, 1/2/3+) fit -- needs both run_pipeline() calls above to have already populated g["bestFit"]
+plot_fit_to_seitz_ratio_comparison(
+    [g["seitz"] for g in groupsWithDomeCut],
+    *fit_threshold_series(groupsWithDomeCut, "bestFit"), "Dome cut",
+    *fit_threshold_series(groupsWithoutDomeCut, "bestFit"), "No dome cut",
+    savepath=output_path("comparison", "fitToSeitzRatioDomeCutCompare.png"),
+    title="All bins (1, 2, 3+) fit",
 )
+
+# same comparison, broken out per (p,T) group as chi2-vs-threshold scans
+for gWithCut, gWithoutCut in zip(groupsWithDomeCut, groupsWithoutDomeCut):
+    plot_chi2_scan_comparison(
+        gWithCut["bestFit"]["thresholdRange"], gWithCut["bestFit"]["chi2Curve"],
+        gWithCut["bestFit"]["threshold"], gWithCut["bestFit"]["chi2"], "Dome cut",
+        gWithoutCut["bestFit"]["chi2Curve"], gWithoutCut["bestFit"]["threshold"], gWithoutCut["bestFit"]["chi2"],
+        "No dome cut",
+        savepath=output_path("comparison", f"chi2Scans/chi2scanDomeCutCompare{gWithCut['p']}{gWithCut['T']}.png"),
+    )
+
+# single-A "threshold = A * seitz" fit, run last: once for pre-cut (withoutDomeCut), once for post-cut (withDomeCut)
+fit_seitz_multiplier(groupsWithoutDomeCut, [], "withoutDomeCut")
+fit_seitz_multiplier(groupsWithDomeCut, ["dome"], "withDomeCut")
