@@ -564,7 +564,7 @@ def plot_combined_multiplicity_comparison(groupsWithCut, groupsWithoutCut, savep
 
 # same grid-of-thresholds layout as plot_combined_multiplicity_comparison() above, but a single
 # series (no cut/no-cut pairing) -- pulls the standalone data for just one side out on its own
-def plot_combined_multiplicity_single(groups, savepath, title, negLnLByGroup, groupsPerRow=4):
+def plot_combined_multiplicity_single(groups, savepath, negLnLByGroup, groupsPerRow=4):
     binLabels = ["1", "2", "3+"]
     numBins = 3
     barWidth = 1.0
@@ -611,15 +611,14 @@ def plot_combined_multiplicity_single(groups, savepath, title, negLnLByGroup, gr
 
     totalNegLnL = sum(negLnLByGroup)
     totalBins = len(groups) * numBins
-    fig.suptitle(r'$-2\Delta\ln L$' + f' summed over all thresholds = {totalNegLnL:0.1f}  (N = {totalBins} bins)',
-                 fontsize=11, y=0.995)
+    statText = r'$-2\Delta\ln\mathcal{L}$/n.d.o.f.: ' + f'{totalNegLnL:0.1f}/({totalBins} - 1)'
 
     axes[0].set_title(r'$Q_{seitz}$ [keV]', loc='left', fontsize=16, pad=2)
-    axes[0].set_title(title, loc='right', fontsize=11, pad=2)
     axes[nRows // 2].set_ylabel("Rate [count/min]", fontsize=16)
+    axes[-1].text(0.99, 0.80, statText, transform=axes[-1].transAxes, ha='right', va='top', fontsize=10)
     axes[-1].set_xlabel("Bubble Multiplicity", fontsize=12, labelpad=28)
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.15, top=1 - 0.35 / (3.2 * nRows))
+    fig.subplots_adjust(hspace=0.15)
     fig.savefig(savepath)
     plt.close(fig)
 
@@ -1058,7 +1057,6 @@ no fitting) vs data, per group, for the standalone (single-series) plots skipped
 """
 plot_combined_multiplicity_single(
     groupsWithDomeCut, savepath=output_path("comparison", "combinedMultiplicityWithDomeCut.png"),
-    title=r'$^{252}$Cf: dome cut',
     negLnLByGroup=[
         neg_ln_l_calc(g, g["seitz"], global_normalization_factor(groupsWithDomeCut), ["dome"])
         for g in groupsWithDomeCut
@@ -1066,7 +1064,6 @@ plot_combined_multiplicity_single(
 )
 plot_combined_multiplicity_single(
     groupsWithoutDomeCut, savepath=output_path("comparison", "combinedMultiplicityWithoutDomeCut.png"),
-    title=r'$^{252}$Cf: no dome cut',
     negLnLByGroup=[
         neg_ln_l_calc(g, g["seitz"], global_normalization_factor(groupsWithoutDomeCut), [])
         for g in groupsWithoutDomeCut
@@ -1074,7 +1071,6 @@ plot_combined_multiplicity_single(
 )
 plot_combined_multiplicity_single(
     groupsNoCutAtAll, savepath=output_path("comparison", "combinedMultiplicityNoCutAtAll.png"),
-    title=r'$^{252}$Cf: no cut at all',
     negLnLByGroup=[
         neg_ln_l_calc(g, g["seitz"], global_normalization_factor(groupsNoCutAtAll), [])
         for g in groupsNoCutAtAll
