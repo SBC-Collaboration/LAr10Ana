@@ -3,6 +3,7 @@
 ## Quick A/B comparison copy, not meant to replace neutronExcluded.py -- writes to its own PLOTS_ROOT
 ## so it never overwrites the main pipeline's output.
 ## dome exclusion: same rate/threshold-fit pipeline as neutronPlotting.py, but the sim and real sides both drop dome-region hits, gated by excludedRegions below
+import atexit
 import glob
 import os
 import sys
@@ -27,19 +28,29 @@ DOME_Z_THRESHOLD_CM = -3
 
 SIM_DOME_Z_THRESHOLD_MM = 591
 
-# withoutDomeCut/withDomeCut pipeline (build_groups()/run_pipeline()): PRE is the always-applied loose baseline, POST adds the full dome cut on top -- independent of DOME_Z_THRESHOLD_CM above
+# drip cut then dome cut
 DOME_Z_THRESHOLD_CM_PRE = 6
 DOME_Z_THRESHOLD_CM_POST = -3
 
 
-# everything lands under one "plots" root: plotsLivetimeNorm/withoutDomeCut/, plotsLivetimeNorm/withDomeCut/, plotsLivetimeNorm/comparison/
-PLOTS_ROOT = "plotsLivetimeNorm"
+PLOTS_ROOT = "plots"
 
 
 def output_path(outputDir, filename):
     path = os.path.join(PLOTS_ROOT, outputDir, filename)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     return path
+
+
+# every chi_squared_diagnostic(debug=True) line goes here instead of the console; opened on the first write, truncated once per run
+chi2DebugFile = None
+
+def chi2_debug(line):
+    global chi2DebugFile
+    if chi2DebugFile is None:
+        chi2DebugFile = open(output_path("comparison", "chi2Debug.txt"), "w")
+        atexit.register(chi2DebugFile.close)
+    chi2DebugFile.write(line + "\n")
 
 
 # excluded if the handscanner labeled it dome, or its precomputed position flag says it's past whichever dome-cut threshold is in play
@@ -136,6 +147,13 @@ useConfigB = True
 
 neutronRuns = (neutronRunsWarmB + neutronRunsColdB + neutronRunsHotB) if useConfigB \
     else (neutronRunsWarm + neutronRunsCold + neutronRunsHot)
+
+## 119.6K runs, source and background alike -- run strings are full "date_run" (e.g. "20260205_12"), same form as the run column in the handscan files
+hotRuns = neutronRunsHot + neutronRunsHotB + backgroundRunsHot
+
+# nominal temperature in K of the run a given event came from
+def run_temperature(run):
+    return 119.6 if run in hotRuns else 116.7
 
 ## real-data region exclusion (scan_source codes); "dome" also gates the sim Z cut above
 # scan_source code -> label, same mapping as combine_handscans.py / EventDisplay
@@ -246,47 +264,69 @@ def load_single_bubble_positions(runList, label="real data", applyDomeExclusion=
             if applyDomeExclusion:
                 continue
         positions.append((run, ev, float(coord[0]), float(coord[1]), float(coord[2])))
-    totalExcluded = regionExcludedCount + zExcludedCount
-    verb = "excluded" if applyDomeExclusion else "flagged (not excluded, kept in output)"
-    print(f"[{label}] {totalExcluded} single-bubble events {verb} "
-          f"({regionExcludedCount} by region label, {zExcludedCount} by reco Z)")
     return positions
 
 
-# total background bin counts (multiplicity 1,2,3,4,5+) and live time
+# (pset_lo, pset_hi, temp) for one event, read from its run's event.sbc
+def _event_pset_temp(run, ev, evDataCache):
+    if run not in evDataCache:
+        evPath = os.path.join(RECON_DIR, run, "event.sbc")
+        evDataCache[run] = Streamer(evPath).to_dict() if os.path.exists(evPath) else None
+    evData = evDataCache[run]
+    if evData is None:
+        return None
+    for i in range(len(evData["ev"])):
+        if int(evData["ev"][i]) == int(ev):
+            return float(evData["pset_lo"][i]), float(evData["pset_hi"][i]), run_temperature(run)
+    return None
+
+
+# background bin counts (multiplicity 1,2,3,4,5+) and live time, split by the (pressure, temperature) each event was taken at,
+# so every source group is subtracted with background from its own operating point. Returns {(p, T): (binCounts, liveTime)};
+# background events without a fixed setpoint belong to no group and are dropped, same rule pToUse applies to the source side
 def load_background():
     subdirs = {os.path.basename(p.rstrip(os.sep)) for p in glob.glob(os.path.join(RECON_DIR, '*/'))}
-    binCounts = [0] * 5
-    liveTime = 0.0
+    byPT = {}
+    expDataCache, evDataCache = {}, {}
     for run, ev, mult, _ in iter_matched_events(HANDSCAN_DIR, backgroundList):
         if run not in subdirs:
             continue
-        expData = Streamer(os.path.join(RECON_DIR, run, 'exposure.sbc')).to_dict()
+        if run not in expDataCache:
+            expDataCache[run] = Streamer(os.path.join(RECON_DIR, run, 'exposure.sbc')).to_dict()
+        expData = expDataCache[run]
         for i in range(len(expData["ev"])):
             if int(expData["ev"][i]) == int(ev) and float(expData['PT2121_livetime'][i]) > 1:
-                if mult != 0:
-                    binCounts[min(mult, 5) - 1] += 1
-                liveTime += float(expData['PT2121_livetime'][i])
+                pset = _event_pset_temp(run, ev, evDataCache)
+                if pset is not None and pset[0] == pset[1]:
+                    binCounts, liveTime = byPT.setdefault((pset[0], pset[2]), ([0] * 5, 0.0))
+                    if mult != 0:
+                        binCounts[min(mult, 5) - 1] += 1
+                    byPT[(pset[0], pset[2])] = (binCounts, liveTime + float(expData['PT2121_livetime'][i]))
                 break
-    return binCounts, liveTime
+    return byPT
 
 # (mult, region) per neutron-run event, its live time, and its (pset_lo, pset_hi, temp)
 def load_neutron_events():
     bubbleCount, sourceTimes, psetsTemps, runEvs = [], [], [], []
+    expDataCache, evDataCache = {}, {}
     for run, ev, mult, region in iter_matched_events(HANDSCAN_DIR, neutronRuns):
-        bubbleCount.append((mult, region))
-        runEvs.append((run, ev))
-        expData = Streamer(f'{RECON_DIR}{run}/exposure.sbc').to_dict()
+        if run not in expDataCache:
+            expDataCache[run] = Streamer(f'{RECON_DIR}{run}/exposure.sbc').to_dict()
+        expData = expDataCache[run]
+        liveTime = None
         for i in range(len(expData["ev"])):
             if int(expData["ev"][i]) == int(ev):
-                sourceTimes.append(float(expData['PT2121_livetime'][i]))
+                liveTime = float(expData['PT2121_livetime'][i])
                 break
-        evData = Streamer(f'{RECON_DIR}{run}/event.sbc').to_dict()
-        for i in range(len(evData["ev"])):
-            if int(evData["ev"][i]) == int(ev):
-                temp = 119 if (run in neutronRunsHot) else 116
-                psetsTemps.append((evData["pset_lo"][i], evData["pset_hi"][i], temp))
-                break
+        pset = _event_pset_temp(run, ev, evDataCache)
+        # all four lists are indexed in parallel downstream, so an event the exposure or event file doesn't
+        # have goes in none of them -- appending to only some would shift every later event's livetime/(p, T)
+        if liveTime is None or pset is None:
+            continue
+        bubbleCount.append((mult, region))
+        runEvs.append((run, ev))
+        sourceTimes.append(liveTime)
+        psetsTemps.append(pset)
     return bubbleCount, sourceTimes, psetsTemps, runEvs
 
 
@@ -325,20 +365,26 @@ def bin_multiplicities(bubbleCount, sourceTimes, keep):
 
 # background-subtracted counts and their (asymmetric) errors, background scaled to sourceTime
 def background_subtract(binCounts, sourceTime, backgroundBinCounts, backgroundTime):
-    backBins = [b * sourceTime / backgroundTime for b in backgroundBinCounts]
-    backErrorLow = [np.sqrt(b) if b >= 1 else 0.0 for b in backBins]
-    # zero-background fallback: -log(1-0.68) is the 68%-CL upper-limit *count* for zero observed events
-    # over backgroundTime, so it needs the same sourceTime/backgroundTime scaling backBins uses above to
-    # become a count over sourceTime -- without it this was a rate (1/backgroundTime), not a count, and
-    # came out orders of magnitude too small whenever sourceTime << backgroundTime
-    backErrorHigh = [np.sqrt(b) if b >= 1 else -np.log(1 - 0.68) * sourceTime / backgroundTime for b in backBins]
-
+    scale = sourceTime / backgroundTime if backgroundTime > 0 else 0.0
+    backBins = [b * scale for b in backgroundBinCounts]
+    backErrorLow = [np.sqrt(b) * scale if b >= 1 else 0.0 for b in backgroundBinCounts]
+    backErrorHigh = [np.sqrt(b) * scale if b >= 1 else -np.log(1 - 0.68) * scale for b in backgroundBinCounts]
     binCountError = [np.sqrt(c) for c in binCounts]
     backSubBins = [c - b for c, b in zip(binCounts, backBins)]
     # background high -> subtracted rate pulled down; background low -> subtracted rate pulled up
     backSubErrorLow = [np.sqrt(countErr**2 + backErr**2) for countErr, backErr in zip(binCountError, backErrorHigh)]
     backSubErrorHigh = [np.sqrt(countErr**2 + backErr**2) for countErr, backErr in zip(binCountError, backErrorLow)]
     return backBins, backErrorLow, backErrorHigh, backSubBins, backSubErrorLow, backSubErrorHigh, binCountError
+
+
+# PLOTTING ONLY -- a negative rate is unphysical, so the drawn point sits at 0 with no lower error and an upper error
+# trimmed to the 68% upper edge the fluctuation actually allows. Deliberately NOT fed to the fits: flooring an observed
+# value pulls it toward the prediction, and the trimmed error becomes the chi2 denominator, so a deficit bin either
+# blows up or (once its upper edge reaches 0) drops out of the sum entirely. Statistics use the unfloored values below
+def floor_at_zero(values, errLow, errHigh):
+    flooredErrHigh = [max(v + e, 0.0) if v < 0 else e for v, e in zip(values, errHigh)]
+    flooredErrLow = [min(e, v) if v > 0 else 0.0 for v, e in zip(values, errLow)]
+    return [max(v, 0.0) for v in values], flooredErrLow, flooredErrHigh
 
 
 # collapse the 5 multiplicity classes (1,2,3,4,5+) into 3: [1, 2, 3+]
@@ -360,7 +406,18 @@ def seitz_count(ratios, total):
     return [scale * r for r in ratios]
 
 # load in data (excludedRegions-independent -- region filtering happens per-group below)
-backgroundBinCounts, backgroundTime = load_background()
+backgroundByPT = load_background()
+
+# background counts/live time for one (p, T), or summed over several for the all-groups-averaged pipeline
+def background_for(pTs):
+    binCounts = [0] * 5
+    liveTime = 0.0
+    for pt in pTs:
+        counts, t = backgroundByPT.get(pt, ([0] * 5, 0.0))
+        binCounts = [a + b for a, b in zip(binCounts, counts)]
+        liveTime += t
+    return binCounts, liveTime
+
 bubbleCount, sourceTimes, psetsTemps, neutronRunEvs = load_neutron_events()
 singleBubblePositions = load_single_bubble_positions(neutronRuns, label="source")
 
@@ -373,25 +430,37 @@ pToUse = sorted({(float(lo), float(t)) for lo, hi, t in psetsTemps if float(lo) 
 
 
 # bins events matching `keep`, background-subtracts, and converts to a rate in counts/minute -- shared core of both build_groups()'s per-(p,T) loop and the avg-group section
-def compute_rate_group(keep):
+def compute_rate_group(keep, backgroundPTs):
     binCounts, liveTimeSec = bin_multiplicities(bubbleCount, sourceTimes, keep)
+    backgroundBinCounts, backgroundTime = background_for(backgroundPTs)
     backBins, backErrorLow, backErrorHigh, backSubBins, backSubErrorLow, backSubErrorHigh, binCountError = \
         background_subtract(binCounts, liveTimeSec, backgroundBinCounts, backgroundTime)
+
+    flooredBins, flooredErrorLow, flooredErrorHigh = floor_at_zero(backSubBins, backSubErrorLow, backSubErrorHigh)
 
     liveTimeMin = liveTimeSec / 60
     toRate = lambda values: [v / liveTimeMin for v in values]
     return {
         "liveTime": liveTimeMin,
         "liveTimeSec": liveTimeSec,
+        # raw (un-scaled, un-rated) inputs to the subtraction, for the chi2 debug dump
         "binCountsRaw": binCounts,
+        "backCountsRaw": list(backgroundBinCounts),
+        "backgroundTimeSec": backgroundTime,
+        "backgroundScale": liveTimeSec / backgroundTime if backgroundTime > 0 else 0.0,
         "binCounts": toRate(binCounts),
         "binCountError": toRate(binCountError),
         "backBins": toRate(backBins),
         "backErrorLow": toRate(backErrorLow),
         "backErrorHigh": toRate(backErrorHigh),
-        "backSubFull": toRate(backSubBins),
-        "backSubErrorLowFull": toRate(backSubErrorLow),
-        "backSubErrorHighFull": toRate(backSubErrorHigh),
+        # plotted (floored at 0) ...
+        "backSubFull": toRate(flooredBins),
+        "backSubErrorLowFull": toRate(flooredErrorLow),
+        "backSubErrorHighFull": toRate(flooredErrorHigh),
+        # ... and the same rates as actually subtracted, which the fits and chi2 use
+        "backSubUnflooredFull": toRate(backSubBins),
+        "errLowUnflooredFull": toRate(backSubErrorLow),
+        "errHighUnflooredFull": toRate(backSubErrorHigh),
     }
 
 
@@ -403,7 +472,8 @@ def build_groups(simExcludedRegions, positionDomeFlags):
     for p, T in pToUse:
         rateGroup = compute_rate_group(
             keep=lambda i, region, p=p, T=T: not is_region_excluded(i, region)
-                                              and psetsTemps[i][0] == p and psetsTemps[i][2] == T
+                                              and psetsTemps[i][0] == p and psetsTemps[i][2] == T,
+            backgroundPTs=[(p, T)],
         )
 
         # seitz threshold for this (P,T) pair, fed straight into the dome-excluded Cf sim counts
@@ -417,6 +487,9 @@ def build_groups(simExcludedRegions, positionDomeFlags):
             "backSub": rebin(rateGroup["backSubFull"]),
             "errLow": rebin_errors(rateGroup["backSubErrorLowFull"]),
             "errHigh": rebin_errors(rateGroup["backSubErrorHighFull"]),
+            "backSubUnfloored": rebin(rateGroup["backSubUnflooredFull"]),
+            "errLowUnfloored": rebin_errors(rateGroup["errLowUnflooredFull"]),
+            "errHighUnfloored": rebin_errors(rateGroup["errHighUnflooredFull"]),
             "seitzRate": rebin(seitzCounts),
             "seitzCounts": rebin(seitzCounts),
             "bestFit": {},
@@ -429,7 +502,7 @@ def build_groups(simExcludedRegions, positionDomeFlags):
     # scale sim-predicted counts to match observed data rates, weighted by each group's own livetime
     # instead of a plain mean -- N = sum_i(T_i * ratio_i) / sum_i(T_i), so groups with more exposure
     # (and thus a more reliable data/sim ratio) pull the shared factor harder than short, noisy ones
-    observedRatesByGroup = [g["backSub"] for g in groups]
+    observedRatesByGroup = [g["backSubUnfloored"] for g in groups]
     simCountsByGroup = [g["seitzCounts"] for g in groups]
     liveTimeByGroup = [g["liveTime"] for g in groups]
     ratioByGroup = [
@@ -462,7 +535,7 @@ def write_rates_txt(groupsPre, groupsPost, savepath):
         f.write("data = background-subtracted real rate, sim = Seitz/sim-predicted rate\n")
         f.write("=" * 78 + "\n\n")
         for gPre, gPost in zip(groupsPre, groupsPost):
-            f.write(f"Seitz = {gPre['seitz']:0.2f} keV  (P = {gPre['p']:0.2f} bar, T = {gPre['T']:0.0f} K)\n")
+            f.write(f"Seitz = {gPre['seitz']:0.2f} keV  (P = {gPre['p']:0.2f} bar, T = {gPre['T']:0.1f} K)\n")
             f.write(f"  Pre-cut  (Z > {DOME_Z_THRESHOLD_CM_PRE}cm, sim off):  livetime = {gPre['liveTime']:0.2f} min\n")
             for label, rate, errLow, errHigh, simRate in zip(
                     binLabels, gPre["backSub"], gPre["errLow"], gPre["errHigh"], gPre["seitzRate"]):
@@ -472,7 +545,6 @@ def write_rates_txt(groupsPre, groupsPost, savepath):
                     binLabels, gPost["backSub"], gPost["errLow"], gPost["errHigh"], gPost["seitzRate"]):
                 f.write(f"    mult {label:<3}: data = {rate:0.4f} (+{errHigh:0.4f}/-{errLow:0.4f})   sim = {simRate:0.4f}\n")
             f.write("\n")
-    print(f"wrote pre/post-cut rates to {savepath}")
 
 write_rates_txt(groupsWithoutDomeCut, groupsWithDomeCut, savepath=output_path("comparison", "ratesPrePostCut.txt"))
 
@@ -564,7 +636,8 @@ def plot_combined_multiplicity_comparison(groupsWithCut, groupsWithoutCut, savep
 
 # same grid-of-thresholds layout as plot_combined_multiplicity_comparison() above, but a single
 # series (no cut/no-cut pairing) -- pulls the standalone data for just one side out on its own
-def plot_combined_multiplicity_single(groups, savepath, negLnLByGroup, groupsPerRow=4):
+def plot_combined_multiplicity_single(groups, savepath, negLnLByGroup, chi2ByGroup, sourceLabel,
+                                       groupsPerRow=4, showPerGroupStats=False):
     binLabels = ["1", "2", "3+"]
     numBins = 3
     barWidth = 1.0
@@ -584,6 +657,7 @@ def plot_combined_multiplicity_single(groups, savepath, negLnLByGroup, groupsPer
         trans = ax.get_xaxis_transform()
         rowGroups = groups[rowIdx * groupsPerRow:(rowIdx + 1) * groupsPerRow]
 
+        rowIdx0 = rowIdx * groupsPerRow
         pos = 0
         for gi, g in enumerate(rowGroups):
             xs = np.arange(pos, pos + numBins)
@@ -598,6 +672,13 @@ def plot_combined_multiplicity_single(groups, savepath, negLnLByGroup, groupsPer
             center = (xs[0] + xs[-1]) / 2
             ax.text(center, 0.97, f'{g["seitz"]:0.2f}', transform=trans, ha='center', va='top', fontsize=10)
 
+            if showPerGroupStats:
+                groupNegLnL = negLnLByGroup[rowIdx0 + gi]
+                groupChi2 = chi2ByGroup[rowIdx0 + gi]
+                perGroupText = (r'$-2\Delta\ln\mathcal{L}$' + f'={groupNegLnL:0.1f}\n'
+                                 + r'$\chi^2$' + f'={groupChi2:0.1f}')
+                ax.text(center, 0.86, perGroupText, transform=trans, ha='center', va='top', fontsize=6)
+
             if gi < len(rowGroups) - 1:
                 ax.axvline(pos + numBins + gap / 2 - 0.5, linestyle='--', linewidth=0.7,
                            color='gray', zorder=0)
@@ -610,15 +691,29 @@ def plot_combined_multiplicity_single(groups, savepath, negLnLByGroup, groupsPer
         ax.tick_params(axis='y', labelsize=12)
 
     totalNegLnL = sum(negLnLByGroup)
+    totalChi2 = sum(chi2ByGroup)
     totalBins = len(groups) * numBins
     statText = r'$-2\Delta\ln\mathcal{L}$/n.d.o.f.: ' + f'{totalNegLnL:0.1f}/({totalBins} - 1)'
+    chi2Text = r'$\chi^2$/n.d.o.f.: ' + f'{totalChi2:0.1f}/({totalBins} - 1)'
 
     axes[0].set_title(r'$Q_{seitz}$ [keV]', loc='left', fontsize=16, pad=2)
+    axes[0].set_title(sourceLabel, loc='right', fontsize=12, pad=2)
     axes[nRows // 2].set_ylabel("Rate [count/min]", fontsize=16)
-    axes[-1].text(0.99, 0.80, statText, transform=axes[-1].transAxes, ha='right', va='top', fontsize=10)
     axes[-1].set_xlabel("Bubble Multiplicity", fontsize=12, labelpad=28)
-    fig.tight_layout()
-    fig.subplots_adjust(hspace=0.15)
+
+    if showPerGroupStats:
+        # per-group stat text already occupies the top of every panel (including the last row's), so the
+        # combined total goes below the whole figure instead of inside axes[-1] -- putting it there too
+        # overlapped the last panel's own per-group numbers
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0.15, bottom=0.16)
+        fig.text(0.5, 0.02, statText + '     ' + chi2Text, ha='center', va='bottom', fontsize=9)
+    else:
+        axes[-1].text(0.99, 0.80, statText + '\n' + chi2Text, transform=axes[-1].transAxes,
+                      ha='right', va='top', fontsize=10)
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0.15)
+
     fig.savefig(savepath)
     plt.close(fig)
 
@@ -643,21 +738,6 @@ plot_combined_multiplicity_comparison(
 """
 # how many of the lowest-seitz groups to plot
 numLowestSeitzZDist = 4
-
-# (pset_lo, pset_hi, temp) for one event, read from its run's event.sbc
-def _event_pset_temp(run, ev, evDataCache):
-    if run not in evDataCache:
-        evPath = os.path.join(RECON_DIR, run, "event.sbc")
-        evDataCache[run] = Streamer(evPath).to_dict() if os.path.exists(evPath) else None
-    evData = evDataCache[run]
-    if evData is None:
-        return None
-    for i in range(len(evData["ev"])):
-        if int(evData["ev"][i]) == int(ev):
-            temp = 119 if (run in neutronRunsHot) or (run in neutronRunsHotB) else 116
-            return float(evData["pset_lo"][i]), float(evData["pset_hi"][i]), temp
-    return None
-
 
 # {(p, T): [z, z, ...]} -- real reco Z for confirmed single-bubble events, grouped by (p, T); drops dome events unless applyDomeExclusion=False (then kept, only counted for the print below)
 def load_single_bubble_z_by_group(runList, applyDomeExclusion=True):
@@ -690,10 +770,6 @@ def load_single_bubble_z_by_group(runList, applyDomeExclusion=True):
         if lo != hi:
             continue
         byGroup.setdefault((lo, temp), []).append(float(coord[2]))
-    totalExcluded = regionExcludedCount + zExcludedCount
-    verb = "excluded" if applyDomeExclusion else "flagged (not excluded, kept in output)"
-    print(f"[z-distribution source] {totalExcluded} single-bubble events {verb} "
-          f"({regionExcludedCount} by region label, {zExcludedCount} by reco Z)")
     return byGroup
 
 
@@ -711,7 +787,7 @@ def plot_z_distribution(sourceZ, backgroundZ, seitz, savepath, sourceLiveTime, b
 
     backgroundCounts, _ = np.histogram(backgroundZ, bins=edges)
     sourceCounts, _ = np.histogram(sourceZ, bins=edges)
-    backgroundRate = backgroundCounts / backgroundLiveTime
+    backgroundRate = backgroundCounts / backgroundLiveTime if backgroundLiveTime > 0 else np.zeros_like(backgroundCounts, dtype=float)
     sourceRate = sourceCounts / sourceLiveTime
 
     plt.figure(figsize=(8, 6))
@@ -729,8 +805,8 @@ def plot_z_distribution(sourceZ, backgroundZ, seitz, savepath, sourceLiveTime, b
 
 
 singleBubbleZByGroup = load_single_bubble_z_by_group(neutronRuns, applyDomeExclusion=False)
-backgroundSingleBubbleZ = [pos[4] for pos in load_single_bubble_positions(backgroundList, label="background", applyDomeExclusion=False)]
-backgroundLiveTimeMin = backgroundTime / 60
+# background Z split the same way the subtraction is, so each group's overlay is background from its own (p, T)
+backgroundZByGroup = load_single_bubble_z_by_group(backgroundList, applyDomeExclusion=False)
 
 # detector wall + dome boundary, r^2-vs-z view -- same construction as draw_r2z_guides() in
 # ../SBC_handscan/reconAna/reconAna.py, inlined here (rather than imported) since that script
@@ -805,15 +881,23 @@ compareNormalizationModes = False
 computeNoSinglesFit = False
 
 def group_observed_total(dataGroup):
-    rate = dataGroup["backSub"] if useRebinnedThresholdPlots else dataGroup["backSubFull"]
+    rate = dataGroup["backSubUnfloored"] if useRebinnedThresholdPlots else dataGroup["backSubUnflooredFull"]
     return sum(v * dataGroup["liveTime"] for v in rate)
 
-# livetime/total-weighted average of each group's own normalization, relative to the mean -- pulls a group's predicted total toward the dataset-wide average instead of forcing an exact match
+# livetime-weighted average of each group's own (sim-predicted total / observed total) ratio -- same
+# weighting pattern build_groups() uses for normalizationFactor, but here expressed relative to each
+# group's own observed total so it can be applied as targetTotal = globalNormFactor * sum(observed) in
+# neg_ln_l_calc()/chi_squared_diagnostic(). g["seitzRate"] is already normalizationFactor-calibrated, so
+# this comes out close to 1 (deviating only by genuine group-to-group scatter) instead of always >= 1 --
+# the old version compared each group's observed total only to the *other groups'* observed totals
+# (sum(w^2)/sum(w)/mean(w), which is >= 1 by Cauchy-Schwarz whenever livetimes/rates differ across
+# groups) and never referenced the simulation at all, so it silently inflated every predicted total
 def global_normalization_factor(dataGroups):
-    weights = [group_observed_total(g) for g in dataGroups]
-    meanWeight = np.mean(weights)
-    avgRatio = sum(w ** 2 for w in weights) / sum(weights)
-    return avgRatio / meanWeight
+    weights = [g["liveTime"] for g in dataGroups]
+    ratioByGroup = [
+        sum(g["seitzRate"]) * g["liveTime"] / group_observed_total(g) for g in dataGroups
+    ]
+    return sum(w * r for w, r in zip(weights, ratioByGroup)) / sum(weights)
 
 def normalization_mode_label(useGlobalNorm):
     return "Global normalization" if useGlobalNorm else "Per-threshold normalization"
@@ -846,71 +930,114 @@ def neg_ln_l_calc(dataGroup, estThreshold, globalNormFactor, simExcludedRegions,
         useGlobalNorm = useGlobalNormalization
 
     if useRebinnedThresholdPlots:
-        rate = dataGroup["backSub"]
+        rate = dataGroup["backSubUnfloored"]
         predictedCounts = rebin(get_multiplicity_counts(estThreshold, excludedRegionsOverride=simExcludedRegions)[0])
         N = rebin(dataGroup["binCountsRaw"])
-        B = rebin(backgroundBinCounts)
+        B = rebin(dataGroup["backCountsRaw"])
     else:
-        rate = dataGroup["backSubFull"]
+        rate = dataGroup["backSubUnflooredFull"]
         predictedCounts = get_multiplicity_counts(estThreshold, excludedRegionsOverride=simExcludedRegions)[0]
         N = dataGroup["binCountsRaw"]
-        B = backgroundBinCounts
+        B = dataGroup["backCountsRaw"]
 
-    # target total is still set from the background-subtracted rate -- only the goodness-of-fit
-    # comparison below switched to raw counts, so the predicted curve's overall scale is unchanged
     liveTime = dataGroup["liveTime"]
-    observed = [v * liveTime for v in rate]
-    targetTotal = globalNormFactor * sum(observed) if useGlobalNorm else sum(observed)
-    predicted = seitz_count(counts_to_ratios(predictedCounts), targetTotal)
 
-    tau = backgroundTime / dataGroup["liveTimeSec"]
+    # at a group's own Seitz threshold (how every combinedMultiplicity*/PerGroupStats plot's
+    # negLnLByGroup calls this), use dataGroup["seitzRate"] directly -- same plotted curve
+    # chi_squared_diagnostic() now matches -- converted to counts (*liveTime) since N/B/S must share
+    # units for neg2_delta_ln_l(). Away from that exact threshold (fit_groups()'s thresholdRange scan,
+    # run_avg_group_pipeline()'s avgGroup which has no "seitzRate") there's no single plotted curve to
+    # match, so fall back to the shape-normalized-to-targetTotal curve used to actually drive the fit
+    if useRebinnedThresholdPlots and "seitzRate" in dataGroup and estThreshold == dataGroup.get("seitz"):
+        predicted = [r * liveTime for r in dataGroup["seitzRate"]]
+    else:
+        # target total is still set from the background-subtracted rate -- only the goodness-of-fit
+        # comparison below switched to raw counts, so the predicted curve's overall scale is unchanged
+        observed = [v * liveTime for v in rate]
+        targetTotal = globalNormFactor * sum(observed) if useGlobalNorm else sum(observed)
+        predicted = seitz_count(counts_to_ratios(predictedCounts), targetTotal)
+
+    tau = dataGroup["backgroundTimeSec"] / dataGroup["liveTimeSec"]
     return sum(neg2_delta_ln_l(n, b, s, tau) for n, b, s in zip(N, B, predicted))
 
 # chi-squared analog of neg_ln_l_calc() above -- the (obs-pred)^2/err^2 sum this pipeline used before
 # switching to the Poisson profile likelihood, kept only for the neg_ln_l-vs-chi2 diagnostic plot.
 # Same shape/target-total logic as neg_ln_l_calc(), just compared via a hand-built asymmetric Gaussian
 # error instead of neg2_delta_ln_l()'s exact Poisson treatment
-def chi_squared_diagnostic(dataGroup, estThreshold, globalNormFactor, simExcludedRegions, useGlobalNorm=None):
+def chi_squared_diagnostic(dataGroup, estThreshold, globalNormFactor, simExcludedRegions, useGlobalNorm=None,
+                            debug=False):
     if useGlobalNorm is None:
         useGlobalNorm = useGlobalNormalization
 
     if useRebinnedThresholdPlots:
-        rate, errLowRate, errHighRate = dataGroup["backSub"], dataGroup["errLow"], dataGroup["errHigh"]
+        binLabels = ["1", "2", "3+"]
+        rate, errLowRate, errHighRate = (dataGroup["backSubUnfloored"], dataGroup["errLowUnfloored"],
+                                         dataGroup["errHighUnfloored"])
         predictedCounts = rebin(get_multiplicity_counts(estThreshold, excludedRegionsOverride=simExcludedRegions)[0])
     else:
-        rate = dataGroup["backSubFull"]
-        errLowRate, errHighRate = dataGroup["backSubErrorLowFull"], dataGroup["backSubErrorHighFull"]
+        binLabels = ["1", "2", "3", "4", "5+"]
+        rate = dataGroup["backSubUnflooredFull"]
+        errLowRate, errHighRate = dataGroup["errLowUnflooredFull"], dataGroup["errHighUnflooredFull"]
         predictedCounts = get_multiplicity_counts(estThreshold, excludedRegionsOverride=simExcludedRegions)[0]
 
-    liveTime = dataGroup["liveTime"]
-    observed = [v * liveTime for v in rate]
-    errLow = [v * liveTime for v in errLowRate]
-    errHigh = [v * liveTime for v in errHighRate]
+    # at a group's own Seitz threshold (how every combinedMultiplicity*/PerGroupStats plot calls this),
+    # use dataGroup["seitzRate"] directly -- the exact same curve drawn as the plot's blue bars -- instead
+    # of re-deriving a separately-normalized prediction via globalNormFactor. Away from that threshold
+    # (the A-multiplier scan in chi_squared_diagnostic_seitz_multiplier, A != 1) there's no plotted curve
+    # to match at that threshold, so fall back to the shape-normalized-to-targetTotal curve
+    if useRebinnedThresholdPlots and "seitzRate" in dataGroup and estThreshold == dataGroup.get("seitz"):
+        predictedRate = dataGroup["seitzRate"]
+        predictedRateSource = "seitzRate (plotted curve)"
+    else:
+        targetTotalRate = globalNormFactor * sum(rate) if useGlobalNorm else sum(rate)
+        predictedRate = seitz_count(counts_to_ratios(predictedCounts), targetTotalRate)
+        predictedRateSource = f"re-normalized, targetTotalRate={targetTotalRate:0.4f}"
 
-    targetTotal = globalNormFactor * sum(observed) if useGlobalNorm else sum(observed)
-    predicted = seitz_count(counts_to_ratios(predictedCounts), targetTotal)
+    if debug:
+        pT = f'(p={dataGroup["p"]:0.2f}, T={dataGroup["T"]:0.1f})' if "p" in dataGroup else "(avg group)"
+        normalizedPredictedRate = [f'{p:0.4f}' for p in predictedRate]
+        chi2_debug(f"  [chi2 debug] threshold={estThreshold:0.2f} keV  {pT}  liveTime={dataGroup['liveTime']:0.2f} min  "
+                   f"predictedRate[{predictedRateSource}]={normalizedPredictedRate}")
+        # raw event counts behind the subtraction, binned the same way as the chi2 terms below
+        toDebugBins = rebin if useRebinnedThresholdPlots else list
+        sourceOn = toDebugBins(dataGroup["binCountsRaw"])
+        sourceOff = toDebugBins(dataGroup["backCountsRaw"])
+        scale = dataGroup["backgroundScale"]
+        chi2_debug(f"    raw counts: sourceOn={sourceOn}  sourceOff={sourceOff}  "
+                   f"scaledSourceOff={[f'{c * scale:0.2f}' for c in sourceOff]}")
+        plotted = dataGroup["backSub"] if useRebinnedThresholdPlots else dataGroup["backSubFull"]
+        chi2_debug(f"    obsRate below is the unfloored subtraction (what the fit sees); plotted (floored at 0) = "
+                   f"{[f'{v:0.4f}' for v in plotted]}")
+        chi2_debug(f"    scale = sourceLiveTime/backgroundLiveTime = {dataGroup['liveTimeSec']:0.1f}s"
+                   f"/{dataGroup['backgroundTimeSec']:0.1f}s = {scale:0.4f}")
+        if dataGroup["backgroundTimeSec"] <= 0:
+            chi2_debug("    WARNING: no background runs at this (p, T) -- nothing subtracted, and the fit's background rate is unconstrained here")
 
     chi2 = 0.0
-    for obs, eLow, eHigh, pred in zip(observed, errLow, errHigh, predicted):
-        err = eHigh if obs >= pred else eLow
-        if err == 0:
-            continue
-        chi2 += ((obs - pred) / err) ** 2
+    for label, obs, eLow, eHigh, pred in zip(binLabels, rate, errLowRate, errHighRate, predictedRate):
+        err = eLow if obs >= pred else eHigh
+        contribution = 0.0 if err == 0 else ((obs - pred) / err) ** 2
+        chi2 += contribution
+        if debug:
+            chi2_debug(f"    mult {label:<3}: obsRate={obs:0.4f}  predRate={pred:0.4f}  "
+                       f"errLow={eLow:0.4f}  errHigh={eHigh:0.4f}  errUsed={err:0.4f}  chi2contrib={contribution:0.4f}")
+    if debug:
+        chi2_debug(f"    -> chi2 total = {chi2:0.4f}")
     return chi2
 
 # same idea as neg_ln_l_calc, but drops the multiplicity==1 bin and fits only 2 and 3+ -- always rebinned, results go in g["bestFitNoSingles"], never g["bestFit"]
 def neg_ln_l_calc_no_singles(dataGroup, estThreshold, simExcludedRegions):
-    rate = dataGroup["backSub"]
+    rate = dataGroup["backSubUnfloored"]
     predictedCounts = rebin(get_multiplicity_counts(estThreshold, excludedRegionsOverride=simExcludedRegions)[0])[1:]
     N = rebin(dataGroup["binCountsRaw"])[1:]
-    B = rebin(backgroundBinCounts)[1:]
+    B = rebin(dataGroup["backCountsRaw"])[1:]
 
     liveTime = dataGroup["liveTime"]
     observed = [v * liveTime for v in rate][1:]
     targetTotal = sum(observed)
     predicted = seitz_count(counts_to_ratios(predictedCounts), targetTotal)
 
-    tau = backgroundTime / dataGroup["liveTimeSec"]
+    tau = dataGroup["backgroundTimeSec"] / dataGroup["liveTimeSec"]
     return sum(neg2_delta_ln_l(n, b, s, tau) for n, b, s in zip(N, B, predicted))
 
 
@@ -946,7 +1073,7 @@ def build_fit_result(dataGroup, threshold, negLnL, simExcludedRegions, threshold
     bestFitRatios = counts_to_ratios(
         get_multiplicity_counts(threshold, excludedRegionsOverride=simExcludedRegions)[0]
     )
-    bestFitRateFull = seitz_count(bestFitRatios, sum(dataGroup["backSubFull"]))
+    bestFitRateFull = seitz_count(bestFitRatios, sum(dataGroup["backSubUnflooredFull"]))
     return {
         "threshold": threshold,
         "thresholdErrLow": thresholdErrLow,
@@ -1055,26 +1182,64 @@ def fit_threshold_series(groups, bestFitKey, thresholdField="threshold",
 STANDALONE COMBINED MULTIPLICITY PLOTS -- -2*deltaLnL of sim (at each group's own Seitz threshold,
 no fitting) vs data, per group, for the standalone (single-series) plots skipped further up
 """
+globalNormFactorWithDomeCut = global_normalization_factor(groupsWithDomeCut)
+negLnLByGroupWithDomeCut = [
+    neg_ln_l_calc(g, g["seitz"], globalNormFactorWithDomeCut, ["dome"]) for g in groupsWithDomeCut
+]
+chi2_debug("[chi2 debug] -- with dome cut --")
+chi2ByGroupWithDomeCut = [
+    chi_squared_diagnostic(g, g["seitz"], globalNormFactorWithDomeCut, ["dome"], debug=True)
+    for g in groupsWithDomeCut
+]
 plot_combined_multiplicity_single(
     groupsWithDomeCut, savepath=output_path("comparison", "combinedMultiplicityWithDomeCut.png"),
-    negLnLByGroup=[
-        neg_ln_l_calc(g, g["seitz"], global_normalization_factor(groupsWithDomeCut), ["dome"])
-        for g in groupsWithDomeCut
-    ],
+    negLnLByGroup=negLnLByGroupWithDomeCut, chi2ByGroup=chi2ByGroupWithDomeCut,
+    sourceLabel=r'$^{252}$Cf Source:' + '\nw/ dome cut',
 )
+plot_combined_multiplicity_single(
+    groupsWithDomeCut, savepath=output_path("comparison", "combinedMultiplicityWithDomeCutPerGroupStats.png"),
+    negLnLByGroup=negLnLByGroupWithDomeCut, chi2ByGroup=chi2ByGroupWithDomeCut,
+    sourceLabel=r'$^{252}$Cf Source:' + '\nw/ dome cut', showPerGroupStats=True,
+)
+
+globalNormFactorWithoutDomeCut = global_normalization_factor(groupsWithoutDomeCut)
+negLnLByGroupWithoutDomeCut = [
+    neg_ln_l_calc(g, g["seitz"], globalNormFactorWithoutDomeCut, []) for g in groupsWithoutDomeCut
+]
+chi2_debug("[chi2 debug] -- without dome cut --")
+chi2ByGroupWithoutDomeCut = [
+    chi_squared_diagnostic(g, g["seitz"], globalNormFactorWithoutDomeCut, [], debug=True)
+    for g in groupsWithoutDomeCut
+]
 plot_combined_multiplicity_single(
     groupsWithoutDomeCut, savepath=output_path("comparison", "combinedMultiplicityWithoutDomeCut.png"),
-    negLnLByGroup=[
-        neg_ln_l_calc(g, g["seitz"], global_normalization_factor(groupsWithoutDomeCut), [])
-        for g in groupsWithoutDomeCut
-    ],
+    negLnLByGroup=negLnLByGroupWithoutDomeCut, chi2ByGroup=chi2ByGroupWithoutDomeCut,
+    sourceLabel=r'$^{252}$Cf Source:' + '\nw/o dome cut',
 )
 plot_combined_multiplicity_single(
+    groupsWithoutDomeCut, savepath=output_path("comparison", "combinedMultiplicityWithoutDomeCutPerGroupStats.png"),
+    negLnLByGroup=negLnLByGroupWithoutDomeCut, chi2ByGroup=chi2ByGroupWithoutDomeCut,
+    sourceLabel=r'$^{252}$Cf Source:' + '\nw/o dome cut', showPerGroupStats=True,
+)
+
+globalNormFactorNoCutAtAll = global_normalization_factor(groupsNoCutAtAll)
+negLnLByGroupNoCutAtAll = [
+    neg_ln_l_calc(g, g["seitz"], globalNormFactorNoCutAtAll, []) for g in groupsNoCutAtAll
+]
+chi2_debug("[chi2 debug] -- no cut at all --")
+chi2ByGroupNoCutAtAll = [
+    chi_squared_diagnostic(g, g["seitz"], globalNormFactorNoCutAtAll, [], debug=True)
+    for g in groupsNoCutAtAll
+]
+plot_combined_multiplicity_single(
     groupsNoCutAtAll, savepath=output_path("comparison", "combinedMultiplicityNoCutAtAll.png"),
-    negLnLByGroup=[
-        neg_ln_l_calc(g, g["seitz"], global_normalization_factor(groupsNoCutAtAll), [])
-        for g in groupsNoCutAtAll
-    ],
+    negLnLByGroup=negLnLByGroupNoCutAtAll, chi2ByGroup=chi2ByGroupNoCutAtAll,
+    sourceLabel=r'$^{252}$Cf Source:' + '\nno cut at all',
+)
+plot_combined_multiplicity_single(
+    groupsNoCutAtAll, savepath=output_path("comparison", "combinedMultiplicityNoCutAtAllPerGroupStats.png"),
+    negLnLByGroup=negLnLByGroupNoCutAtAll, chi2ByGroup=chi2ByGroupNoCutAtAll,
+    sourceLabel=r'$^{252}$Cf Source:' + '\nno cut at all', showPerGroupStats=True,
 )
 
 """
@@ -1116,9 +1281,9 @@ FULL PER-SIDE PIPELINE -- Z distributions, profile-likelihood fits, linhists, av
 def plot_group_z_distributions(groups, outputDir):
     for g in groups[:numLowestSeitzZDist]:
         plot_z_distribution(
-            singleBubbleZByGroup.get((g["p"], g["T"]), []), backgroundSingleBubbleZ, g["seitz"],
+            singleBubbleZByGroup.get((g["p"], g["T"]), []), backgroundZByGroup.get((g["p"], g["T"]), []), g["seitz"],
             savepath=output_path(outputDir, f"zDistributions/zdist{g['p']}{g['T']}.png"),
-            sourceLiveTime=g["liveTime"], backgroundLiveTime=backgroundLiveTimeMin,
+            sourceLiveTime=g["liveTime"], backgroundLiveTime=g["backgroundTimeSec"] / 60,
         )
 
 
@@ -1249,12 +1414,17 @@ def plot_group_linhists(groups, zeroKevRateRebinned, zeroKevRateFull, normalizat
 def run_avg_group_pipeline(groups, globalNormFactor, simExcludedRegions, positionDomeFlags,
                             zeroKevRateRebinned, zeroKevRateFull, outputDir):
     is_region_excluded = make_is_region_excluded(positionDomeFlags)
-    avgRateGroup = compute_rate_group(keep=lambda i, region: not is_region_excluded(i, region))
+    # the avg group pools every (p, T)'s source events, so it pools their backgrounds too
+    avgRateGroup = compute_rate_group(keep=lambda i, region: not is_region_excluded(i, region),
+                                      backgroundPTs=pToUse)
     avgGroup = {
         **avgRateGroup,
         "backSub": rebin(avgRateGroup["backSubFull"]),
         "errLow": rebin_errors(avgRateGroup["backSubErrorLowFull"]),
         "errHigh": rebin_errors(avgRateGroup["backSubErrorHighFull"]),
+        "backSubUnfloored": rebin(avgRateGroup["backSubUnflooredFull"]),
+        "errLowUnfloored": rebin_errors(avgRateGroup["errLowUnflooredFull"]),
+        "errHighUnfloored": rebin_errors(avgRateGroup["errHighUnflooredFull"]),
     }
 
     avgSeitz = np.mean([g["seitz"] for g in groups])
@@ -1313,7 +1483,7 @@ def run_avg_group_pipeline(groups, globalNormFactor, simExcludedRegions, positio
         # avgSeitzRate stays on its own per-total scale -- normalizationFactor isn't reliable here since
         # avgSeitz usually falls outside the thresholds it was calibrated on. zeroKevRateRebinned is
         # already globally scaled (see compute_zero_kev_reference), so it's used as-is, unlike avgSeitzRate
-        avgSeitzRate = seitz_count(counts_to_ratios(avgSeitzCountsRebinned), sum(avgGroup["backSub"]))
+        avgSeitzRate = seitz_count(counts_to_ratios(avgSeitzCountsRebinned), sum(avgGroup["backSubUnfloored"]))
         avgLinhistArgs = (
             binLabels3, rebin(avgGroup["binCounts"]), rebin_errors(avgGroup["binCountError"]),
             rebin(avgGroup["backBins"]), rebin_errors(avgGroup["backErrorLow"]), rebin_errors(avgGroup["backErrorHigh"]),
@@ -1322,7 +1492,7 @@ def run_avg_group_pipeline(groups, globalNormFactor, simExcludedRegions, positio
         )
         avgBestFitRate = avgBestFit["rate"]
     else:
-        totalAvg = sum(avgGroup["backSubFull"])
+        totalAvg = sum(avgGroup["backSubUnflooredFull"])
         avgSeitzRatiosFull = counts_to_ratios(avgSeitzCountsRaw)
         avgLinhistArgs = (
             binLabelsFull, avgGroup["binCounts"], avgGroup["binCountError"], avgGroup["backBins"],
@@ -1391,11 +1561,7 @@ def plot_neg_ln_l_vs_chi2_diagnostic(gridA, negLnLCurve, chi2Curve, savepath, xl
     plt.plot(gridA, negLnLCurve, 'o', markersize=3, color="steelblue", label=r"$-2\Delta\ln L$")
     plt.plot(gridA, chi2Curve, 'o', markersize=3, color="darkorange", label=r"$\chi^2$")
     plt.xlabel(xlabel, fontsize=16)
-    plt.ylabel("Test statistic (log scale)", fontsize=16)
-    # log scale: if the two curves are as close as Wilks' theorem suggests they should be, this still
-    # shows it clearly -- but it also keeps both curves' own shapes visible if they instead turn out to
-    # differ by orders of magnitude, which a shared linear axis would completely hide
-    plt.yscale('log')
+    plt.ylabel("Test statistic", fontsize=16)
     plt.legend(fontsize=12)
     plt.tight_layout()
     plt.savefig(savepath)
@@ -1425,8 +1591,6 @@ def fit_seitz_multiplier(groups, simExcludedRegions, outputDir, normalizationFac
         sigmaRange=(lowA, highA),
         infoText=f"N bins = {nBins} ({len(groups)} (p, T) groups x {binsPerGroup} multiplicity bins)",
     )
-    print(f"[{outputDir}] best-fit Seitz threshold multiplier: A = {bestA:0.3f} "
-          f"(+{AErrHigh:0.3f}/-{AErrLow:0.3f}), negLnL = {bestNegLnL:0.2f}")
 
     chi2Curve = [chi_squared_diagnostic_seitz_multiplier(groups, A, globalNormFactor, simExcludedRegions)
                  for A in seitzMultiplierRange]
