@@ -6,6 +6,28 @@ from skimage.measure import label, regionprops
 import diplib as dip
 from skimage.restoration import rolling_ball
 
+"""
+Args:
+  ev: event
+  cam: camera
+  noise_thresh: diff values below this threshold will be set to zero
+
+Returns:
+  bub_dict: dictionary of lists, where each row is a bubble frame from one camera
+    cam (int): camera number of this bubble
+    pos (float, 2): x and y axis of the pixel position of the bubble
+    radius (float): radius of the bubble in pixels
+    frame (int): frame number of this bubble
+    second_good_cand (int)(but only 0 or 1): 1 if the second most prominent circular feature falls 
+    near a sufficiently bright and large region of connected pixels; indicates likely at 
+    least one more bubble in frame; can be 100% ignored by analyzers, only used to get confidence
+    confidence (float): for each camera, the percentage of frames where a bubble has been found and
+    there is not likely a second bubble or prominent circular structure in the event; for handscanned,
+    confirmed single bubble events, low confidence indicates a particularly noisy image and/or the 
+    likelihood that the real bubble has been missed.  Cut for low confidence should be about ~70% 
+"""
+
+
 out_keys = ['rad','pos','frame','cam','second_good_cand']
    
 def _new_bub_dict():
