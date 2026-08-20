@@ -1,5 +1,10 @@
 # Change Log
 
+## [LAr10Ana v0.6.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.6.0) (2026-08-20)
+- Update single bubble only bubble finder
+- Add d_wall calculation in 3D recon
+- Add trigger rate calculation per sipm batch
+
 ## [LAr10Ana v0.5.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.5.0) (2026-07-30)
 - Add bubble finder with single bubble only
 - Improve logging and speed of grid job submission
