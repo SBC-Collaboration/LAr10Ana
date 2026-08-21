@@ -1,5 +1,8 @@
 # Change Log
 
+## [LAr10Ana v1.0.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v1.0.0) (2026-08-21)
+- Paper version, same as v0.6.0
+
 ## [LAr10Ana v0.6.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.6.0) (2026-08-20)
 - Update single bubble only bubble finder
 - Add d_wall calculation in 3D recon

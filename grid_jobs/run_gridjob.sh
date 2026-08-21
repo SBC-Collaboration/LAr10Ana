@@ -142,12 +142,12 @@ LARGEST_FILE_GB=$((LARGEST_FILE_BYTES / 1024 / 1024 / 1024))
 DISK_GB=$((TAR_SIZE_GB * 3 + 5))
 DISK_GB=$((DISK_GB < 5 ? 5 : DISK_GB))
 DISK_GB=$((DISK_GB > 500 ? 500 : DISK_GB))
-# RAM: 4x size + 2GB, minimum 2GB, max 16GB
-RAM_GB=$((LARGEST_FILE_GB * 4 + 2))
-RAM_GB=$((RAM_GB < 2 ? 2 : RAM_GB))
+# RAM: 4x size + 4GB, minimum 4GB, max 16GB
+RAM_GB=$((LARGEST_FILE_GB * 4 + 4))
+RAM_GB=$((RAM_GB < 4 ? 4 : RAM_GB))
 RAM_GB=$((RAM_GB > 64 ? 64 : RAM_GB))
-# Run time: 1h/2GB x (size + 1) + 2h, minimum 2h, maximum 24h
-RUN_TIME=$(( (TAR_SIZE_GB + 1) / 2 + 2))
+# Run time: 1h/1GB x (size + 1) + 2h, minimum 2h, maximum 24h
+RUN_TIME=$(( (TAR_SIZE_GB + 1) + 2))
 RUN_TIME=$((RUN_TIME < 2 ? 2 : RUN_TIME))
 RUN_TIME=$((RUN_TIME > 24 ? 24 : RUN_TIME))
 if [ $VERBOSE = true ]; then
