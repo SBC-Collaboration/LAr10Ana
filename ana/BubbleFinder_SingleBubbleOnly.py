@@ -35,6 +35,9 @@ def _new_bub_dict():
     
 def FindBubbles(ev, cam, noise_thresh, bub_dict=None):
 
+    if not ev['cam'][f'c{cam}']['loaded']:
+        return bub_dict
+
     stable_pos = 0
     prev_pos = [0,0]
     constrained_search = False
