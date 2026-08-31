@@ -20,6 +20,7 @@ from ana.ScintRate import ScintillationRateBatched as sra
 from ana.BubbleFinder import BubbleFinder as bf
 from ana.BubbleFinder_SingleBubbleOnly import BubbleFinder as bf_single
 from ana.Reconstruction3D import reconstruct_2D_to_3D as reco
+from ana.Reconstruction3D_SingleBubbleOnly import reconstruct_2D_to_3D as reco_single
 from ana.PressureT0 import PressureT0Finding as pt0
 from ana.SlowDAQTexpansion import SlowDAQTexpansionFinding as t_exp
 from ana.AcousticNoise import acoustic_noise as acousN
@@ -39,6 +40,7 @@ ANALYSES = {
     "bubble": bf,
     "bubble_single": bf_single,
     "reco": reco,
+    "reco_single": reco_single,
     "pressure_t0": pt0,
     "t_expansion": t_exp,
     "acoustic_noise": acousN,
@@ -157,6 +159,9 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
             elif p == "reco" and not data["event_info"]["loaded"]:
                 print(f"Skipping {p} analysis -- event info data not loaded.")
                 continue
+            elif p == "reco_single" and not data["event_info"]["loaded"]:
+                print(f"Skipping {p} analysis -- event info data not loaded.")
+                continue
             elif p == "pressure_t0" and not data["acoustics"]["loaded"]:
                 print(f"Skipping {p} analysis -- acoustic data not loaded.")
                 continue
@@ -199,7 +204,7 @@ def ProcessSingleRun(rundir, dataset='SBC-25', recondir='.', process_list=None, 
                         val = np.array(val)
                     dtypes.append(dname(val.dtype.str))
                     
-                    if p in ("scint_rate", "bubble", "bubble_single", "reco", "clustering"):
+                    if p in ("scint_rate", "bubble", "bubble_single", "reco", "reco_single", "clustering"):
                         shape = list(np.atleast_1d(val).shape)
                     else:
                         shape = list(np.squeeze(val).shape)
@@ -236,10 +241,10 @@ if __name__ == "__main__":
             rundir=sys.argv[1],
             recondir=sys.argv[2],
             process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "bubble_single", 
-                            "reco", "pressure_t0", "t_expansion", "acoustic_noise", "scint_t0", "clustering"])
+                            "reco", "reco_single", "pressure_t0", "t_expansion", "acoustic_noise", "scint_t0", "clustering"])
     else:
         ProcessSingleRun(
             rundir="/exp/e961/data/SBC-25-daqdata/20260212_1.tar",
             recondir="/home/zsheng/test", # Use your own directory for testing~
             process_list = ["run", "event", "exposure", "scintillation", "scint_rate", "bubble", "bubble_single", 
-                            "reco", "pressure_t0", "t_expansion", "acoustic_noise", "scint_t0", "clustering"])
+                            "reco", "reco_single", "pressure_t0", "t_expansion", "acoustic_noise", "scint_t0", "clustering"])
