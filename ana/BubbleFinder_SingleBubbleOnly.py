@@ -276,4 +276,72 @@ def BubbleFinder(ev, noise_thresh = 5):
         for i in range(len(cam[cMask])):
             out['confidence'].append([conf])
 
+    #use confidence scores to get t0 frame and cams containing t0 frame
+    out['t0_frame'] = []
+    out['t0_cams'] = []
+    
+    c1Mask = cam==1
+    c2Mask = cam==2
+    c3Mask = cam==3
+    confs = np.array(out['confidence']).ravel()
+    rs = np.array(out['rad']).ravel()
+    fs = np.array(out['frame']).ravel()
+    
+    conf1 = confs[c1Mask]
+    conf2 = confs[c2Mask]
+    conf3 = confs[c3Mask]
+    
+    #only want to consider cams with confidence score above 70%
+    if len(conf1)>0 and conf1[0]>0.7:
+        r1 = rs[c1Mask]
+        f1 = fs[c1Mask]
+    else:
+        r1 = [0]
+        f1 = [100]
+    
+    if len(conf2)>0 and conf2[0]>0.7:
+        r2 = rs[c2Mask]
+        f2 = fs[c2Mask]
+    else:
+        r2 = [0]
+        f2 = [100]
+    
+    if len(conf3)>0 and conf3[0]>0.7:
+        r3 = rs[c3Mask]
+        f3 = fs[c3Mask]
+    else:
+        r3 = [0]
+        f3 = [100]
+    
+    #get earliest frame where one camera dips to the lowest radius it finds
+    earliest = np.min([f1[np.argmin(r1)],f2[np.argmin(r2)],f3[np.argmin(r3)]])
+    #get closest frame to this where at least 2 cams have a detection
+    f12 = np.intersect1d(f1,f2)
+    f23 = np.intersect1d(f2,f3) 
+    f13 = np.intersect1d(f1,f3)
+    
+    if len(f12)==0:
+        f12 = [100]
+    if len(f23)==0:
+        f23 = [100]
+    if len(f13)==0:
+        f13 = [100]
+        
+    f12_earliest = f12[np.argmin(abs(f12 - earliest))]
+    f23_earliest = f23[np.argmin(abs(f23 - earliest))]
+    f13_earliest = f13[np.argmin(abs(f13 - earliest))]
+    
+    t0_frame = np.min([f12_earliest,f23_earliest,f13_earliest])
+    ct0 = np.argmin([f12_earliest,f23_earliest,f13_earliest])
+    if ct0==0:
+        t0_cams = [1,2]
+    elif ct0==1:
+        t0_cams = [2,3]
+    elif ct0==2:
+        t0_cams = [1,3]
+
+    for i in range(len(cam)):
+        out['t0_frame'].append([t0_frame])
+        out['t0_cams'].append(t0_cams)
+
     return out
