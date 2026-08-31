@@ -1,5 +1,9 @@
 # Change Log
 
+## [LAr10Ana v1.1.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v1.1.0) (2026-08-31)
+- A new separate `Reconstruction3D_SingleBubbleOnly` module that works with `BubbleFinder_SingleBubbleOnly`.
+- Bug fix in `BubbleFinder_SingleBubbleOnly` and `ScintRate` modules.
+
 ## [LAr10Ana v1.0.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v1.0.0) (2026-08-21)
 - Paper version, same as v0.6.0
 
