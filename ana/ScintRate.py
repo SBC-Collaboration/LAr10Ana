@@ -4,6 +4,7 @@
 import sys
 import numpy as np
 from ana.BatchSiPMs import BatchSiPMs
+import warnings
 
 # Functions to run code
 
@@ -49,8 +50,14 @@ def _signal_ratio_filtering(waveforms):
 def ScintillationRateBatched(ev, nwvf_batch=1000, maxwvf=-1, progress=False, njob=1):
     output = BatchSiPMs(ev, ScintillationRateAnalysis, nwvf_batch=nwvf_batch, maxwvf=maxwvf, progress=progress, njob=njob)
     if ev is not None and ev['scintillation']['loaded']:
-        output["trigger_rate"] = _trigger_rate_windowed(ev)[:output["n_hits"].shape[0]].astype(np.uint16)
-
+        rate = _trigger_rate_windowed(ev)
+        n = output["n_hits"].shape[0]
+        if 0 < rate.shape[0] < n:
+            warnings.warn(f"trigger_rate: {rate.shape[0]} timestamps for {n} waveforms; padding with 0")
+        m = min(n, rate.shape[0])
+        trigger_rate = np.zeros((n, 1), dtype=np.uint16)
+        trigger_rate[:m] = np.clip(rate[:m], 0, np.iinfo(np.uint16).max)
+        output["trigger_rate"] = trigger_rate
     return output
 
 # BatchSipm for hit counting only. Trigger rate calculation is done separately in the above function
