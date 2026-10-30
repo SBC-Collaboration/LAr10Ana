@@ -16,19 +16,27 @@ Returns:
   bub_dict: dictionary of lists, where each row is a bubble frame from one camera
     cam (int): camera number of this bubble
     pos (float, 2): x and y axis of the pixel position of the bubble
-    rad (float): radius of the bubble in pixels
+    radius (float): radius of the bubble in pixels
     frame (int): frame number of this bubble
-    bad_cam_likely (bool): if any value in this list is true for a given camera, 
-    the bubble finder failed to find a consistent location for the bubble in this camera, 
-    and the tags for this camera should not be used for 3d position reconstruction
+    second_good_cand (int)(but only 0 or 1): 1 if the second most prominent circular feature falls 
+    near a sufficiently bright and large region of connected pixels; indicates likely at 
+    least one more bubble in frame; can be 100% ignored by analyzers, only used to get confidence
+    confidence (float): for each camera, the percentage of frames where a bubble has been found and
+    there is not likely a second bubble or prominent circular structure in the event; for handscanned,
+    confirmed single bubble events, low confidence indicates a particularly noisy image and/or the 
+    likelihood that the real bubble has been missed.  Cut for low confidence should be about ~70% 
 """
 
-out_keys = ['rad','pos','frame','cam','bad_cam_likely']
+
+out_keys = ['rad','pos','frame','cam','second_good_cand']
    
 def _new_bub_dict():
     return dict([(key, []) for key in out_keys])
     
 def FindBubbles(ev, cam, noise_thresh, bub_dict=None):
+
+    if not ev['cam'][f'c{cam}']['loaded']:
+        return bub_dict
 
     stable_pos = 0
     prev_pos = [0,0]
@@ -43,14 +51,14 @@ def FindBubbles(ev, cam, noise_thresh, bub_dict=None):
     Tshape = imShape[::-1]
         
     if cam==1:
-        circy, circx = disk((375, 595), 300, shape=imShape)
+        circy, circx = disk((375, 595), 290, shape=imShape)
         coord_mask = 1.9*circx-1200<circy
         mask_circx = circx[coord_mask]
         mask_circy = circy[coord_mask]
     elif cam==2:
-        mask_circy, mask_circx = disk((420, 670), 300, shape=imShape)
+        mask_circy, mask_circx = disk((420, 670), 290, shape=imShape)
     elif cam==3:
-        mask_circy, mask_circx = disk((440, 690), 300, shape=imShape)
+        mask_circy, mask_circx = disk((440, 690), 290, shape=imShape)
 
     if bub_dict is None:
         bub_dict = _new_bub_dict()
@@ -74,12 +82,7 @@ def FindBubbles(ev, cam, noise_thresh, bub_dict=None):
     for i in range(1,frames):
         
         im_num = frames-i
-        if i==9 and constrained_search==False:
-            bad = True 
-            #low confidence that there's actually a bubble visible here if the position of the brightest and largest
-            #region in the detector hasn't stabilized by now; for example it may be blocked by the fill tube for cam1
-            #or lighting may be particularly unstable and we don't want to poison the 3d reco with bad position tags
-      
+
         diff = np.zeros((imShape[0],imShape[1]))
         if constrained_search==False:
             
@@ -94,11 +97,12 @@ def FindBubbles(ev, cam, noise_thresh, bub_dict=None):
             
             preMask_prevDiff-=dip.GetSinglePixels(preMask_prevDiff > 0)
             preMask_refDiff-=dip.GetSinglePixels(preMask_refDiff > 0)
-            
+
             if np.std(preMask_prevDiff)<np.std(preMask_refDiff):
                 diff[mask_circy,mask_circx] = preMask_prevDiff[mask_circy,mask_circx]  
             else:
                 diff[mask_circy,mask_circx] = preMask_refDiff[mask_circy,mask_circx]
+                
         else:
             
             thisIm = np.float32(np.average(ev['cam'][f'c{cam}'][f'frame{im_num}'],axis=2))
@@ -112,7 +116,7 @@ def FindBubbles(ev, cam, noise_thresh, bub_dict=None):
         
         filt = rolling_ball(diff, radius = 1)
         filt[filt<np.mean(filt)+3*np.std(filt)] = 0
-        labelIm = filt 
+        labelIm = filt
     
         #connectivity = 2 allows pixels to count as connected if they are diagonal from each other
         labeled = label(labelIm>0, connectivity = 2)
@@ -152,6 +156,8 @@ def FindBubbles(ev, cam, noise_thresh, bub_dict=None):
         cand_idx = np.argmax(scores)
         
         cand_region = props[cand_idx]
+        score_thresh = np.mean(scores) + 3*np.std(scores)
+        cand_regions = np.array(props)[scores>=score_thresh]
 
         #estimate rad cands
         min_est_rad = np.round(cand_region.axis_major_length/2)
@@ -196,23 +202,42 @@ def FindBubbles(ev, cam, noise_thresh, bub_dict=None):
         elif constrained_search==True and np.mean(filt[buby,bubx])>=np.mean(filt)+2.5*np.std(filt): 
             bubless_frames = 0 #stop search after 3 consecutive frames below threshold 
 
+        #delete this bubble from the accumulator array and see how the next highest peak compares
+        peak_votes = np.max(regIm)
+        bub_neighborhood_y, bub_neighborhood_x = disk((pcy,pcx), prad+20, shape=imShape)
+        accum[bub_neighborhood_y, bub_neighborhood_x] = 0
+        next_peak_votes = np.max(accum)
+        vote_rat = next_peak_votes/peak_votes
+
+        #see if next accum peak falls within any of the other high-scoring candidate regions
+        npcy, npcx, _ = np.unravel_index(np.argmax(accum), accum_shape)
+        second_good_cand = 0
+        for reg in cand_regions:
+            cand_cent = reg.centroid
+            dist = np.sqrt((npcx-cand_cent[1])**2+(npcy-cand_cent[0])**2)
+            if dist<20:
+                second_good_cand = 1
+                break
+
         if bubless_frames==3:
             return bub_dict
-        else:
+        elif constrained_search==True and vote_rat<1:
             bub_dict["rad"].append([prad])
             bub_dict["cam"].append([cam])
             bub_dict["frame"].append([im_num])
             bub_dict["pos"].append([pcx,pcy])
-            bub_dict["bad_cam_likely"].append([bad])
+            bub_dict['second_good_cand'].append([second_good_cand])
 
         if constrained_search==False:
             cent = cand_region.centroid
             if np.sqrt((cent[0]-prev_cent[0])**2 + (cent[1]-prev_cent[1])**2)<20:
-                stable_pos+=1
-            else:
-                stable_pos = 0
-            prev_pos = [pcx,pcy]
-            prev_cent = cent
+                if vote_rat<1:
+                    stable_pos+=1
+                else:
+                    stable_pos = 0
+            if vote_rat<1:
+                prev_pos = [pcx,pcy]
+                prev_cent = cent
             if stable_pos==2: #consistent between images twice --> 3 consecutive consistent images
                 constrained_search = True
                 con_x, con_y = disk((pcx, pcy), prad+10, shape=Tshape)
@@ -230,5 +255,93 @@ def BubbleFinder(ev, noise_thresh = 5):
 
     if len(out["rad"]) == 0:
         raise ValueError("No bubbles found in event")
+
+    out['confidence'] = []
+
+    #calculate and add confidence score for each camera;
+    #confidence that there are no more bubbles visible in each set of camera frames
+    cam = np.array(out['cam']).ravel()
+    for c in range(1,4):
+        
+        cMask = cam==c
+        if len(cam[cMask])==0: #no bubs found for this camera
+            continue
+    
+        #1 - how often the next most prominent circular feature lines up with a large 
+        #and bright region of connected pixels, or how often there is likely at least 
+        #one more bubble to be found in the image
+        sgc = np.array(out['second_good_cand']).ravel()[cMask]
+        conf = 1 - len(sgc[sgc>0])/len(sgc) 
+        
+        for i in range(len(cam[cMask])):
+            out['confidence'].append([conf])
+
+    #use confidence scores to get t0 frame and cams containing t0 frame
+    out['t0_frame'] = []
+    out['t0_cams'] = []
+    
+    c1Mask = cam==1
+    c2Mask = cam==2
+    c3Mask = cam==3
+    confs = np.array(out['confidence']).ravel()
+    rs = np.array(out['rad']).ravel()
+    fs = np.array(out['frame']).ravel()
+    
+    conf1 = confs[c1Mask]
+    conf2 = confs[c2Mask]
+    conf3 = confs[c3Mask]
+    
+    #only want to consider cams with confidence score above 70%
+    if len(conf1)>0 and conf1[0]>0.7:
+        r1 = rs[c1Mask]
+        f1 = fs[c1Mask]
+    else:
+        r1 = [0]
+        f1 = [100]
+    
+    if len(conf2)>0 and conf2[0]>0.7:
+        r2 = rs[c2Mask]
+        f2 = fs[c2Mask]
+    else:
+        r2 = [0]
+        f2 = [100]
+    
+    if len(conf3)>0 and conf3[0]>0.7:
+        r3 = rs[c3Mask]
+        f3 = fs[c3Mask]
+    else:
+        r3 = [0]
+        f3 = [100]
+    
+    #get earliest frame where one camera dips to the lowest radius it finds
+    earliest = np.min([f1[np.argmin(r1)],f2[np.argmin(r2)],f3[np.argmin(r3)]])
+    #get closest frame to this where at least 2 cams have a detection
+    f12 = np.intersect1d(f1,f2)
+    f23 = np.intersect1d(f2,f3) 
+    f13 = np.intersect1d(f1,f3)
+    
+    if len(f12)==0:
+        f12 = [100]
+    if len(f23)==0:
+        f23 = [100]
+    if len(f13)==0:
+        f13 = [100]
+        
+    f12_earliest = f12[np.argmin(abs(f12 - earliest))]
+    f23_earliest = f23[np.argmin(abs(f23 - earliest))]
+    f13_earliest = f13[np.argmin(abs(f13 - earliest))]
+    
+    t0_frame = np.min([f12_earliest,f23_earliest,f13_earliest])
+    ct0 = np.argmin([f12_earliest,f23_earliest,f13_earliest])
+    if ct0==0:
+        t0_cams = [1,2]
+    elif ct0==1:
+        t0_cams = [2,3]
+    elif ct0==2:
+        t0_cams = [1,3]
+
+    for i in range(len(cam)):
+        out['t0_frame'].append([t0_frame])
+        out['t0_cams'].append(t0_cams)
 
     return out

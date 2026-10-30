@@ -4,8 +4,32 @@
 import sys
 import numpy as np
 from ana.BatchSiPMs import BatchSiPMs
+import warnings
 
 # Functions to run code
+
+# Unwrap the CAEN timestamp to account for rollovers
+def _unwrap_caen_timestamp(ts, max_ts):
+    ts = np.asarray(ts, dtype=np.int64)
+
+    # Detect rollovers
+    rollovers = np.diff(ts) < 0
+
+    # Cumulative count of rollovers
+    rollover_count = np.concatenate([[0], np.cumsum(rollovers)])
+    return ts + rollover_count * max_ts
+
+# Calculate trigger rate using 1s window around this trigger
+def _trigger_rate_windowed(ev, window_sec=1.0):
+    timetag = ev["scintillation"]['TriggerTimeTag']
+    if callable(timetag):
+        timetag = timetag()
+    timestamp = _unwrap_caen_timestamp(timetag, 2**31) * 8.e-9
+    half_win = window_sec / 2.0
+    left_idx = np.searchsorted(timestamp, timestamp - half_win, side='left')
+    right_idx = np.searchsorted(timestamp, timestamp + half_win, side='right')
+    rate = (right_idx - left_idx) / window_sec
+    return rate[:, np.newaxis]
 
 # Calculate the ratio of the SiPM pulse to the baseline
 def _signal_ratio_filtering(waveforms):
@@ -24,19 +48,32 @@ def _signal_ratio_filtering(waveforms):
     return signalRatio
 
 def ScintillationRateBatched(ev, nwvf_batch=1000, maxwvf=-1, progress=False, njob=1):
-    return BatchSiPMs(ev, ScintillationRateAnalysis, nwvf_batch=nwvf_batch, maxwvf=maxwvf, progress=progress, njob=njob)
+    output = BatchSiPMs(ev, ScintillationRateAnalysis, nwvf_batch=nwvf_batch, maxwvf=maxwvf, progress=progress, njob=njob)
+    if ev is not None and ev['scintillation']['loaded']:
+        rate = _trigger_rate_windowed(ev)
+        n = output["n_hits"].shape[0]
+        if 0 < rate.shape[0] < n:
+            warnings.warn(f"trigger_rate: {rate.shape[0]} timestamps for {n} waveforms; padding with 0")
+        m = min(n, rate.shape[0])
+        trigger_rate = np.zeros((n, 1), dtype=np.uint16)
+        trigger_rate[:m] = np.clip(rate[:m], 0, np.iinfo(np.uint16).max)
+        output["trigger_rate"] = trigger_rate
+    return output
 
-# Main function to compute SiPMs hit per each file
+# BatchSipm for hit counting only. Trigger rate calculation is done separately in the above function
 def ScintillationRateAnalysis(ev):
     # default value
     output = {
-        "n_hits": np.zeros((1,1), dtype=np.uint8),
-        "hits_mask": np.zeros((1,1), dtype=np.uint32),
+        "n_hits": np.zeros((1, 1), dtype=np.uint8),
+        "hits_mask": np.zeros((1, 1), dtype=np.uint32),
+        "trigger_rate": np.zeros((1,1), dtype=np.uint16)
     }
-    if ev is None or not ev['event_info']['loaded'] or not ev['scintillation']['loaded']:
+    if ev is None:
+        # Used by BatchSipm to get data structure
+        return output
+    elif not ev['scintillation']['loaded']:
         print("File not loaded. Quitting.")
         return output
-
     # Load the waveforms
     waveforms = ev["scintillation"]['Waveforms']
     # Remove non-functional SiPMs
@@ -61,7 +98,6 @@ def ScintillationRateAnalysis(ev):
 
 # The rest of this code can be used in a jupyter notebook to see the results. 
 if __name__ == "__main__":
-    # from GetEvent import GetEvent
     ana_path = "../LAr10Ana/"
     sys.path.insert(0, ana_path)
     import GetEvent
@@ -69,8 +105,9 @@ if __name__ == "__main__":
     # Compute the scintillation rates
     test_run = "/exp/e961/data/SBC-25-daqdata/20251107_28.tar"
     test_event = 0
-    background_ev =  GetEvent.GetEvent(test_run, test_event, "run_control", "run_info", "event_info", "scintillation", 
-                                strictMode=False, lazy_load_scintillation=False)
-    out = ScintillationRateAnalysis(background_ev)
+    background_ev = GetEvent.GetEvent(test_run, test_event, "run_control", "run_info", "event_info", "scintillation",
+                                       strictMode=False, lazy_load_scintillation=False)
+    # Use ScintillationRateBatched (not ScintillationRateAnalysis directly) to also get the trigger_rate key.
+    out = ScintillationRateBatched(background_ev)
     for k in out.keys():
         print(f"{k}: {out[k][:5]}")

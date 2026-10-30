@@ -1,5 +1,20 @@
 # Change Log
 
+## [LAr10Ana v1.1.1](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v1.1.1) (2026-10-15)
+- Bug fix in `ScintRate.py`.
+
+## [LAr10Ana v1.1.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v1.1.0) (2026-08-31)
+- A new separate `Reconstruction3D_SingleBubbleOnly` module that works with `BubbleFinder_SingleBubbleOnly`.
+- Bug fix in `BubbleFinder_SingleBubbleOnly` and `ScintRate` modules.
+
+## [LAr10Ana v1.0.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v1.0.0) (2026-08-21)
+- Paper version, same as v0.6.0
+
+## [LAr10Ana v0.6.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.6.0) (2026-08-20)
+- Update single bubble only bubble finder
+- Add d_wall calculation in 3D recon
+- Add trigger rate calculation per sipm batch
+
 ## [LAr10Ana v0.5.0](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v0.5.0) (2026-07-30)
 - Add bubble finder with single bubble only
 - Improve logging and speed of grid job submission

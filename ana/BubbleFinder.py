@@ -173,7 +173,11 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
 
         sort_inds = areas[combined_mask][reg_mask].argsort()
         largest_regions_sorted = largest_regions[sort_inds[::-1]]
-    
+
+        #prevents issue of massive circle in diff between 38 and 39 for runs w/ no pre trig images
+        if largest_region.axis_major_length>100:
+            continue
+          
         #estimate radii
         min_est_rad = np.round(largest_region.axis_major_length/2)
         if min_est_rad - 2 <= 3:
@@ -259,7 +263,7 @@ def FindBubbles(ev, cam, num_pix_in_neighborhood, noise_thresh, bub_dict=None):
                     #check if bubble candidate meets intensity thresh for the noise in the image
                     past_intensity_thresh = np.average(pastDiff) + 2.5*np.std(pastDiff)
                     bub_coords_y, bub_coords_x = disk((pcy, pcx), prad, shape=imShape)
-                    if np.average(pastDiff[bub_coords_y, bub_coords_x]) >= past_intensity_thresh:
+                    if np.average(pastDiff[bub_coords_y, bub_coords_x]) > past_intensity_thresh:
                         #add bubble to dictionary
                         bub_dict["bub_num"].append([bub_num])
                         bub_dict["cam"].append([cam])
