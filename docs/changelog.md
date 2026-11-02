@@ -1,5 +1,8 @@
 # Change Log
 
+## [LAr10Ana v1.1.2](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v1.1.2) (2026-11-02)
+- Bug fix in 3D recon. The reprojection error that was saved in file was 1/reproj_error. Now it's fixed. Also other errors in how the reproj_error is counted is fixed.
+
 ## [LAr10Ana v1.1.1](https://github.com/SBC-Collaboration/LAr10Ana/releases/tag/v1.1.1) (2026-10-15)
 - Bug fix in `ScintRate.py`.
 
